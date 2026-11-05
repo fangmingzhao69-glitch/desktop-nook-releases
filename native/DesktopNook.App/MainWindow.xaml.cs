@@ -103,7 +103,7 @@ public partial class MainWindow : Window
         _interactions++;
         try
         {
-            var picker=new CollectWindow(Store,_activeCategory??"uncategorized"){Owner=this};
+            var picker=new CollectWindow(Store,_activeCategory??Store.DefaultCategoryId){Owner=this};
             if(picker.ShowDialog()!=true) return;
             var errors=new List<string>();var completed=0;
             foreach(var entry in picker.Selection)
@@ -131,15 +131,24 @@ public partial class MainWindow : Window
         menu.IsOpen=true;
     }
     private static MenuItem Menu(string name,Action action,bool enabled=true) {var item=new MenuItem{Header=name,IsEnabled=enabled};item.Click+=(_,_)=>action();return item;}
-    private void CategoryMenu(FrameworkElement owner,string id)
+    internal void CategoryMenu(FrameworkElement owner,string id)
     {
         var category=Store.State.Categories.Single(c=>c.Id==id);var index=Store.State.Categories.IndexOf(category);
         var items=new List<MenuItem>{Menu("收进此分类",()=>{_activeCategory=id;OnCollect(this,new());})};
         if(id!="uncategorized")items.AddRange([
             Menu("重命名",()=>{var name=Ask("重命名分类","分类名称",category.Name);if(name is not null)Run(()=>Store.RenameCategory(id,name),"分类已更新");}),
-            Menu("向前移动",()=>Run(()=>Store.OrderCategory(id,-1)),index>0),Menu("向后移动",()=>Run(()=>Store.OrderCategory(id,1)),index<Store.State.Categories.Count-2),
-            Menu("删除分类",()=>{_interactions++;try{if(UiDialogs.Show(this,"删除“"+category.Name+"”？其中的图标将移入未分类，不会移回桌面。","桌面小筑",MessageBoxButton.OKCancel)==MessageBoxResult.OK)Run(()=>Store.DeleteCategory(id),"分类已删除");}finally{_interactions--;}})
+            Menu("向前移动",()=>Run(()=>Store.OrderCategory(id,-1)),index>0),Menu("向后移动",()=>Run(()=>Store.OrderCategory(id,1)),index<Store.State.Categories.Count-(Store.State.Categories.Any(c=>c.Id=="uncategorized")?2:1))
         ]);
+        var delete=Menu("删除分类",()=>{
+            _interactions++;
+            try{
+                var targetId=Store.DeleteDestination(id);var target=Store.State.Categories.Single(c=>c.Id==targetId);
+                if(UiDialogs.Show(this,$"删除“{category.Name}”？其中的图标将移入“{target.Name}”，不会删除文件或移回桌面。","删除分类",MessageBoxButton.OKCancel)!=MessageBoxResult.OK)return;
+                int warnings=Store.RecoveryMessages.Count;bool selected=_activeCategory==id;
+                if(Run(()=>Store.DeleteCategory(id,targetId),"分类已删除")){if(selected){_activeCategory=targetId;Render();}if(Store.RecoveryMessages.Count>warnings)SetStatus(Store.RecoveryMessages.Last());}
+            }finally{_interactions--;}
+        },Store.State.Categories.Count>1);
+        if(!delete.IsEnabled){delete.ToolTip="至少保留一个分类，请先新建分类再删除";ToolTipService.SetShowOnDisabled(delete,true);}items.Add(delete);
         Popup(owner,items);
     }
     private void OnMore(object sender,RoutedEventArgs e)
@@ -299,11 +308,11 @@ public partial class MainWindow : Window
         catch{e.Effects=DragDropEffects.None;e.Handled=true;}
     }
     private void OnDragLeave(object sender,DragEventArgs e) {DropOutline.Visibility=Visibility.Collapsed;OrderMarker.Visibility=Visibility.Collapsed;}
-    private void OnDrop(object sender,DragEventArgs e) => HandleDrop(e,_activeCategory??"uncategorized");
+    private void OnDrop(object sender,DragEventArgs e) => HandleDrop(e,_activeCategory??Store.DefaultCategoryId);
     private void HandleDrop(DragEventArgs e,string? categoryId,bool onCategory=false)
     {
         if(!onCategory && e.Data.GetDataPresent(ItemFormat)){OrderDrop(e);return;}
-        e.Handled=true;DropOutline.Visibility=Visibility.Collapsed;OrderMarker.Visibility=Visibility.Collapsed;if(onCategory && categoryId is null && e.Data.GetDataPresent(ItemFormat)){e.Effects=DragDropEffects.None;SetStatus("全部按分类汇总，移动分类请拖到具体分类标签");return;}categoryId??="uncategorized";
+        e.Handled=true;DropOutline.Visibility=Visibility.Collapsed;OrderMarker.Visibility=Visibility.Collapsed;if(onCategory && categoryId is null && e.Data.GetDataPresent(ItemFormat)){e.Effects=DragDropEffects.None;SetStatus("全部按分类汇总，移动分类请拖到具体分类标签");return;}categoryId??=Store.DefaultCategoryId;
         if(!CanImport(e.Data)){e.Effects=DragDropEffects.None;return;}
         _interactions++;
         try

@@ -26,11 +26,12 @@ internal sealed class TextDialog : Window
 internal sealed record DesktopEntry(string Path,string Name,string Source,bool Recycle);
 internal sealed class CollectWindow : Window
 {
-    private readonly List<CheckBox> _checks=[];private readonly ComboBox _categories;
-    public string CategoryId => (string)(_categories.SelectedValue??"uncategorized");
+    private readonly List<CheckBox> _checks=[];private readonly ComboBox _categories;private readonly string _defaultCategory;
+    public string CategoryId => (string)(_categories.SelectedValue??_defaultCategory);
     public List<DesktopEntry> Selection => _checks.Where(c=>c.IsChecked==true).Select(c=>(DesktopEntry)c.Tag).ToList();
     public CollectWindow(NookStore store,string selectedCategory)
     {
+        _defaultCategory=store.DefaultCategoryId;
         Title="收进小筑";Width=470.4;Height=515.2;ResizeMode=ResizeMode.NoResize;WindowStartupLocation=WindowStartupLocation.CenterOwner;ShowInTaskbar=false;Background=new SolidColorBrush(Color.FromRgb(246,248,253));FontSize=10;
         var root=new Grid{Margin=new Thickness(15),LayoutTransform=new ScaleTransform(1.4,1.4)};root.RowDefinitions.Add(new(){Height=GridLength.Auto});root.RowDefinitions.Add(new(){Height=new GridLength(1,GridUnitType.Star)});root.RowDefinitions.Add(new(){Height=GridLength.Auto});root.RowDefinitions.Add(new(){Height=GridLength.Auto});
         root.Children.Add(new TextBlock{Text="选择桌面图标，也可以直接拖入小筑。",Foreground=Brushes.SlateGray,Margin=new Thickness(0,0,0,10)});

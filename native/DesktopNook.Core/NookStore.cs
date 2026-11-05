@@ -91,7 +91,7 @@ public sealed class NookStore
     }
     private void Validate(NookState state)
     {
-        if (state.Version != 1 || state.Categories.Count == 0 || state.Categories[^1].Id != "uncategorized" || state.Categories.Select(c => c.Id).Distinct().Count() != state.Categories.Count || state.Items.Select(i => i.Id).Distinct().Count() != state.Items.Count || state.Items.Count(i => i.Kind == "recycle-bin") > 1) throw new IOException("配置结构无效。");
+        if (state.Version is not (1 or 2) || state.Categories.Count == 0 || (state.Version==1 && state.Categories[^1].Id!="uncategorized") || (state.Categories.Any(c=>c.Id=="uncategorized") && state.Categories[^1].Id!="uncategorized") || state.Categories.Select(c => c.Id).Distinct().Count() != state.Categories.Count || state.Items.Select(i => i.Id).Distinct().Count() != state.Items.Count || state.Items.Count(i => i.Kind == "recycle-bin") > 1) throw new IOException("配置结构无效。");
         foreach (var item in state.Items) { ValidateItem(item); if (!state.Categories.Any(c => c.Id == item.CategoryId)) throw new IOException("入口所属分类不存在。"); }
     }
     private static T Read<T>(string path) => JsonSerializer.Deserialize<T>(File.ReadAllText(path), Json) ?? throw new IOException("记录为空：" + path);
@@ -157,7 +157,7 @@ public sealed class NookStore
             var active = item.Kind == "recycle-bin" ? !_recycle.IsVisible : Mutable(item)?Exists(ManagedPath(item)):File.Exists(ManagedPath(item)) && (!File.Exists(item.OriginalPath) || HashFile(item.OriginalPath) != item.Hash);
             if (active && !State.Items.Any(i => i.Id == item.Id))
             {
-                if (!State.Categories.Any(c => c.Id == item.CategoryId)) item.CategoryId = "uncategorized";
+                if (!State.Categories.Any(c => c.Id == item.CategoryId)) item.CategoryId = FallbackCategory(State);
                 State.Items.Add(item);
             }
         }
@@ -178,7 +178,7 @@ public sealed class NookStore
             if (Exists(item.OriginalPath)&&(!Mutable(item)||!Exists(ManagedPath(item)))) { next.Items.RemoveAll(i => i.Id == item.Id); SaveManifest(item, true); }
             else if (Exists(ManagedPath(item)) && (Mutable(item)||HashFile(ManagedPath(item)) == item.Hash))
             {
-                if (!next.Items.Any(i => i.Id == item.Id)) { if (!next.Categories.Any(c => c.Id == item.CategoryId)) item.CategoryId = "uncategorized"; next.Items.Add(item); }
+                if (!next.Items.Any(i => i.Id == item.Id)) { if (!next.Categories.Any(c => c.Id == item.CategoryId)) item.CategoryId = FallbackCategory(next); next.Items.Add(item); }
                 SaveManifest(item, false);
             }
             else throw new IOException("未完成迁移的快捷方式需要人工恢复。原记录已保留：" + ItemDirectory(item));
@@ -275,7 +275,15 @@ public sealed class NookStore
         // Retain the vault backup so recovery never depends on a single desktop file.
         return destination;
     }
-    public void AddCategory(string name) { name = CheckName(name); var next = Clone(State); next.Categories.Insert(next.Categories.Count - 1, new() { Name = name }); Save(next); }
+    private static string FallbackCategory(NookState state)=>state.Categories.FirstOrDefault(c=>c.Id=="uncategorized")?.Id??state.Categories[0].Id;
+    public string DefaultCategoryId=>FallbackCategory(State);
+    public string DeleteDestination(string id)
+    {
+        CategoryExists(id);var remaining=State.Categories.Where(c=>c.Id!=id).ToList();
+        if(remaining.Count==0)throw new ArgumentException("至少保留一个分类，请先新建分类再删除。");
+        return remaining.FirstOrDefault(c=>c.Id=="uncategorized")?.Id??remaining[0].Id;
+    }
+    public void AddCategory(string name) { name = CheckName(name); var next = Clone(State);var index=next.Categories.FindIndex(c=>c.Id=="uncategorized");next.Categories.Insert(index<0?next.Categories.Count:index, new() { Name = name }); Save(next); }
     public int RestoreCatalog(IEnumerable<NookItem> recovered)
     {
         var next=Clone(State);var added=new List<NookItem>();
@@ -294,15 +302,22 @@ public sealed class NookStore
         if (State.Categories.Any(c => c.Id != except && c.Name.Equals(name, StringComparison.OrdinalIgnoreCase))) throw new ArgumentException("已有同名分类。"); return name;
     }
     public void RenameCategory(string id, string name) { if (id == "uncategorized") throw new ArgumentException("未分类不能重命名。"); name = CheckName(name, id); var next = Clone(State); next.Categories.Single(c => c.Id == id).Name = name; Save(next); }
-    public void DeleteCategory(string id)
+    public void DeleteCategory(string id,string? destination=null)
     {
-        if (id == "uncategorized") throw new ArgumentException("未分类不能删除。"); var next = Clone(State); next.Categories.RemoveAll(c => c.Id == id);
-        foreach (var item in next.Items.Where(i => i.CategoryId == id)) { item.CategoryId = "uncategorized"; SaveManifest(item, false); } Save(next);
+        string fallback=DeleteDestination(id);destination??=fallback;CategoryExists(destination);
+        if(destination==id)throw new ArgumentException("接收分类不能是被删除的分类。");
+        var next=Clone(State);var moved=next.Items.Where(i=>i.CategoryId==id).ToList();next.Items.RemoveAll(i=>i.CategoryId==id);next.Categories.RemoveAll(c=>c.Id==id);
+        if(id=="uncategorized")next.Version=2;
+        foreach(var item in moved)item.CategoryId=destination;next.Items.AddRange(moved);
+        // Commit the authoritative index first. A locked recovery manifest must
+        // not leave half the catalog pointing at a removed category.
+        Save(next);
+        foreach(var item in moved){try{SaveManifest(item,false);}catch(Exception ex) when(ex is IOException or UnauthorizedAccessException){RecoveryMessages.Add("分类已删除，部分恢复清单未同步；收纳内容保留，请备份数据目录。");}}
     }
     public void MoveItem(string id, string categoryId) { CategoryExists(categoryId); var next = Clone(State); var item = next.Items.Single(i => i.Id == id); next.Items.Remove(item); item.CategoryId = categoryId; next.Items.Add(item); Save(next); SaveManifest(item, false); }
     public void RenameItem(string id, string name) { name = name.Trim(); if (name.Length is < 1 or > 40) throw new ArgumentException("名称需为 1–40 个字符。"); var next = Clone(State); var item = next.Items.Single(i => i.Id == id); item.Name = name; Save(next); SaveManifest(item, false); }
     public void ArchiveItem(string id){var item=State.Items.Single(i=>i.Id==id);if(item.Kind=="recycle-bin")throw new IOException("系统回收站请使用移回桌面。");SaveManifest(item,true);var next=Clone(State);next.Items.RemoveAll(i=>i.Id==id);Save(next);}
-    public void OrderCategory(string id, int delta) { var next = Clone(State); var index = next.Categories.FindIndex(c => c.Id == id); var target = index + delta; if (index < 0 || id == "uncategorized" || target < 0 || target >= next.Categories.Count - 1 || Math.Abs(delta) != 1) return; (next.Categories[index], next.Categories[target]) = (next.Categories[target], next.Categories[index]); Save(next); }
+    public void OrderCategory(string id, int delta) { var next = Clone(State); var index = next.Categories.FindIndex(c => c.Id == id); var target = index + delta;int limit=next.Categories.Count-(next.Categories.Any(c=>c.Id=="uncategorized")?1:0);if (index < 0 || id == "uncategorized" || target < 0 || target >= limit || Math.Abs(delta) != 1) return; (next.Categories[index], next.Categories[target]) = (next.Categories[target], next.Categories[index]); Save(next); }
     public void OrderItem(string id, int delta) { var next = Clone(State); var item = next.Items.Single(i => i.Id == id); var siblings = next.Items.Where(i => i.CategoryId == item.CategoryId).ToList(); var target = siblings.IndexOf(item) + delta; if (target < 0 || target >= siblings.Count || Math.Abs(delta) != 1) return; var a = next.Items.IndexOf(item); var b = next.Items.IndexOf(siblings[target]); (next.Items[a], next.Items[b]) = (next.Items[b], next.Items[a]); Save(next); }
     public IReadOnlyList<NookItem> OrderedItems(string? categoryId=null) => categoryId is null
         ? State.Categories.SelectMany(c=>State.Items.Where(i=>i.CategoryId==c.Id)).ToList()

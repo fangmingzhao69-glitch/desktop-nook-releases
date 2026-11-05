@@ -57,6 +57,7 @@ public partial class App : Application
             if (e.Args.Contains("--ui-self-test")) Dispatcher.BeginInvoke(async () => await NativeVerification.Run(window, root), System.Windows.Threading.DispatcherPriority.Loaded);
             if (e.Args.Contains("--size-self-test")) Dispatcher.BeginInvoke(async () => await SizingVerification.Run(window, root), System.Windows.Threading.DispatcherPriority.Loaded);
             if (e.Args.Contains("--order-self-test")) Dispatcher.BeginInvoke(async () => await OrderingVerification.Run(window, root), System.Windows.Threading.DispatcherPriority.Loaded);
+            if (e.Args.Contains("--category-self-test")) Dispatcher.BeginInvoke(async () => await CategoryDeletionVerification.Run(window, root), System.Windows.Threading.DispatcherPriority.Loaded);
         }
         catch (Exception ex) { MessageBox.Show("桌面小筑暂时无法打开。原文件和数据均保留。\n\n" + ex.Message, "桌面小筑", MessageBoxButton.OK, MessageBoxImage.Error); Shutdown(1); }
     }
