@@ -304,4 +304,17 @@ public sealed class NookStore
     public void ArchiveItem(string id){var item=State.Items.Single(i=>i.Id==id);if(item.Kind=="recycle-bin")throw new IOException("系统回收站请使用移回桌面。");SaveManifest(item,true);var next=Clone(State);next.Items.RemoveAll(i=>i.Id==id);Save(next);}
     public void OrderCategory(string id, int delta) { var next = Clone(State); var index = next.Categories.FindIndex(c => c.Id == id); var target = index + delta; if (index < 0 || id == "uncategorized" || target < 0 || target >= next.Categories.Count - 1 || Math.Abs(delta) != 1) return; (next.Categories[index], next.Categories[target]) = (next.Categories[target], next.Categories[index]); Save(next); }
     public void OrderItem(string id, int delta) { var next = Clone(State); var item = next.Items.Single(i => i.Id == id); var siblings = next.Items.Where(i => i.CategoryId == item.CategoryId).ToList(); var target = siblings.IndexOf(item) + delta; if (target < 0 || target >= siblings.Count || Math.Abs(delta) != 1) return; var a = next.Items.IndexOf(item); var b = next.Items.IndexOf(siblings[target]); (next.Items[a], next.Items[b]) = (next.Items[b], next.Items[a]); Save(next); }
+    public IReadOnlyList<NookItem> OrderedItems(string? categoryId=null) => categoryId is null
+        ? State.Categories.SelectMany(c=>State.Items.Where(i=>i.CategoryId==c.Id)).ToList()
+        : State.Items.Where(i=>i.CategoryId==categoryId).ToList();
+    public void ReorderItems(string categoryId,IReadOnlyList<string> ids)
+    {
+        CategoryExists(categoryId);
+        var siblings=State.Items.Where(i=>i.CategoryId==categoryId).ToList();
+        if(ids.Count!=siblings.Count||ids.Distinct(StringComparer.Ordinal).Count()!=ids.Count||!ids.ToHashSet(StringComparer.Ordinal).SetEquals(siblings.Select(i=>i.Id)))
+            throw new ArgumentException("排序项目已变化，请取消后重新调整。");
+        var next=Clone(State);var byId=next.Items.Where(i=>i.CategoryId==categoryId).ToDictionary(i=>i.Id);int position=0;
+        for(int i=0;i<next.Items.Count;i++)if(next.Items[i].CategoryId==categoryId)next.Items[i]=byId[ids[position++]];
+        Save(next);
+    }
 }

@@ -129,6 +129,27 @@ Test("User entry.json files never collide with or become recovery manifests",roo
 Test("Lost collection index can be merged from intact records without moving payloads",root=>{
     var(desktop,data,bin)=Setup(root);var store=new NookStore(data,[desktop],bin);var first=store.Collect(FileAt(desktop,"one.lnk"),"office");var second=store.Collect(FileAt(desktop,"two.lnk"),"dev");store.State.Items.Clear();File.WriteAllText(Path.Combine(data,"state.json"),JsonSerializer.Serialize(store.State));store=new(data,[desktop],bin);Assert(store.RestoreCatalog([first,second])==2,"both records recovered");Assert(store.RestoreCatalog([first,second])==0,"recovery is idempotent");store=new(data,[desktop],bin);Assert(store.State.Items.Count==2&&store.State.Items[0].CategoryId=="office"&&File.Exists(store.ManagedPath(first)),"classification and files retained");
 });
+Test("Custom category order persists without changing other categories or payloads",root=>{
+    var(desktop,data,bin)=Setup(root);var store=new NookStore(data,[desktop],bin);
+    var a=store.Collect(FileAt(desktop,"A.lnk"),"office");var x=store.Collect(FileAt(desktop,"X.lnk"),"dev");var b=store.Collect(FileAt(desktop,"B.lnk"),"office");var y=store.Collect(FileAt(desktop,"Y.lnk"),"dev");
+    var hashes=store.State.Items.ToDictionary(i=>i.Id,i=>NookStore.HashFile(store.ManagedPath(i)));
+    store.ReorderItems("office",new[]{b.Id,a.Id});store=new(data,[desktop],bin);
+    Assert(store.OrderedItems("office").Select(i=>i.Id).SequenceEqual(new[]{b.Id,a.Id}),"persisted category order");
+    Assert(store.OrderedItems("dev").Select(i=>i.Id).SequenceEqual(new[]{x.Id,y.Id}),"other category unchanged");
+    Assert(store.State.Items.All(i=>NookStore.HashFile(store.ManagedPath(i))==hashes[i.Id]&&!File.Exists(i.OriginalPath)),"only metadata changes");
+});
+Test("All view follows category order and each category custom sequence",root=>{
+    var(desktop,data,bin)=Setup(root);var store=new NookStore(data,[desktop],bin);
+    var d=store.Collect(FileAt(desktop,"Dev.lnk"),"dev");var a=store.Collect(FileAt(desktop,"OfficeA.lnk"),"office");var z=store.Collect(FileAt(desktop,"Design.lnk"),"design");var b=store.Collect(FileAt(desktop,"OfficeB.lnk"),"office");
+    store.ReorderItems("office",new[]{b.Id,a.Id});Assert(store.OrderedItems().Select(i=>i.Id).SequenceEqual(new[]{b.Id,a.Id,z.Id,d.Id}),"grouped all view");
+    store.OrderCategory("dev",-1);Assert(store.OrderedItems().Select(i=>i.Id).SequenceEqual(new[]{b.Id,a.Id,d.Id,z.Id}),"category move reflected");
+    var added=store.Collect(FileAt(desktop,"OfficeNew.lnk"),"office");Assert(store.OrderedItems("office")[^1].Id==added.Id,"new item appended");
+    store.MoveItem(d.Id,"office");Assert(store.OrderedItems("office")[^1].Id==d.Id,"moved item appended");
+});
+Test("Invalid reorder refuses duplicate missing and foreign identifiers atomically",root=>{
+    var(desktop,data,bin)=Setup(root);var store=new NookStore(data,[desktop],bin);var a=store.Collect(FileAt(desktop,"One.lnk"),"office");var b=store.Collect(FileAt(desktop,"Two.lnk"),"office");var x=store.Collect(FileAt(desktop,"Other.lnk"),"dev");var hash=NookStore.HashFile(Path.Combine(data,"state.json"));
+    foreach(var ids in new[]{new[]{a.Id,a.Id},new[]{a.Id},new[]{a.Id,x.Id},new[]{a.Id,b.Id,Guid.NewGuid().ToString("N")}}){try{store.ReorderItems("office",ids);throw new Exception("invalid order accepted");}catch(ArgumentException){}Assert(NookStore.HashFile(Path.Combine(data,"state.json"))==hash,"file unchanged");}
+});
 var failed = results.Count(r => JsonSerializer.Serialize(r).Contains("\"passed\":false"));
 var output = args.FirstOrDefault() ?? Path.Combine(runRoot,"results.json");Directory.CreateDirectory(Path.GetDirectoryName(Path.GetFullPath(output))!);
 File.WriteAllText(output,JsonSerializer.Serialize(new{passed=results.Count-failed,failed,runRoot,checks=results},new JsonSerializerOptions{WriteIndented=true}));

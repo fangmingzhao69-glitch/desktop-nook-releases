@@ -67,7 +67,7 @@ public partial class MainWindow : Window
         Dispatcher.BeginInvoke(UpdateSizingLayout,System.Windows.Threading.DispatcherPriority.Loaded);
         Tabs.Children.Clear(); AddTab("全部",null);
         foreach(var category in Store.State.Categories) AddTab(category.Name,category.Id);
-        var visible=Store.State.Items.Where(i=>_activeCategory is null || i.CategoryId==_activeCategory).Select(item=>new IconEntry(item,item.Kind=="recycle-bin"?"":Store.ManagedPath(item))).ToList();
+        var visible=VisibleOrderedItems().Select(item=>new IconEntry(item,item.Kind=="recycle-bin"?"":Store.ManagedPath(item))).ToList();
         Icons.ItemsSource=visible; EmptyState.Visibility=visible.Count==0?Visibility.Visible:Visibility.Collapsed;
         EmptyText.Text=_activeCategory is null?"给桌面图标，一个小家":"此分类还没有图标";
         TotalCount.Text=Store.State.Items.Count.ToString();
@@ -84,7 +84,7 @@ public partial class MainWindow : Window
         button.PreviewKeyDown+=(_,e)=>{if(e.Key is Key.Left or Key.Right or Key.Home or Key.End){var buttons=Tabs.Children.OfType<Button>().ToList();var current=buttons.IndexOf(button);var next=e.Key==Key.Home?0:e.Key==Key.End?buttons.Count-1:(current+(e.Key==Key.Left?-1:1)+buttons.Count)%buttons.Count;SelectCategory(buttons[next].Tag as string);Tabs.Children.OfType<Button>().ElementAt(next).Focus();e.Handled=true;}};
         Tabs.Children.Add(button);
     }
-    public void SelectCategory(string? id) { _activeCategory=id;Render(); }
+    public void SelectCategory(string? id) { if(_ordering)return;_activeCategory=id;Render(); }
     private static SolidColorBrush Brush(string color) => new((Color)ColorConverter.ConvertFromString(color));
     private bool Run(Action action,string? message=null)
     {
@@ -144,6 +144,7 @@ public partial class MainWindow : Window
     }
     private void OnMore(object sender,RoutedEventArgs e)
     {
+        if(_ordering){Popup((FrameworkElement)sender,[Menu("完成排序",()=>EndIconOrdering(true)),Menu("取消排序",()=>EndIconOrdering(false))]);return;}
         var options=App.Options;
         var startup=new MenuItem{Header="开机自启",IsCheckable=true,IsChecked=options.Enabled,IsEnabled=!App.IsSandbox};
         startup.Checked+=(_,_)=>Run(()=>options.SetEnabled(true),"已开启开机自启");
@@ -152,7 +153,7 @@ public partial class MainWindow : Window
         closing.Checked+=(_,_)=>Run(()=>options.CloseEndsProcess=true,"关闭按钮将退出程序");
         closing.Unchecked+=(_,_)=>Run(()=>options.CloseEndsProcess=false,"关闭按钮将收起面板");
         Popup((FrameworkElement)sender,[
-        startup,closing,WindowSizeMenu(),new Separator(),
+        startup,closing,WindowSizeMenu(),Menu("调整图标顺序…",BeginIconOrdering),new Separator(),
         Menu(UpdateMenuText,()=>_ = CheckOnlineUpdateAsync(true)),
         Menu("从本地文件更新…",()=>_ = SelectUpdateAsync()),
         Menu("全部移回桌面",RestoreAll,Store.State.Items.Count>0),
@@ -232,16 +233,17 @@ public partial class MainWindow : Window
     }
     private void OnIconClick(object sender,RoutedEventArgs e)
     {
-        if(_dragging || DateTime.UtcNow<_suppressUntil)return;
+        if(_ordering || _dragging || DateTime.UtcNow<_suppressUntil)return;
         if(((Button)sender).Tag is NookItem item)Run(()=>{ShellIntegration.Launch(Store,item);if(!KeepOpenForVerification)WindowState=WindowState.Minimized;});
     }
     private void OnIconRightClick(object sender,MouseButtonEventArgs e)
     {
-        e.Handled=true;var button=(Button)sender;if(button.Tag is not NookItem item)return;
+        e.Handled=true;if(_ordering)return;var button=(Button)sender;if(button.Tag is not NookItem item)return;
         ShowIconMenu(button,item);
     }
     internal void ShowIconMenu(Button button,NookItem item)
     {
+        if(_ordering)return;
         var siblings=Store.State.Items.Where(i=>i.CategoryId==item.CategoryId).ToList();var index=siblings.FindIndex(i=>i.Id==item.Id);
         var move=new MenuItem{Header="移动到分类"};foreach(var cat in Store.State.Categories)move.Items.Add(Menu(cat.Name,()=>Run(()=>Store.MoveItem(item.Id,cat.Id),"已移动分类")));
         var own=new List<object>{Menu("移回桌面",()=>RestoreItem(item.Id)),move,Menu("修改显示名称",()=>Rename()),Menu("前移",()=>Run(()=>Store.OrderItem(item.Id,-1)),index>0),Menu("后移",()=>Run(()=>Store.OrderItem(item.Id,1)),index<siblings.Count-1),new Separator()};
@@ -273,6 +275,7 @@ public partial class MainWindow : Window
     {
         if(_dragging || e.LeftButton!=MouseButtonState.Pressed || sender is not Button button || button.Tag is not NookItem item)return;
         var current=e.GetPosition(this);if(Math.Abs(current.X-_mouseDown.X)<SystemParameters.MinimumHorizontalDragDistance && Math.Abs(current.Y-_mouseDown.Y)<SystemParameters.MinimumVerticalDragDistance)return;
+        if(_ordering){StartOrderDrag(button,item);return;}
         _dragging=true;var restoreOnDesktop=false;
         var data=new DataObject();data.SetData(ItemFormat,item.Id);
         QueryContinueDragEventHandler query=(_,args)=>{
@@ -294,13 +297,15 @@ public partial class MainWindow : Window
     private void OnDragOver(object sender,DragEventArgs e) => HandleDragOver(e);
     private void HandleDragOver(DragEventArgs e)
     {
+        if(_ordering){OrderDragOver(e);return;}
         try{var accepted=CanImport(e.Data);e.Effects=accepted?(e.Data.GetDataPresent(ItemFormat)?DragDropEffects.Move:DragDropEffects.Copy):DragDropEffects.None;DropOutline.Visibility=accepted?Visibility.Visible:Visibility.Collapsed;e.Handled=true;}
         catch{e.Effects=DragDropEffects.None;e.Handled=true;}
     }
-    private void OnDragLeave(object sender,DragEventArgs e) => DropOutline.Visibility=Visibility.Collapsed;
+    private void OnDragLeave(object sender,DragEventArgs e) {DropOutline.Visibility=Visibility.Collapsed;OrderMarker.Visibility=Visibility.Collapsed;}
     private void OnDrop(object sender,DragEventArgs e) => HandleDrop(e,_activeCategory??"uncategorized");
     private void HandleDrop(DragEventArgs e,string? categoryId)
     {
+        if(_ordering){OrderDrop(e);return;}
         e.Handled=true;DropOutline.Visibility=Visibility.Collapsed;categoryId??="uncategorized";
         if(!CanImport(e.Data)){e.Effects=DragDropEffects.None;return;}
         _interactions++;
@@ -318,12 +323,12 @@ public partial class MainWindow : Window
     }
     private void OnKeyDown(object sender,KeyEventArgs e)
     {
-        if(e.Key==Key.Escape && !_dragging){e.Handled=true;if(!KeepOpenForVerification)WindowState=WindowState.Minimized;return;}
+        if(e.Key==Key.Escape && !_dragging){e.Handled=true;if(_ordering){EndIconOrdering(false);return;}if(!KeepOpenForVerification)WindowState=WindowState.Minimized;return;}
         if(e.OriginalSource is not Button button || button.Tag is not NookItem)return;
         if(e.Key==Key.Apps || (e.Key==Key.F10&&Keyboard.Modifiers.HasFlag(ModifierKeys.Shift))){e.Handled=true;ShowIconMenu(button,(NookItem)button.Tag);return;}
         if(e.Key is Key.Left or Key.Right or Key.Up or Key.Down)
         {
-            var buttons=FindVisualChildren<Button>(Icons).ToList();var index=buttons.IndexOf(button);var offset=e.Key==Key.Left?-1:e.Key==Key.Right?1:e.Key==Key.Up?-6:6;var next=Math.Clamp(index+offset,0,buttons.Count-1);buttons[next].Focus();e.Handled=true;
+            var buttons=FindVisualChildren<Button>(Icons).ToList();var index=buttons.IndexOf(button);var offset=e.Key==Key.Left?-1:e.Key==Key.Right?1:e.Key==Key.Up?-IconColumns:IconColumns;var next=Math.Clamp(index+offset,0,buttons.Count-1);buttons[next].Focus();e.Handled=true;
         }
     }
     private static IEnumerable<T> FindVisualChildren<T>(DependencyObject source) where T:DependencyObject
