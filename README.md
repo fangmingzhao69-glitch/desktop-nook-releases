@@ -6,6 +6,16 @@
 
 [下载最新正式版](https://github.com/fangmingzhao69-glitch/desktop-nook-releases/releases/latest) · [使用说明](docs/使用说明.md) · [开发与构建](docs/开发与构建.md) · [架构与数据](docs/架构与数据.md) · [反馈问题](https://github.com/fangmingzhao69-glitch/desktop-nook-releases/issues)
 
+## 界面预览
+
+![桌面小筑主界面：顶部按分类筛选，中间点击图标启动，右上角收纳和设置](docs/images/overview.png)
+
+图中使用 0.9.1 的演示数据。顶部切换分类，右上角“收进小筑”添加桌面项目，“···”调整窗口大小或检查更新。
+
+**第一次使用：** [下载安装包](https://github.com/fangmingzhao69-glitch/desktop-nook-releases/releases/latest/download/DesktopNook-Setup.exe) → 安装后固定到任务栏 → 点击“收进小筑”选择项目和分类。
+
+详细图解：[选择收纳项目](docs/使用说明.md#3-选择项目收进小筑) · [按分类查看](docs/使用说明.md#4-按分类查看) · [调整窗口大小](docs/使用说明.md#5-调整窗口大小) · [在线更新](docs/使用说明.md#6-更多操作与在线更新)。
+
 ## 下载与运行
 
 支持 Windows 10/11 x64。发行包包含 .NET 桌面运行时，普通用户无需安装 .NET SDK。
