@@ -190,8 +190,8 @@ public partial class MainWindow : Window
         {
             var picker=new Microsoft.Win32.OpenFileDialog{Title="选择桌面小筑新版本",Filter="桌面小筑程序或安装包 (*.exe)|*.exe",CheckFileExists=true};if(picker.ShowDialog(this)!=true)return;
             var source=picker.FileName;var target=Environment.ProcessPath!;var candidate=await Task.Run(()=>LocalUpdater.Inspect(source));
-            if(UiDialogs.Show(this,"当前版本："+CurrentVersionLabel+"\n更新到：v"+candidate.Version.ToString(3)+"\n\n程序会在原位置更新，保留分类、收纳内容和设置，完成后自动打开。","更新桌面小筑",MessageBoxButton.OKCancel)!=MessageBoxResult.OK)return;
-            SetStatus("正在准备更新…");var staged=await Task.Run(()=>LocalUpdater.Stage(source,target,Store.DataDirectory,App.IsSandbox?Path.GetDirectoryName(Store.DataDirectory):null));
+            if(UiDialogs.ShowUpdate(this,"当前版本："+CurrentVersionLabel+"\n更新到：v"+candidate.Version.ToString(3)+"\n\n程序会在原位置更新，保留分类、收纳内容和设置，完成后自动打开。","更新桌面小筑",MessageBoxButton.OKCancel)!=MessageBoxResult.OK)return;
+            SetStatus("正在准备更新…");var staged=await Task.Run(()=>LocalUpdater.Stage(source,target,Store.DataDirectory,App.IsSandbox?Path.GetDirectoryName(Store.DataDirectory):null,options:App.Options,state:Store.State));
             var helper=new ProcessStartInfo(staged.Helper){UseShellExecute=false,CreateNoWindow=true};helper.ArgumentList.Add("--apply-update");helper.ArgumentList.Add(staged.Plan);Process.Start(helper);Quit();
         }
         catch(Exception ex){ShowFailure(ex);}
@@ -208,16 +208,16 @@ public partial class MainWindow : Window
             SetAvailableRelease(await OnlineUpdater.CheckAsync(client,System.Reflection.Assembly.GetExecutingAssembly().GetName().Version!));
             if(_latestRelease is null)
             {
-                if(manual){SetStatus($"当前 {CurrentVersionLabel} 已是最新版本");UiDialogs.Show(this,$"当前版本：{CurrentVersionLabel}\n已是最新版本。","检查更新");}return;
+                if(manual){SetStatus($"当前 {CurrentVersionLabel} 已是最新版本");UiDialogs.ShowUpdate(this,$"当前版本：{CurrentVersionLabel}\n已是最新版本。","检查更新");}return;
             }
             SetStatus($"发现新版本 v{_latestRelease.Version.ToString(3)}，点击更新查看详情");
             if(!manual)return;
             string notes=_latestRelease.Notes.Length>600?_latestRelease.Notes[..600]+"…":_latestRelease.Notes;
-            if(UiDialogs.Show(this,$"当前版本：{CurrentVersionLabel}\n更新到：v{_latestRelease.Version.ToString(3)}\n来源：GitHub 官方发行版\n\n{notes}\n\n选择确定后从 GitHub 下载更新并自动重启，分类、收纳内容和设置保留。","发现新版本",MessageBoxButton.OKCancel)!=MessageBoxResult.OK)return;
+            if(UiDialogs.ShowUpdate(this,$"当前版本：{CurrentVersionLabel}\n更新到：v{_latestRelease.Version.ToString(3)}\n来源：GitHub 官方发行版\n\n{notes}\n\n选择确定后从 GitHub 下载更新并自动重启，分类、收纳内容和设置保留。","发现新版本",MessageBoxButton.OKCancel)!=MessageBoxResult.OK)return;
             var download=new UpdateDownloadWindow(this,_latestRelease,Store.DataDirectory);
             if(download.ShowDialog()!=true||download.DownloadedFile is null)return;
             SetStatus("正在准备更新…");
-            var staged=await Task.Run(()=>LocalUpdater.Stage(download.DownloadedFile,Environment.ProcessPath!,Store.DataDirectory,App.IsSandbox?Path.GetDirectoryName(Store.DataDirectory):null));
+            var staged=await Task.Run(()=>LocalUpdater.Stage(download.DownloadedFile,Environment.ProcessPath!,Store.DataDirectory,App.IsSandbox?Path.GetDirectoryName(Store.DataDirectory):null,options:App.Options,state:Store.State));
             using(var plan=System.Text.Json.JsonDocument.Parse(File.ReadAllText(staged.Plan)))
                 if(!plan.RootElement.GetProperty("CandidateHash").GetString()!.Equals(_latestRelease.Sha256,StringComparison.OrdinalIgnoreCase))throw new IOException("更新文件校验失败，请重新下载。");
             var helper=new ProcessStartInfo(staged.Helper){UseShellExecute=false,CreateNoWindow=true};helper.ArgumentList.Add("--apply-update");helper.ArgumentList.Add(staged.Plan);
@@ -225,7 +225,7 @@ public partial class MainWindow : Window
         }
         catch(Exception)
         {
-            if(manual){SetStatus("更新检查未完成");UiDialogs.Show(this,$"当前版本：{CurrentVersionLabel}\n暂时无法完成在线更新，请检查网络或系统代理后重试。也可以使用“从本地文件更新”。","在线更新");}
+            if(manual){SetStatus("更新检查未完成");UiDialogs.ShowUpdate(this,$"当前版本：{CurrentVersionLabel}\n暂时无法完成在线更新，请检查网络或系统代理后重试。也可以使用“从本地文件更新”。","在线更新");}
         }
         finally{_onlineBusy=false;if(manual)_interactions--;}
     }

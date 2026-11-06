@@ -33,13 +33,29 @@ public partial class App : Application
             if(liveIndex>=0){var result=LiveVerification.Run(Path.GetFullPath(e.Args[liveIndex+1]));Shutdown(result);return;}
             var sandboxIndex = Array.IndexOf(e.Args, "--sandbox");
             IsSandbox = sandboxIndex >= 0;
-            var root = IsSandbox ? Path.GetFullPath(e.Args[sandboxIndex + 1]) : Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "DesktopNook");
+            var dataRootIndex=Array.IndexOf(e.Args,"--data-root");
+            var root = IsSandbox ? Path.GetFullPath(e.Args[sandboxIndex + 1]) : dataRootIndex>=0?Path.GetFullPath(e.Args[dataRootIndex+1]):Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "DesktopNook");
             var signature = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(root.ToUpperInvariant())))[..20];
-            if(IsSandbox)Options=new StartupOptions(@"Software\DesktopNook\Sandbox\"+signature+@"\Run",@"Software\DesktopNook\Sandbox\"+signature+@"\Settings");
+            if(IsSandbox)Options=new StartupOptions(@"Software\DesktopNook\Sandbox\"+signature+@"\Run",@"Software\DesktopNook\Sandbox\"+signature+@"\Settings",Path.Combine(root,"Data","preferences.json"));
+            else Options=new StartupOptions(preferencesPath:Path.Combine(root,"preferences.json"));
             if(e.Args.Any(a=>a.StartsWith("--maintenance="))){Shutdown(Maintenance.Run(e.Args,root,signature,IsSandbox));return;}
             _mutex = new Mutex(true, "Local\\DesktopNook-" + signature, out _ownsMutex);
             _activate = new EventWaitHandle(false, EventResetMode.AutoReset, "Local\\DesktopNook-Activate-" + signature);
             if (!_ownsMutex) { if(!e.Args.Contains("--autostart"))_activate.Set(); Shutdown(); return; }
+            var resumeIndex=Array.IndexOf(e.Args,"--resume-update");
+            if(resumeIndex>=0)
+            {
+                var plan=System.Text.Json.JsonSerializer.Deserialize<UpdatePlan>(File.ReadAllText(e.Args[resumeIndex+1]))??throw new IOException("更新确认记录为空。");
+                var directory=IsSandbox?Path.Combine(root,"Data"):root;
+                if(!string.Equals(Path.GetFullPath(plan.DataRoot),Path.GetFullPath(directory),StringComparison.OrdinalIgnoreCase))throw new IOException("更新后的数据目录与原目录不一致，已停止启动。");
+                if(!string.IsNullOrEmpty(plan.StateFingerprint))
+                {
+                    var saved=System.Text.Json.JsonSerializer.Deserialize<NookState>(File.ReadAllText(Path.Combine(directory,"state.json")))??throw new IOException("原分类配置为空。");
+                    if(LocalUpdater.Fingerprint(saved)!=plan.StateFingerprint)throw new IOException("更新前后分类配置不一致，已停止启动并保留记录。");
+                }
+                if(plan.CloseEndsProcess is bool closing&&Options.CloseEndsProcess!=closing)throw new IOException("更新前后关闭偏好不一致，已停止启动并保留记录。");
+            }
+            Options.PersistForUpdate();
             var desktops = IsSandbox ? new[] { Path.Combine(root, "Desktop") } : new[] { Environment.GetFolderPath(Environment.SpecialFolder.DesktopDirectory), Environment.GetFolderPath(Environment.SpecialFolder.CommonDesktopDirectory) };
             if (IsSandbox) Directory.CreateDirectory(desktops[0]);
             Recycle = IsSandbox ? new SandboxRecycle(root) : new WindowsRecycleBin();
@@ -52,7 +68,7 @@ public partial class App : Application
             _stop=new EventWaitHandle(false,EventResetMode.AutoReset,"Local\\DesktopNook-Stop-"+signature);
             ThreadPool.RegisterWaitForSingleObject(_stop,(_,_)=>Dispatcher.BeginInvoke(()=>window.QuitForMaintenance()),null,Timeout.Infinite,false);
             ThreadPool.RegisterWaitForSingleObject(_activate, (_, _) => Dispatcher.BeginInvoke(() => window.TogglePanel()), null, Timeout.Infinite, false);
-            var readyIndex=Array.IndexOf(e.Args,"--update-ready");if(readyIndex>=0)Dispatcher.BeginInvoke(()=>File.WriteAllText(e.Args[readyIndex+1],System.Text.Json.JsonSerializer.Serialize(new{version=System.Reflection.Assembly.GetExecutingAssembly().GetName().Version!.ToString(),pid=Environment.ProcessId})),System.Windows.Threading.DispatcherPriority.Loaded);
+            var readyIndex=Array.IndexOf(e.Args,"--update-ready");if(readyIndex>=0)Dispatcher.BeginInvoke(()=>WriteUpdateReady(e.Args[readyIndex+1]),System.Windows.Threading.DispatcherPriority.Loaded);
             DispatcherUnhandledException += (_, args) => { args.Handled = true; window.ShowFailure(args.Exception); };
             if (e.Args.Contains("--ui-self-test")) Dispatcher.BeginInvoke(async () => await NativeVerification.Run(window, root), System.Windows.Threading.DispatcherPriority.Loaded);
             if (e.Args.Contains("--size-self-test")) Dispatcher.BeginInvoke(async () => await SizingVerification.Run(window, root), System.Windows.Threading.DispatcherPriority.Loaded);
@@ -60,6 +76,12 @@ public partial class App : Application
             if (e.Args.Contains("--category-self-test")) Dispatcher.BeginInvoke(async () => await CategoryDeletionVerification.Run(window, root), System.Windows.Threading.DispatcherPriority.Loaded);
         }
         catch (Exception ex) { MessageBox.Show("桌面小筑暂时无法打开。原文件和数据均保留。\n\n" + ex.Message, "桌面小筑", MessageBoxButton.OK, MessageBoxImage.Error); Shutdown(1); }
+    }
+    private static void WriteUpdateReady(string path)
+    {
+        var temp=path+".tmp-"+Environment.ProcessId;
+        File.WriteAllText(temp,System.Text.Json.JsonSerializer.Serialize(new{version=System.Reflection.Assembly.GetExecutingAssembly().GetName().Version!.ToString(),pid=Environment.ProcessId,stateFingerprint=LocalUpdater.Fingerprint(Store.State),closeEndsProcess=Options.CloseEndsProcess,categoryIds=Store.State.Categories.Select(c=>c.Id).ToArray(),dataRoot=Store.DataDirectory}));
+        File.Move(temp,path,true);
     }
     protected override void OnExit(ExitEventArgs e) { _stop?.Dispose();_activate?.Dispose(); if (_ownsMutex) _mutex?.ReleaseMutex(); _mutex?.Dispose(); base.OnExit(e); }
 }

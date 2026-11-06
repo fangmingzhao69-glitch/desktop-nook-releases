@@ -16,11 +16,14 @@ internal sealed class UpdatePlan
     public string? Sandbox {get;set;}
     public bool Installer {get;set;}
     public int ProcessId {get;set;}
+    public string StateFingerprint {get;set;}="";
+    public bool? CloseEndsProcess {get;set;}
 }
 internal static class LocalUpdater
 {
     private static readonly JsonSerializerOptions Json=new(){WriteIndented=true};
     internal static string Hash(string path){using var file=File.OpenRead(path);return Convert.ToHexString(SHA256.HashData(file));}
+    internal static string Fingerprint(DesktopNook.Core.NookState state)=>Convert.ToHexString(SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(JsonSerializer.Serialize(state))));
     internal static (Version Version,bool Installer) Inspect(string path)
     {
         var info=FileVersionInfo.GetVersionInfo(path);
@@ -29,9 +32,11 @@ internal static class LocalUpdater
         version=new Version(version.Major,version.Minor,Math.Max(0,version.Build),Math.Max(0,version.Revision));
         return(version,info.FileDescription?.Contains("安装程序")==true);
     }
-    public static (string Helper,string Plan,string Version) Stage(string source,string target,string dataRoot,string? sandbox=null,int? processId=null)
+    public static (string Helper,string Plan,string Version) Stage(string source,string target,string dataRoot,string? sandbox=null,int? processId=null,StartupOptions? options=null,DesktopNook.Core.NookState? state=null)
     {
         source=Path.GetFullPath(source);target=Path.GetFullPath(target);
+        if(state is not null&&Fingerprint(JsonSerializer.Deserialize<DesktopNook.Core.NookState>(File.ReadAllText(Path.Combine(dataRoot,"state.json")))!)!=Fingerprint(state))
+            throw new IOException("当前运行配置与保存的分类不一致，请重新打开小筑核对后再更新；本次未替换程序。");
         if(source.Equals(target,StringComparison.OrdinalIgnoreCase))throw new IOException("请选择其他位置的新版本文件。");
         var candidate=Inspect(source);var current=Inspect(target);
         if(candidate.Version<current.Version)throw new IOException("所选版本较旧，请选择当前版本或更新版本。");
@@ -41,10 +46,13 @@ internal static class LocalUpdater
         DesktopNook.Core.NookStore.CopyPreservingStreams(source,staged);DesktopNook.Core.NookStore.CopyPreservingStreams(Environment.ProcessPath!,helper);
         if(Hash(staged)!=Hash(source))throw new IOException("更新文件校验失败，当前程序未更改。");
         // Save metadata only; never duplicate or relocate managed user files/folders during updates.
+        options?.PersistForUpdate();
         var metadata=Path.Combine(dir,"metadata-backup");Directory.CreateDirectory(metadata);
-        foreach(var name in new[]{"state.json","state.json.bak","migration.json"}){var file=Path.Combine(dataRoot,name);if(File.Exists(file))File.Copy(file,Path.Combine(metadata,name),false);}
+        foreach(var name in new[]{"state.json","state.json.bak","migration.json","preferences.json","preferences.json.bak"}){var file=Path.Combine(dataRoot,name);if(File.Exists(file))File.Copy(file,Path.Combine(metadata,name),false);}
         var vault=Path.Combine(dataRoot,"vault");if(Directory.Exists(vault))foreach(var folder in Directory.EnumerateDirectories(vault)){if(Guid.TryParseExact(Path.GetFileName(folder),"N",out _)&&File.Exists(Path.Combine(folder,"entry.json"))){var dest=Path.Combine(metadata,"vault",Path.GetFileName(folder));Directory.CreateDirectory(dest);File.Copy(Path.Combine(folder,"entry.json"),Path.Combine(dest,"entry.json"),false);}}
         var plan=new UpdatePlan{Target=target,Candidate=staged,CandidateHash=Hash(staged),PreviousHash=Hash(target),Version=candidate.Version.ToString(),DataRoot=Path.GetFullPath(dataRoot),Sandbox=sandbox,Installer=candidate.Installer,ProcessId=processId??Environment.ProcessId};
+        if(state is not null)plan.StateFingerprint=Fingerprint(state);
+        plan.CloseEndsProcess=options?.CloseEndsProcess;
         var planFile=Path.Combine(dir,"update.json");File.WriteAllText(planFile,JsonSerializer.Serialize(plan,Json));
         return(helper,planFile,plan.Version);
     }
@@ -76,9 +84,18 @@ internal static class LocalUpdater
             }
             var start=new ProcessStartInfo(plan.Target){UseShellExecute=false,WorkingDirectory=Path.GetDirectoryName(plan.Target)!};
             if(plan.Sandbox is not null){start.ArgumentList.Add("--sandbox");start.ArgumentList.Add(plan.Sandbox);}
+            else{start.ArgumentList.Add("--data-root");start.ArgumentList.Add(plan.DataRoot);}
+            start.ArgumentList.Add("--resume-update");start.ArgumentList.Add(Path.GetFullPath(planPath));
             start.ArgumentList.Add("--update-ready");var ready=Path.Combine(directory,"ready.json");start.ArgumentList.Add(ready);
             using var updated=Process.Start(start)??throw new IOException("新版程序未能启动，备份已保留。");
-            var confirmed=false;for(var i=0;i<100;i++){if(File.Exists(ready)){confirmed=true;break;}if(updated.HasExited)break;Thread.Sleep(100);}
+            var confirmed=false;for(var i=0;i<100;i++){if(File.Exists(ready))
+            {
+                using var actual=JsonDocument.Parse(File.ReadAllText(ready));var value=actual.RootElement;
+                confirmed=value.GetProperty("version").GetString()==plan.Version&&value.GetProperty("pid").GetInt32()==updated.Id
+                    &&(string.IsNullOrEmpty(plan.StateFingerprint)||(value.TryGetProperty("stateFingerprint",out var fingerprint)&&fingerprint.GetString()==plan.StateFingerprint))
+                    &&(plan.CloseEndsProcess is null||(value.TryGetProperty("closeEndsProcess",out var closing)&&closing.GetBoolean()==plan.CloseEndsProcess));
+                break;
+            }if(updated.HasExited)break;Thread.Sleep(100);}
             File.WriteAllText(log,JsonSerializer.Serialize(new{success=confirmed,version=plan.Version,replaced,backup,processId=updated.Id,reason=confirmed?"":"新版未确认就绪，旧程序备份保留"},Json));
             return confirmed?0:2;
         }

@@ -31,6 +31,15 @@ internal static class NativeVerification
                 options.SetEnabled(false);using var check=Registry.CurrentUser.OpenSubKey(optionKey+@"\Run");if(options.Enabled||check?.GetValue("OtherEntry") as string!="keep")throw new Exception("关闭自启影响其他入口。");
                 checks.Add("Startup option persists quoted command, can be disabled and preserves other entries");
                 checks.Add("Close-to-exit preference persists independently of collection data");
+                var preferencePath=Path.Combine(root,"preference-fixture.json");
+                var persistent=new StartupOptions(optionKey+@"\Run",optionKey+@"\Settings",preferencePath);
+                persistent.PersistForUpdate();
+                if(persistent.CloseEndsProcess)throw new Exception("迁移设置时把取消勾选变成了默认勾选。");
+                persistent.WriteWindowSize(new(){Free=true,Locked=false,Width=800,Height=500});
+                Registry.CurrentUser.DeleteSubKeyTree(optionKey+@"\Settings",false);
+                persistent=new StartupOptions(optionKey+@"\Run",optionKey+@"\Settings",preferencePath);
+                if(persistent.CloseEndsProcess||persistent.ReadWindowSize().Locked||persistent.ReadWindowSize().Width!=800)throw new Exception("偏好文件未保留关闭和宽高比的取消勾选状态。");
+                checks.Add("Unchecked close preference migrates durably and survives missing registry values");
             }
             finally{Registry.CurrentUser.DeleteSubKeyTree(optionKey,false);}
             var desktop=App.Store.DesktopRoots[0];
@@ -114,6 +123,23 @@ internal static class NativeVerification
             window.SetAvailableRelease(null);
             if(window.UpdateAvailableButton.Visibility!=Visibility.Collapsed)throw new Exception("没有新版本时提示未隐藏。");
             checks.Add("No new release hides the update notice");
+            Exception? dialogFailure=null;
+            _=window.Dispatcher.BeginInvoke(()=>
+            {
+                var dialog=Application.Current.Windows.OfType<Window>().Single(w=>w.Title=="更新布局验证");
+                try
+                {
+                dialog.UpdateLayout();
+                if(dialog.ActualWidth>390||dialog.ActualHeight>window.ActualHeight)throw new Exception("更新确认窗口比例过大。");
+                var bitmap=new RenderTargetBitmap((int)Math.Ceiling(dialog.ActualWidth),(int)Math.Ceiling(dialog.ActualHeight),96,96,PixelFormats.Pbgra32);bitmap.Render(dialog);
+                var png=new PngBitmapEncoder();png.Frames.Add(BitmapFrame.Create(bitmap));using(var file=File.Create(Path.Combine(root,"update-dialog-preview.png")))png.Save(file);
+                FindNamedButton(dialog,"取消").RaiseEvent(new RoutedEventArgs(System.Windows.Controls.Button.ClickEvent));
+                }
+                catch(Exception ex){dialogFailure=ex;dialog.DialogResult=false;}
+            },DispatcherPriority.ContextIdle);
+            if(UiDialogs.ShowUpdate(window,"当前版本："+MainWindow.CurrentVersionLabel+"\n更新到：v9.9.9\n\n"+new string('更',600),"更新布局验证",MessageBoxButton.OKCancel)!=MessageBoxResult.Cancel)throw new Exception("取消更新未生效。");
+            if(dialogFailure is not null)throw dialogFailure;
+            checks.Add("Compact update confirmation fits panel and can be cancelled without downloading");
             if(Environment.GetCommandLineArgs().Contains("--leave-payloads"))
             {
                 App.Store.Collect(Path.Combine(desktop,"真实文档拖放验证.txt"),"office");App.Store.Collect(Path.Combine(desktop,"真实文件夹拖放验证"),"office");App.Store.CollectRecycleBin("uncategorized");checks.Add("Uninstall fixture retains document, folder and system item alongside shortcuts");
@@ -245,7 +271,7 @@ internal static class NativeVerification
     }
     private static System.Windows.Controls.Button FindNamedButton(DependencyObject root,string name)
     {
-        for(var i=0;i<VisualTreeHelper.GetChildrenCount(root);i++){var child=VisualTreeHelper.GetChild(root,i);if(child is System.Windows.Controls.Button button&&System.Windows.Automation.AutomationProperties.GetName(button)==name)return button;try{return FindNamedButton(child,name);}catch(InvalidOperationException){}}
+            for(var i=0;i<VisualTreeHelper.GetChildrenCount(root);i++){var child=VisualTreeHelper.GetChild(root,i);if(child is System.Windows.Controls.Button button&&(System.Windows.Automation.AutomationProperties.GetName(button)==name||button.Content as string==name))return button;try{return FindNamedButton(child,name);}catch(InvalidOperationException){}}
         throw new InvalidOperationException("未找到按钮："+name);
     }
 }
