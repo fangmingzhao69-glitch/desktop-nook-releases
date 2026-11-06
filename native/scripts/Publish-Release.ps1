@@ -14,6 +14,14 @@ $setupInfo=[Diagnostics.FileVersionInfo]::GetVersionInfo($Installer)
 $version=([version]$exeInfo.FileVersion).ToString(3)
 if($exeInfo.ProductName -ne 'DesktopNook' -or $setupInfo.ProductName -ne '桌面小筑' -or ([version]$setupInfo.FileVersion).ToString(3) -ne $version){throw '程序与安装包版本或产品标识不一致。'}
 $tag='v'+$version
+$sourceRoot=[IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..\..'))
+$sourceCommit=(& git -C $sourceRoot rev-parse HEAD).Trim()
+if($LASTEXITCODE -ne 0){throw '无法读取源码提交。'}
+if(-not $VerifyOnly) {
+    $pending=& git -C $sourceRoot status --porcelain
+    if($LASTEXITCODE -ne 0 -or $pending){throw '请先提交并推送所有源码修改，再构建发布。'}
+    if(-not $exeInfo.ProductVersion.EndsWith('+'+$sourceCommit,[StringComparison]::OrdinalIgnoreCase)){throw '程序不是从当前提交构建，请从已提交源码重新构建。'}
+}
 $stage=Join-Path $PSScriptRoot ('..\artifacts\github-release\'+$tag)
 New-Item -ItemType Directory -Path $stage -Force | Out-Null
 $binary=Join-Path $stage 'DesktopNook-win-x64.exe'
@@ -61,14 +69,19 @@ try {
     }
     $releases=& gh api "repos/$Repository/releases?per_page=100" | ConvertFrom-Json
     if($LASTEXITCODE -ne 0){throw '无法读取发行版列表。'}
+    if(-not $VerifyOnly) {
+        $remoteCommit=& gh api "repos/$Repository/commits/main" --jq .sha
+        if($LASTEXITCODE -ne 0 -or $remoteCommit.Trim() -ne $sourceCommit){throw '当前提交尚未推送到 GitHub main，或远程已有新提交；发布已停止。'}
+    }
     $existing=$releases|Where-Object tag_name -eq $tag
     if($VerifyOnly -and -not $existing){throw '待核验的发行版不存在。'}
     if($existing -and -not $existing.draft -and -not $VerifyOnly){throw '该版本已公开，请使用新版本号，不覆盖已发布文件。'}
     # Publish only the three explicit files, after all uploads and hashes succeed.
     if(-not $existing) {
-        & gh release create $tag $binary $setup $checksum --repo $Repository --draft --title ('桌面小筑 '+$version) --notes-file $NotesFile
+        & gh release create $tag $binary $setup $checksum --repo $Repository --target $sourceCommit --draft --title ('桌面小筑 '+$version) --notes-file $NotesFile
         if($LASTEXITCODE -ne 0){throw '发行包上传未完成，草稿保留，可再次运行本脚本续传。'}
     } elseif($existing.draft -and -not $VerifyOnly) {
+        if($existing.target_commitish -ne $sourceCommit){throw '已有草稿绑定其他源码提交，请检查后使用新版本号。'}
         foreach($file in @($binary,$setup,$checksum)) {
             if(-not ($existing.assets|Where-Object name -eq ([IO.Path]::GetFileName($file)))) {
                 & gh release upload $tag $file --repo $Repository

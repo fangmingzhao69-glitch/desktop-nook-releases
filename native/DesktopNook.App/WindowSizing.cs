@@ -99,6 +99,7 @@ public partial class MainWindow
         foreach(var panel in FindVisualChildren<UniformGrid>(Icons))panel.Columns=IconColumns;
         ResizeHandles.Visibility=_sizePreference.Free?Visibility.Visible:Visibility.Collapsed;
         ResizeHint.Visibility=ResizeHandles.Visibility;
+        if(LastMenu?.IsOpen==true)MenuLayout.Adapt(LastMenu,this);
     }
     internal int IconColumns {get;private set;}=6;
     private void ResizeDelta(object sender,DragDeltaEventArgs e)

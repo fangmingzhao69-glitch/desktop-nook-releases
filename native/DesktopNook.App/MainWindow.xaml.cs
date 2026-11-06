@@ -17,6 +17,8 @@ public partial class MainWindow : Window
     private int _placementVersion;
     private bool _onlineBusy;
     private OnlineRelease? _latestRelease;
+    private DateTime _lastUpdateCheck=DateTime.MinValue;
+    private readonly System.Windows.Threading.DispatcherTimer _updateTimer=new(){Interval=TimeSpan.FromHours(1)};
     internal static string CurrentVersionLabel=>"v"+System.Reflection.Assembly.GetExecutingAssembly().GetName().Version!.ToString(3);
     internal string UpdateMenuText=>_latestRelease is null?$"检查在线更新（当前 {CurrentVersionLabel}）…":$"更新到 v{_latestRelease.Version.ToString(3)}（当前 {CurrentVersionLabel}）…";
     private Point _mouseDown; private bool _dragging; private int _interactions; private int _menus; private bool _allowExit; private DateTime _suppressUntil;
@@ -30,10 +32,19 @@ public partial class MainWindow : Window
     internal List<Point> IconPositions() => FindVisualChildren<Button>(Icons).Select(b=>b.TranslatePoint(new Point(0,0),this)).ToList();
     public MainWindow()
     {
-        InitializeComponent();InitializeSizing();Activated+=(_,_)=>Place();
+        InitializeComponent();InitializeSizing();Activated+=(_,_)=>{Place();if(IsLoaded&&!App.IsSandbox&&DateTime.UtcNow-_lastUpdateCheck>TimeSpan.FromMinutes(15))_=CheckOnlineUpdateAsync(false);};
+        _updateTimer.Tick+=(_,_)=>_=CheckOnlineUpdateAsync(false);
+        Closed+=(_,_)=>_updateTimer.Stop();
         Render();
     }
-    private void OnLoaded(object sender,RoutedEventArgs e) { TaskbarPlacement.EnableToggle(this);Place(); if(Store.RecoveryMessages.Count>0) SetStatus(Store.RecoveryMessages.Last());if(!App.IsSandbox)_=CheckOnlineUpdateAsync(false); }
+    private void OnLoaded(object sender,RoutedEventArgs e) { TaskbarPlacement.EnableToggle(this);Place(); if(Store.RecoveryMessages.Count>0) SetStatus(Store.RecoveryMessages.Last());if(!App.IsSandbox){_updateTimer.Start();_=CheckOnlineUpdateAsync(false);} }
+    internal void SetAvailableRelease(OnlineRelease? release)
+    {
+        _latestRelease=release;
+        UpdateAvailableButton.Content=release is null?"":$"发现 v{release.Version.ToString(3)} · 更新";
+        UpdateAvailableButton.Visibility=release is null?Visibility.Collapsed:Visibility.Visible;
+    }
+    private async void OnUpdateAvailable(object sender,RoutedEventArgs e)=>await CheckOnlineUpdateAsync(true);
     private async void Place()
     {
         if(_resizing || KeepOpenForVerification || !IsLoaded || WindowState!=WindowState.Normal)return;
@@ -123,7 +134,8 @@ public partial class MainWindow : Window
     }
     private void Popup(FrameworkElement owner,IEnumerable<object> entries,Action? closed=null)
     {
-        var menu=new ContextMenu { FontSize=11,PlacementTarget=owner,LayoutTransform=new ScaleTransform(1.4,1.4) };
+        var menu=new ContextMenu { PlacementTarget=owner };
+        MenuLayout.Adapt(menu,this);
         LastMenu=menu;
         foreach(var entry in entries)menu.Items.Add(entry);
         menu.Opened+=(_,_)=>_menus++;
@@ -188,20 +200,20 @@ public partial class MainWindow : Window
     private async Task CheckOnlineUpdateAsync(bool manual)
     {
         if(_onlineBusy){if(manual)SetStatus("正在检查或下载更新，请稍候…");return;}
-        _onlineBusy=true;if(manual)_interactions++;
+        _onlineBusy=true;_lastUpdateCheck=DateTime.UtcNow;if(manual)_interactions++;
         try
         {
             if(manual)SetStatus($"正在检查更新（当前 {CurrentVersionLabel}）…");
             using var client=OnlineUpdater.CreateClient();
-            _latestRelease=await OnlineUpdater.CheckAsync(client,System.Reflection.Assembly.GetExecutingAssembly().GetName().Version!);
+            SetAvailableRelease(await OnlineUpdater.CheckAsync(client,System.Reflection.Assembly.GetExecutingAssembly().GetName().Version!));
             if(_latestRelease is null)
             {
                 if(manual){SetStatus($"当前 {CurrentVersionLabel} 已是最新版本");UiDialogs.Show(this,$"当前版本：{CurrentVersionLabel}\n已是最新版本。","检查更新");}return;
             }
-            SetStatus($"发现新版本 {_latestRelease.Version.ToString(3)}，可在更多菜单中更新");
+            SetStatus($"发现新版本 v{_latestRelease.Version.ToString(3)}，点击更新查看详情");
             if(!manual)return;
             string notes=_latestRelease.Notes.Length>600?_latestRelease.Notes[..600]+"…":_latestRelease.Notes;
-            if(UiDialogs.Show(this,$"当前版本：{CurrentVersionLabel}\n更新到：v{_latestRelease.Version.ToString(3)}\n\n{notes}\n\n下载完成后自动重启，分类、收纳内容和设置保留。","发现新版本",MessageBoxButton.OKCancel)!=MessageBoxResult.OK)return;
+            if(UiDialogs.Show(this,$"当前版本：{CurrentVersionLabel}\n更新到：v{_latestRelease.Version.ToString(3)}\n来源：GitHub 官方发行版\n\n{notes}\n\n选择确定后从 GitHub 下载更新并自动重启，分类、收纳内容和设置保留。","发现新版本",MessageBoxButton.OKCancel)!=MessageBoxResult.OK)return;
             var download=new UpdateDownloadWindow(this,_latestRelease,Store.DataDirectory);
             if(download.ShowDialog()!=true||download.DownloadedFile is null)return;
             SetStatus("正在准备更新…");

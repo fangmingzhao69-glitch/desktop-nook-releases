@@ -12,6 +12,7 @@ namespace DesktopNook.App;
 
 internal static class NativeVerification
 {
+    [DllImport("user32.dll")]private static extern uint GetDpiForWindow(IntPtr window);
     public static async Task Run(MainWindow window,string root)
     {
         var checks=new List<string>();var failure="";window.KeepOpenForVerification=true;
@@ -97,11 +98,22 @@ internal static class NativeVerification
             var encoder=new PngBitmapEncoder();encoder.Frames.Add(BitmapFrame.Create(bitmap));using(var file=File.Create(Path.Combine(root,"native-preview.png")))encoder.Save(file);
             checks.Add("Native window rendered at 716.8x627.2 with production icon");
             window.ShowIconMenu(window.IconButton(App.Store.State.Items[0].Id),App.Store.State.Items[0]);
-            await window.Dispatcher.InvokeAsync(()=>{},DispatcherPriority.ContextIdle);
-            if(window.LastMenu is not null && System.Windows.PresentationSource.FromVisual(window.LastMenu)?.RootVisual is FrameworkElement menuRoot)
+            try
             {
-                var image=new RenderTargetBitmap((int)Math.Ceiling(menuRoot.ActualWidth),(int)Math.Ceiling(menuRoot.ActualHeight),96,96,PixelFormats.Pbgra32);image.Render(menuRoot);var png=new PngBitmapEncoder();png.Frames.Add(BitmapFrame.Create(image));using var file=File.Create(Path.Combine(root,"context-menu-preview.png"));png.Save(file);window.LastMenu.IsOpen=false;
+                await SaveMenuPreview(window.LastMenu??throw new Exception("右键菜单没有打开。"),Path.Combine(root,"context-menu-preview.png"));
+                checks.Add("Context-menu preview contains visible menu background and text after popup rendering");
             }
+            finally{if(window.LastMenu is not null)window.LastMenu.IsOpen=false;}
+            await VerifyMenuLayout(window,root,checks);
+            var stateHash=LocalUpdater.Hash(Path.Combine(App.Store.DataDirectory,"state.json"));
+            window.SetAvailableRelease(new OnlineRelease(new Version(9,9,9),new Uri($"https://github.com/{OnlineUpdater.Repository}/releases/download/v9.9.9/{OnlineUpdater.AssetName}"),1,new string('0',64),"演示更新"));
+            window.UpdateLayout();
+            if(window.UpdateAvailableButton.Visibility!=Visibility.Visible||!window.UpdateAvailableButton.Content.ToString()!.Contains("v9.9.9"))throw new Exception("新版本没有显示可点击提示。");
+            if(Directory.Exists(Path.Combine(App.Store.DataDirectory,"updates"))||LocalUpdater.Hash(Path.Combine(App.Store.DataDirectory,"state.json"))!=stateHash)throw new Exception("发现新版时不应自动下载或改动数据。");
+            checks.Add("New release shows an actionable version notice without downloading or changing collection data");
+            window.SetAvailableRelease(null);
+            if(window.UpdateAvailableButton.Visibility!=Visibility.Collapsed)throw new Exception("没有新版本时提示未隐藏。");
+            checks.Add("No new release hides the update notice");
             if(Environment.GetCommandLineArgs().Contains("--leave-payloads"))
             {
                 App.Store.Collect(Path.Combine(desktop,"真实文档拖放验证.txt"),"office");App.Store.Collect(Path.Combine(desktop,"真实文件夹拖放验证"),"office");App.Store.CollectRecycleBin("uncategorized");checks.Add("Uninstall fixture retains document, folder and system item alongside shortcuts");
@@ -113,6 +125,123 @@ internal static class NativeVerification
             Directory.CreateDirectory(root);File.WriteAllText(Path.Combine(root,"native-verification.json"),JsonSerializer.Serialize(new{passed=checks.Count,failure,checks,realDesktopModified=false},new JsonSerializerOptions{WriteIndented=true}));
             Application.Current.Shutdown(failure.Length==0?0:1);
         }
+    }
+    private static async Task VerifyMenuLayout(MainWindow window,string root,List<string> checks)
+    {
+        var textMetrics=new List<object>();
+        async Task Layout(){window.UpdateLayout();await window.Dispatcher.InvokeAsync(()=>{},DispatcherPriority.ContextIdle);}
+        void CheckBounds(System.Windows.Controls.ContextMenu menu)
+        {
+            var visual=(FrameworkElement)PresentationSource.FromVisual(menu)!.RootVisual;
+            if(visual.ActualHeight>window.ActualHeight-20||visual.ActualWidth>window.ActualWidth-20)
+                throw new Exception($"菜单超出面板可用尺寸：{visual.ActualWidth:F1}×{visual.ActualHeight:F1}。");
+            CheckTextRendering(visual);
+        }
+        IEnumerable<T> Find<T>(DependencyObject parent) where T:DependencyObject
+        {
+            for(int n=0;n<VisualTreeHelper.GetChildrenCount(parent);n++){var child=VisualTreeHelper.GetChild(parent,n);if(child is T match)yield return match;foreach(var nested in Find<T>(child))yield return nested;}
+        }
+        void CheckTextRendering(FrameworkElement visual)
+        {
+            var source=(System.Windows.Interop.HwndSource)PresentationSource.FromVisual(visual)!;
+            double nativeDpi=GetDpiForWindow(source.Handle)/96d;
+            if(Math.Abs(VisualTreeHelper.GetDpi(visual).DpiScaleX-nativeDpi)>.001)throw new Exception("菜单渲染 DPI 与当前弹出窗口 DPI 不一致。");
+            var texts=Find<System.Windows.Controls.TextBlock>(visual).Where(t=>!string.IsNullOrWhiteSpace(t.Text)).ToList();
+            if(texts.Count==0)throw new Exception("菜单没有可检查的文字。");
+            foreach(var text in texts)
+            {
+                if(TextOptions.GetTextFormattingMode(text)!=TextFormattingMode.Display||!text.UseLayoutRounding)throw new Exception("菜单文字没有使用屏幕像素对齐排版。");
+                var transformed=text.TransformToAncestor(visual).TransformBounds(new Rect(0,0,1,1));
+                if(Math.Abs(transformed.Width-1)>.001||Math.Abs(transformed.Height-1)>.001)throw new Exception("菜单文字仍有整体缩放。");
+                for(DependencyObject? current=text;current is not null;current=VisualTreeHelper.GetParent(current))
+                {
+                    if(current is UIElement element&&(element.Effect is not null||element.CacheMode is BitmapCache))throw new Exception("菜单文字被阴影效果或位图缓存包裹。");
+                    if(ReferenceEquals(current,visual))break;
+                }
+            }
+            textMetrics.Add(new{nativeDpi=nativeDpi*96,wpfDpi=VisualTreeHelper.GetDpi(visual).PixelsPerInchX,textElements=texts.Count,formatting="Display",textScale=1,effectAncestors=0});
+        }
+        foreach(double preset in new[]{.8,1,1.5})
+        {
+            window.SelectWindowSize(preset);await Layout();
+            FindNamedButton(window,"更多操作").RaiseEvent(new RoutedEventArgs(System.Windows.Controls.Button.ClickEvent));
+            var menu=window.LastMenu!;
+            try
+            {
+                await SaveMenuPreview(menu,Path.Combine(root,$"more-menu-{preset*100:0}.png"));CheckBounds(menu);
+                if(!menu.Items.OfType<System.Windows.Controls.MenuItem>().Any(i=>i.Header as string=="退出并结束进程"))throw new Exception("适配菜单丢失退出入口。");
+                checks.Add($"More menu fits {preset*100:0}% panel with all commands retained");
+            }
+            finally{menu.IsOpen=false;}
+        }
+        window.SelectWindowSize(reset:true);await Layout();
+        var tab=window.Tabs.Children.OfType<System.Windows.Controls.Button>().Single(b=>b.Tag as string=="office");
+        window.CategoryMenu(tab,"office");
+        try{await SaveMenuPreview(window.LastMenu!,Path.Combine(root,"category-menu-preview.png"));CheckBounds(window.LastMenu!);checks.Add("Category menu uses the same compact layout");}
+        finally{window.LastMenu!.IsOpen=false;}
+        window.SelectWindowSize();window.Width=560;window.Height=360;await Layout();
+        window.ShowIconMenu(window.IconButton(App.Store.State.Items[0].Id),App.Store.State.Items[0]);
+        var iconMenu=window.LastMenu!;
+        try
+        {
+            await SaveMenuPreview(iconMenu,Path.Combine(root,"compact-icon-menu.png"));CheckBounds(iconMenu);
+            var scroll=Find<System.Windows.Controls.ScrollViewer>(iconMenu).First();
+            if(scroll.ScrollableHeight<=0)throw new Exception("长菜单未提供滚动区域。");
+            scroll.ScrollToEnd();await Layout();
+            if(scroll.VerticalOffset<=0)throw new Exception("长菜单无法滚动到末尾命令。");
+            await SaveMenuPreview(iconMenu,Path.Combine(root,"compact-icon-menu-end.png"));
+            scroll.ScrollToHome();await Layout();
+            var move=iconMenu.Items.OfType<System.Windows.Controls.MenuItem>().Single(i=>i.Header as string=="移动到分类");
+            for(int n=0;n<40;n++)move.Items.Add(new System.Windows.Controls.MenuItem{Header=$"较长分类名称用于验证宽度与滚动 {n+1}"});
+            move.IsSubmenuOpen=true;await Layout();
+            var popup=(System.Windows.Controls.Primitives.Popup)move.Template.FindName("PART_Popup",move);
+            var body=(FrameworkElement)popup.Child;
+            await SaveMenuPreview(iconMenu,Path.Combine(root,"compact-submenu.png"),body);
+            var submenuRoot=(FrameworkElement)PresentationSource.FromVisual(body)!.RootVisual;
+            CheckTextRendering(submenuRoot);
+            if(submenuRoot.ActualHeight>window.ActualHeight-20||submenuRoot.ActualWidth>window.ActualWidth-20)throw new Exception("子菜单尺寸未跟随面板约束。");
+            var submenuScroll=Find<System.Windows.Controls.ScrollViewer>(body).First();
+            if(submenuScroll.ScrollableHeight<=0)throw new Exception("长子菜单无法滚动。");
+            submenuScroll.ScrollToEnd();await Layout();
+            if(submenuScroll.VerticalOffset<=0)throw new Exception("子菜单末尾项目不可访问。");
+            move.IsSubmenuOpen=false;
+            checks.Add("Small free-size panel bounds long icon and nested menus while keeping last commands scrollable");
+            checks.Add("Root and nested menu text uses native popup DPI, pixel-aligned formatting and no scaled/effect-cached text layer");
+            File.WriteAllText(Path.Combine(root,"menu-text-dpi-verification.json"),JsonSerializer.Serialize(new{success=true,samples=textMetrics,physicalMixedDpiMonitorsTested=false},new JsonSerializerOptions{WriteIndented=true}));
+        }
+        finally{iconMenu.IsOpen=false;window.SelectWindowSize(reset:true);await Layout();}
+    }
+    private static async Task SaveMenuPreview(System.Windows.Controls.ContextMenu menu,string path,FrameworkElement? popupChild=null)
+    {
+        // ContextIdle can run before the popup's opening animation paints.
+        var deadline=DateTime.UtcNow.AddSeconds(5);
+        while(DateTime.UtcNow<deadline)
+        {
+            await Task.Delay(50);
+            await menu.Dispatcher.InvokeAsync(()=>{},DispatcherPriority.Render);
+            if(!menu.IsOpen)throw new Exception("截图前右键菜单已关闭。");
+            if(PresentationSource.FromVisual(popupChild??(FrameworkElement)menu)?.RootVisual is not FrameworkElement root)continue;
+            root.UpdateLayout();
+            var dpi=VisualTreeHelper.GetDpi(root);
+            int width=(int)Math.Ceiling(root.ActualWidth*dpi.DpiScaleX),height=(int)Math.Ceiling(root.ActualHeight*dpi.DpiScaleY);
+            if(width<=0||height<=0)continue;
+            var image=new RenderTargetBitmap(width,height,96*dpi.DpiScaleX,96*dpi.DpiScaleY,PixelFormats.Pbgra32);
+            image.Render(root);
+            var pixels=new byte[width*height*4];image.CopyPixels(pixels,width*4,0);
+            int visible=0,light=0,dark=0;
+            for(int n=0;n<pixels.Length;n+=4)
+            {
+                if(pixels[n+3]<200)continue;
+                visible++;
+                int brightness=pixels[n]+pixels[n+1]+pixels[n+2];
+                if(brightness>650)light++;
+                if(brightness<500)dark++;
+            }
+            if(visible<width*height/10||light<100||dark<20)continue;
+            var png=new PngBitmapEncoder();png.Frames.Add(BitmapFrame.Create(image));
+            using var file=File.Create(path);png.Save(file);return;
+        }
+        throw new Exception("右键菜单截图为空或缺少可见文字，未作为通过记录保存。");
     }
     private static System.Windows.Controls.Button FindNamedButton(DependencyObject root,string name)
     {
