@@ -168,6 +168,11 @@ Test("Locked manifest cannot leave a half deleted category index",root=>{
 Test("Recovery remaps stale uncategorized manifests to an existing category",root=>{
     var(desktop,data,bin)=Setup(root);var store=new NookStore(data,[desktop],bin);var item=store.Collect(FileAt(desktop),"uncategorized");store.DeleteCategory("uncategorized");var manifestPath=Path.Combine(data,"vault",item.Id,"entry.json");var manifest=JsonSerializer.Deserialize<Manifest>(File.ReadAllText(manifestPath))!;manifest.Item.CategoryId="uncategorized";File.WriteAllText(manifestPath,JsonSerializer.Serialize(manifest));store.State.Items.Clear();File.WriteAllText(Path.Combine(data,"state.json.bak"),JsonSerializer.Serialize(store.State));File.WriteAllText(Path.Combine(data,"state.json"),"broken");store=new(data,[desktop],bin);Assert(store.State.Items.Single().CategoryId==store.DefaultCategoryId&&!store.State.Categories.Any(c=>c.Id=="uncategorized"),"recovered into real category without recreating default");
 });
+Test("Uncategorized deletion survives recovery from both damaged indexes",root=>{
+    var(desktop,data,bin)=Setup(root);var store=new NookStore(data,[desktop],bin);var item=store.Collect(FileAt(desktop),"uncategorized");store.DeleteCategory("uncategorized");
+    File.WriteAllText(Path.Combine(data,"state.json"),"broken");File.WriteAllText(Path.Combine(data,"state.json.bak"),"broken");store=new(data,[desktop],bin);
+    Assert(!store.State.Categories.Any(c=>c.Id=="uncategorized")&&store.State.Items.Count==1&&store.State.Items[0].CategoryId!="uncategorized"&&File.Exists(store.ManagedPath(item)),"deletion marker prevents default resurrection during recovery");
+});
 var failed = results.Count(r => JsonSerializer.Serialize(r).Contains("\"passed\":false"));
 var output = args.FirstOrDefault() ?? Path.Combine(runRoot,"results.json");Directory.CreateDirectory(Path.GetDirectoryName(Path.GetFullPath(output))!);
 File.WriteAllText(output,JsonSerializer.Serialize(new{passed=results.Count-failed,failed,runRoot,checks=results},new JsonSerializerOptions{WriteIndented=true}));

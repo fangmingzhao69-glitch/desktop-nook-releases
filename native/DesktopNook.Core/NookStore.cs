@@ -18,6 +18,18 @@ public sealed class NookStore
     private string StatePath => Path.Combine(DataDirectory, "state.json");
     private string JournalPath => Path.Combine(DataDirectory, "migration.json");
     private string Vault => Path.Combine(DataDirectory, "vault");
+    private string CategoryPolicyPath=>Path.Combine(DataDirectory,"category-policy.json");
+    private sealed class CategoryPolicy {public bool UncategorizedRemoved {get;set;}}
+    private bool UncategorizedRemoved()
+    {
+        foreach(var path in new[]{CategoryPolicyPath,CategoryPolicyPath+".bak"})
+            if(File.Exists(path))try{return Read<CategoryPolicy>(path).UncategorizedRemoved;}catch(JsonException){}
+        return false;
+    }
+    private void RememberCategoryDeletion()
+    {
+        if(!State.Categories.Any(c=>c.Id=="uncategorized")&&!UncategorizedRemoved())WriteAtomic(CategoryPolicyPath,new CategoryPolicy{UncategorizedRemoved=true},true);
+    }
 
     public NookStore(string dataDirectory, IEnumerable<string> desktopRoots, IRecycleBin recycle, Action<string>? checkpoint = null)
     {
@@ -118,7 +130,7 @@ public sealed class NookStore
         }
         finally { if (File.Exists(temp)) File.Delete(temp); if(File.Exists(backupTemp))File.Delete(backupTemp); }
     }
-    private void Save(NookState next) { Validate(next); WriteAtomic(StatePath, next, true); State = next; }
+    private void Save(NookState next) { Validate(next); WriteAtomic(StatePath, next, true); State = next;RememberCategoryDeletion(); }
     private static T Clone<T>(T value) => JsonSerializer.Deserialize<T>(JsonSerializer.Serialize(value, Json), Json)!;
     private void SaveManifest(NookItem item, bool restored) => WriteAtomic(ManifestPath(item), new Manifest { Item = item, Restored = restored });
     private void Begin(Migration migration)
@@ -144,8 +156,16 @@ public sealed class NookStore
         }
         else if (ManifestFiles().Any()) reconcile = true;
         if (reconcile) ReconcileManifests();
+        if(UncategorizedRemoved()&&State.Categories.Any(c=>c.Id=="uncategorized")&&State.Categories.Count>1)
+        {
+            string destination=State.Categories.First(c=>c.Id!="uncategorized").Id;
+            foreach(var item in State.Items.Where(i=>i.CategoryId=="uncategorized"))item.CategoryId=destination;
+            State.Categories.RemoveAll(c=>c.Id=="uncategorized");State.Version=2;reconcile=true;
+            RecoveryMessages.Add("已保留删除未分类的选择，收纳内容保留在现有分类。");
+        }
         RecoverPending();
         if (!File.Exists(StatePath) || reconcile) Save(State);
+        RememberCategoryDeletion();
     }
     private void ReconcileManifests()
     {
