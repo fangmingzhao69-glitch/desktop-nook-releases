@@ -1,0 +1,174 @@
+{
+  "passed": 42,
+  "failed": 0,
+  "checks": [
+    {
+      "name": "Roundtrip preserves shortcut bytes and persistent category",
+      "passed": true
+    },
+    {
+      "name": "Conflict never overwrites, renamed restore preserves both files",
+      "passed": true
+    },
+    {
+      "name": "Desktop roots and file types restricted",
+      "passed": true
+    },
+    {
+      "name": "Category reassignment, deletion and duplicate validation",
+      "passed": true
+    },
+    {
+      "name": "Interrupted collect recovery: journal",
+      "passed": true
+    },
+    {
+      "name": "Interrupted collect recovery: vault",
+      "passed": true
+    },
+    {
+      "name": "Interrupted collect recovery: collect-state",
+      "passed": true
+    },
+    {
+      "name": "Interrupted collect recovery: source-removed",
+      "passed": true
+    },
+    {
+      "name": "Interrupted restore recovery: journal",
+      "passed": true
+    },
+    {
+      "name": "Interrupted restore recovery: destination-created",
+      "passed": true
+    },
+    {
+      "name": "Interrupted restore recovery: restore-state",
+      "passed": true
+    },
+    {
+      "name": "Source changes during collection are not deleted",
+      "passed": true
+    },
+    {
+      "name": "Recycle Bin distinct state roundtrip, no file emulation",
+      "passed": true
+    },
+    {
+      "name": "Recycle Bin interrupted hide restores original state",
+      "passed": true
+    },
+    {
+      "name": "Corrupt config rebuilt from manifests, damaged originals retained",
+      "passed": true
+    },
+    {
+      "name": "Corrupt backup does not resurrect restored entry",
+      "passed": true
+    },
+    {
+      "name": "Different shortcuts to same application stay independent",
+      "passed": true
+    },
+    {
+      "name": "Windows security alternate streams preserved on roundtrip",
+      "passed": true
+    },
+    {
+      "name": "Repeated category and item renames in actual LocalAppData retain attributes and backup",
+      "passed": true
+    },
+    {
+      "name": "Removing a menu entry retains recovery copy and system item is protected",
+      "passed": true
+    },
+    {
+      "name": "Regular documents remain editable and restore latest content",
+      "passed": true
+    },
+    {
+      "name": "Nested folders including empty directories roundtrip without recursive deletion",
+      "passed": true
+    },
+    {
+      "name": "Folder same-name conflicts never overwrite either tree",
+      "passed": true
+    },
+    {
+      "name": "Folder collect interruption recovery: journal",
+      "passed": true
+    },
+    {
+      "name": "Folder collect interruption recovery: mutable-moved",
+      "passed": true
+    },
+    {
+      "name": "Folder collect interruption recovery: collect-state",
+      "passed": true
+    },
+    {
+      "name": "Folder restore interruption recovery: journal",
+      "passed": true
+    },
+    {
+      "name": "Folder restore interruption recovery: destination-created",
+      "passed": true
+    },
+    {
+      "name": "Folder restore interruption recovery: restore-state",
+      "passed": true
+    },
+    {
+      "name": "Mutable restore destination created concurrently is retained",
+      "passed": true
+    },
+    {
+      "name": "Cross-volume folder payload remains on source volume and restores",
+      "passed": true
+    },
+    {
+      "name": "User entry.json files never collide with or become recovery manifests",
+      "passed": true
+    },
+    {
+      "name": "Lost collection index can be merged from intact records without moving payloads",
+      "passed": true
+    },
+    {
+      "name": "Custom category order persists without changing other categories or payloads",
+      "passed": true
+    },
+    {
+      "name": "All view follows category order and each category custom sequence",
+      "passed": true
+    },
+    {
+      "name": "Invalid reorder refuses duplicate missing and foreign identifiers atomically",
+      "passed": true
+    },
+    {
+      "name": "Uncategorized deletion preserves contents and remains deleted after reload",
+      "passed": true
+    },
+    {
+      "name": "Categories can be added reordered and removed without uncategorized",
+      "passed": true
+    },
+    {
+      "name": "Last category deletion and invalid destination never alter state",
+      "passed": true
+    },
+    {
+      "name": "Locked manifest cannot leave a half deleted category index",
+      "passed": true
+    },
+    {
+      "name": "Recovery remaps stale uncategorized manifests to an existing category",
+      "passed": true
+    },
+    {
+      "name": "Uncategorized deletion survives recovery from both damaged indexes",
+      "passed": true
+    }
+  ]
+}

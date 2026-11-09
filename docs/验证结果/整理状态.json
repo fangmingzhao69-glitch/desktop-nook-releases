@@ -1,0 +1,11 @@
+{
+  "Date": "2026-11-10",
+  "DeletionExecuted": false,
+  "ToolRejection": "blocked by policy",
+  "Targets": 177,
+  "PlannedFiles": 4168.0,
+  "PlannedGiB": 11.471,
+  "CleanSourceBuildPassed": true,
+  "CorePassed": 42,
+  "CoreFailed": 0
+}

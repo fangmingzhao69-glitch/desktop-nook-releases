@@ -1,0 +1,9 @@
+{
+  "Date": "2026-11-10",
+  "Version": "0.12.2",
+  "SourceFiles": 57,
+  "IncludesHistoricalArtifacts": false,
+  "AppBuildPassed": true,
+  "CorePassed": 42,
+  "CoreFailed": 0
+}

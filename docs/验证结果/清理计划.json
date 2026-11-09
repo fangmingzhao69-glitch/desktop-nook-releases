@@ -1,0 +1,1064 @@
+[
+  {
+    "Relative": "原型",
+    "Directory": true,
+    "Files": 135,
+    "Bytes": 16635593.0
+  },
+  {
+    "Relative": "test-results",
+    "Directory": true,
+    "Files": 1106,
+    "Bytes": 3121569124.0
+  },
+  {
+    "Relative": "native/artifacts",
+    "Directory": true,
+    "Files": 656,
+    "Bytes": 4788321672.0
+  },
+  {
+    "Relative": "native/test-results",
+    "Directory": true,
+    "Files": 1206,
+    "Bytes": 1987295233.0
+  },
+  {
+    "Relative": "native/DesktopNook.App/bin",
+    "Directory": true,
+    "Files": 407,
+    "Bytes": 147546570.0
+  },
+  {
+    "Relative": "native/DesktopNook.App/obj",
+    "Directory": true,
+    "Files": 394,
+    "Bytes": 12775088.0
+  },
+  {
+    "Relative": "native/DesktopNook.Core/bin",
+    "Directory": true,
+    "Files": 2,
+    "Bytes": 36794.0
+  },
+  {
+    "Relative": "native/DesktopNook.Core/obj",
+    "Directory": true,
+    "Files": 16,
+    "Bytes": 116699.0
+  },
+  {
+    "Relative": "native/DesktopNook.Tests/bin",
+    "Directory": true,
+    "Files": 7,
+    "Bytes": 284594.0
+  },
+  {
+    "Relative": "native/DesktopNook.Tests/obj",
+    "Directory": true,
+    "Files": 22,
+    "Bytes": 326071.0
+  },
+  {
+    "Relative": "docs/品牌方案",
+    "Directory": true,
+    "Files": 43,
+    "Bytes": 217963.0
+  },
+  {
+    "Relative": "发布/备份",
+    "Directory": true,
+    "Files": 9,
+    "Bytes": 1274515687.0
+  },
+  {
+    "Relative": "发布/安装升级卸载验证.json",
+    "Directory": false,
+    "Files": 1,
+    "Bytes": 260.0
+  },
+  {
+    "Relative": "发布/本次图标恢复记录.json",
+    "Directory": false,
+    "Files": 1,
+    "Bytes": 568.0
+  },
+  {
+    "Relative": "发布/本机覆盖升级验证.json",
+    "Directory": false,
+    "Files": 1,
+    "Bytes": 141.0
+  },
+  {
+    "Relative": "发布/菜单比例适配记录-0.11.1.md",
+    "Directory": false,
+    "Files": 1,
+    "Bytes": 1438.0
+  },
+  {
+    "Relative": "发布/菜单文字清晰度修复记录-0.11.2.md",
+    "Directory": false,
+    "Files": 1,
+    "Bytes": 1971.0
+  },
+  {
+    "Relative": "发布/窗口大小升级验证-0.9.0.json",
+    "Directory": false,
+    "Files": 1,
+    "Bytes": 125.0
+  },
+  {
+    "Relative": "发布/窗口大小验证-0.9.0.json",
+    "Directory": false,
+    "Files": 1,
+    "Bytes": 2379.0
+  },
+  {
+    "Relative": "发布/当前版本验证报告-2026-11-06.md",
+    "Directory": false,
+    "Files": 1,
+    "Bytes": 3043.0
+  },
+  {
+    "Relative": "发布/分类删除核心验证-0.11.0.json",
+    "Directory": false,
+    "Files": 1,
+    "Bytes": 4818.0
+  },
+  {
+    "Relative": "发布/分类删除升级验证-0.11.0.json",
+    "Directory": false,
+    "Files": 1,
+    "Bytes": 164.0
+  },
+  {
+    "Relative": "发布/分类删除专项验证-0.11.0.json",
+    "Directory": false,
+    "Files": 1,
+    "Bytes": 1074.0
+  },
+  {
+    "Relative": "发布/覆盖安装升级验证.json",
+    "Directory": false,
+    "Files": 1,
+    "Bytes": 180.0
+  },
+  {
+    "Relative": "发布/固定图标尺寸升级验证-0.9.1.json",
+    "Directory": false,
+    "Files": 1,
+    "Bytes": 125.0
+  },
+  {
+    "Relative": "发布/固定图标尺寸验证-0.9.1.json",
+    "Directory": false,
+    "Files": 1,
+    "Bytes": 2880.0
+  },
+  {
+    "Relative": "发布/恢复原分类界面核对.json",
+    "Directory": false,
+    "Files": 1,
+    "Bytes": 134.0
+  },
+  {
+    "Relative": "发布/恢复原分类收纳记录.json",
+    "Directory": false,
+    "Files": 1,
+    "Bytes": 685.0
+  },
+  {
+    "Relative": "发布/界面预览.png",
+    "Directory": false,
+    "Files": 1,
+    "Bytes": 37173.0
+  },
+  {
+    "Relative": "发布/免安装原地升级验证.json",
+    "Directory": false,
+    "Files": 1,
+    "Bytes": 199.0
+  },
+  {
+    "Relative": "发布/排序核心验证-0.10.0.json",
+    "Directory": false,
+    "Files": 1,
+    "Bytes": 4206.0
+  },
+  {
+    "Relative": "发布/其他分类文件恢复记录-2026-11-06.md",
+    "Directory": false,
+    "Files": 1,
+    "Bytes": 1219.0
+  },
+  {
+    "Relative": "发布/启动验证记录.json",
+    "Directory": false,
+    "Files": 1,
+    "Bytes": 148.0
+  },
+  {
+    "Relative": "发布/迁移核心验证记录.json",
+    "Directory": false,
+    "Files": 1,
+    "Bytes": 3686.0
+  },
+  {
+    "Relative": "发布/任务栏定位验证.json",
+    "Directory": false,
+    "Files": 1,
+    "Bytes": 242.0
+  },
+  {
+    "Relative": "发布/任务栏切换验证.json",
+    "Directory": false,
+    "Files": 1,
+    "Bytes": 398.0
+  },
+  {
+    "Relative": "发布/使用说明.md",
+    "Directory": false,
+    "Files": 1,
+    "Bytes": 15803.0
+  },
+  {
+    "Relative": "发布/图标与DPI验证-0.7.1.json",
+    "Directory": false,
+    "Files": 1,
+    "Bytes": 2507.0
+  },
+  {
+    "Relative": "发布/完整卸载恢复验证.json",
+    "Directory": false,
+    "Files": 1,
+    "Bytes": 231.0
+  },
+  {
+    "Relative": "发布/文件文件夹卸载恢复验证.json",
+    "Directory": false,
+    "Files": 1,
+    "Bytes": 203.0
+  },
+  {
+    "Relative": "发布/文件文件夹真实桌面验证.json",
+    "Directory": false,
+    "Files": 1,
+    "Bytes": 321.0
+  },
+  {
+    "Relative": "发布/右键菜单预览.png",
+    "Directory": false,
+    "Files": 1,
+    "Bytes": 54205.0
+  },
+  {
+    "Relative": "发布/原生验证记录.json",
+    "Directory": false,
+    "Files": 1,
+    "Bytes": 1725.0
+  },
+  {
+    "Relative": "发布/在线更新本地验证.json",
+    "Directory": false,
+    "Files": 1,
+    "Bytes": 704.0
+  },
+  {
+    "Relative": "发布/在线更新真实下载验证.json",
+    "Directory": false,
+    "Files": 1,
+    "Bytes": 817.0
+  },
+  {
+    "Relative": "发布/真实桌面验收.json",
+    "Directory": false,
+    "Files": 1,
+    "Bytes": 590.0
+  },
+  {
+    "Relative": "发布/直接排序升级验证-0.10.1.json",
+    "Directory": false,
+    "Files": 1,
+    "Bytes": 126.0
+  },
+  {
+    "Relative": "发布/直接排序专项验证-0.10.1.json",
+    "Directory": false,
+    "Files": 1,
+    "Bytes": 1114.0
+  },
+  {
+    "Relative": "发布/重命名修复验证.json",
+    "Directory": false,
+    "Files": 1,
+    "Bytes": 458.0
+  },
+  {
+    "Relative": "发布/桌面小筑-0.10.0-安装包.exe",
+    "Directory": false,
+    "Files": 1,
+    "Bytes": 44198010.0
+  },
+  {
+    "Relative": "发布/桌面小筑-0.10.1-安装包.exe",
+    "Directory": false,
+    "Files": 1,
+    "Bytes": 44188951.0
+  },
+  {
+    "Relative": "发布/桌面小筑-0.11.0-安装包.exe",
+    "Directory": false,
+    "Files": 1,
+    "Bytes": 44197498.0
+  },
+  {
+    "Relative": "发布/桌面小筑-0.11.1-安装包.exe",
+    "Directory": false,
+    "Files": 1,
+    "Bytes": 44209101.0
+  },
+  {
+    "Relative": "发布/桌面小筑-0.11.2-安装包.exe",
+    "Directory": false,
+    "Files": 1,
+    "Bytes": 44206520.0
+  },
+  {
+    "Relative": "发布/桌面小筑-0.11.3-安装包.exe",
+    "Directory": false,
+    "Files": 1,
+    "Bytes": 44196864.0
+  },
+  {
+    "Relative": "发布/桌面小筑-0.11.4-安装包.exe",
+    "Directory": false,
+    "Files": 1,
+    "Bytes": 44202805.0
+  },
+  {
+    "Relative": "发布/桌面小筑-0.3.0-安装包.exe",
+    "Directory": false,
+    "Files": 1,
+    "Bytes": 44151738.0
+  },
+  {
+    "Relative": "发布/桌面小筑-0.4.0-安装包.exe",
+    "Directory": false,
+    "Files": 1,
+    "Bytes": 44153994.0
+  },
+  {
+    "Relative": "发布/桌面小筑-0.5.0-安装包.exe",
+    "Directory": false,
+    "Files": 1,
+    "Bytes": 44151675.0
+  },
+  {
+    "Relative": "发布/桌面小筑-0.5.1-安装包.exe",
+    "Directory": false,
+    "Files": 1,
+    "Bytes": 44163957.0
+  },
+  {
+    "Relative": "发布/桌面小筑-0.6.0-安装包.exe",
+    "Directory": false,
+    "Files": 1,
+    "Bytes": 44161401.0
+  },
+  {
+    "Relative": "发布/桌面小筑-0.7.0-安装包.exe",
+    "Directory": false,
+    "Files": 1,
+    "Bytes": 44168316.0
+  },
+  {
+    "Relative": "发布/桌面小筑-0.7.1-安装包.exe",
+    "Directory": false,
+    "Files": 1,
+    "Bytes": 44176875.0
+  },
+  {
+    "Relative": "发布/桌面小筑-0.8.0-安装包.exe",
+    "Directory": false,
+    "Files": 1,
+    "Bytes": 44202673.0
+  },
+  {
+    "Relative": "发布/桌面小筑-0.9.0-安装包.exe",
+    "Directory": false,
+    "Files": 1,
+    "Bytes": 44193517.0
+  },
+  {
+    "Relative": "发布/桌面小筑-0.9.1-安装包.exe",
+    "Directory": false,
+    "Files": 1,
+    "Bytes": 44193790.0
+  },
+  {
+    "Relative": "发布/桌面小筑.exe",
+    "Directory": false,
+    "Files": 1,
+    "Bytes": 141749901.0
+  },
+  {
+    "Relative": "发布/自定义排序升级验证-0.10.0.json",
+    "Directory": false,
+    "Files": 1,
+    "Bytes": 126.0
+  },
+  {
+    "Relative": "发布/自启与退出验证.json",
+    "Directory": false,
+    "Files": 1,
+    "Bytes": 205.0
+  },
+  {
+    "Relative": "窗口大小与版本显示实现方案-v0.9.md",
+    "Directory": false,
+    "Files": 1,
+    "Bytes": 4475.0
+  },
+  {
+    "Relative": "技术方案与构建记录-v0.1.md",
+    "Directory": false,
+    "Files": 1,
+    "Bytes": 3757.0
+  },
+  {
+    "Relative": "界面原型说明-v0.1.md",
+    "Directory": false,
+    "Files": 1,
+    "Bytes": 2681.0
+  },
+  {
+    "Relative": "界面原型说明-v0.2.md",
+    "Directory": false,
+    "Files": 1,
+    "Bytes": 2299.0
+  },
+  {
+    "Relative": "界面原型说明-v0.3.md",
+    "Directory": false,
+    "Files": 1,
+    "Bytes": 1390.0
+  },
+  {
+    "Relative": "界面原型说明-v0.4.md",
+    "Directory": false,
+    "Files": 1,
+    "Bytes": 1699.0
+  },
+  {
+    "Relative": "界面原型说明-v0.5.md",
+    "Directory": false,
+    "Files": 1,
+    "Bytes": 1550.0
+  },
+  {
+    "Relative": "收纳分类恢复记录-2026-10-30.md",
+    "Directory": false,
+    "Files": 1,
+    "Bytes": 1200.0
+  },
+  {
+    "Relative": "需求说明-v0.2.md",
+    "Directory": false,
+    "Files": 1,
+    "Bytes": 11416.0
+  },
+  {
+    "Relative": "用户操作流程-v0.2.md",
+    "Directory": false,
+    "Files": 1,
+    "Bytes": 6665.0
+  },
+  {
+    "Relative": "原生更新记录-v0.2.1.md",
+    "Directory": false,
+    "Files": 1,
+    "Bytes": 1471.0
+  },
+  {
+    "Relative": "原生更新记录-v0.2.md",
+    "Directory": false,
+    "Files": 1,
+    "Bytes": 1410.0
+  },
+  {
+    "Relative": "原生更新记录-v0.4.md",
+    "Directory": false,
+    "Files": 1,
+    "Bytes": 1701.0
+  },
+  {
+    "Relative": "原生更新记录-v0.5.1.md",
+    "Directory": false,
+    "Files": 1,
+    "Bytes": 1548.0
+  },
+  {
+    "Relative": "原生更新记录-v0.5.md",
+    "Directory": false,
+    "Files": 1,
+    "Bytes": 1724.0
+  },
+  {
+    "Relative": "原生更新记录-v0.6.md",
+    "Directory": false,
+    "Files": 1,
+    "Bytes": 2640.0
+  },
+  {
+    "Relative": "原生更新记录-v0.7.md",
+    "Directory": false,
+    "Files": 1,
+    "Bytes": 1787.0
+  },
+  {
+    "Relative": "原生验收与安装交付-v0.3.md",
+    "Directory": false,
+    "Files": 1,
+    "Bytes": 2346.0
+  },
+  {
+    "Relative": "docs/家族设计与交互规范-v0.1.md",
+    "Directory": false,
+    "Files": 1,
+    "Bytes": 6494.0
+  },
+  {
+    "Relative": "docs/轻匣品牌与界面落地-v0.12.0.md",
+    "Directory": false,
+    "Files": 1,
+    "Bytes": 2110.0
+  },
+  {
+    "Relative": "docs/轻匣任务栏图标与菜单修复-v0.12.1.md",
+    "Directory": false,
+    "Files": 1,
+    "Bytes": 2959.0
+  },
+  {
+    "Relative": "docs/验证修复记录-2026-11-06.md",
+    "Directory": false,
+    "Files": 1,
+    "Bytes": 1583.0
+  },
+  {
+    "Relative": "docs/images/beizhi-character-v08.png",
+    "Directory": false,
+    "Files": 1,
+    "Bytes": 1031647.0
+  },
+  {
+    "Relative": "docs/images/beizhi-character-v09.png",
+    "Directory": false,
+    "Files": 1,
+    "Bytes": 642437.0
+  },
+  {
+    "Relative": "docs/images/beizhi-character-v10.png",
+    "Directory": false,
+    "Files": 1,
+    "Bytes": 979511.0
+  },
+  {
+    "Relative": "docs/images/beizhi-character-v11.png",
+    "Directory": false,
+    "Files": 1,
+    "Bytes": 1004311.0
+  },
+  {
+    "Relative": "docs/images/beizhi-character-v12.png",
+    "Directory": false,
+    "Files": 1,
+    "Bytes": 997835.0
+  },
+  {
+    "Relative": "docs/images/beizhi-clear-glass-v16.png",
+    "Directory": false,
+    "Files": 1,
+    "Bytes": 1645369.0
+  },
+  {
+    "Relative": "docs/images/beizhi-clear-glass-v17.png",
+    "Directory": false,
+    "Files": 1,
+    "Bytes": 1608216.0
+  },
+  {
+    "Relative": "docs/images/beizhi-family-v08.png",
+    "Directory": false,
+    "Files": 1,
+    "Bytes": 1507225.0
+  },
+  {
+    "Relative": "docs/images/beizhi-family-v09.png",
+    "Directory": false,
+    "Files": 1,
+    "Bytes": 1539696.0
+  },
+  {
+    "Relative": "docs/images/beizhi-glass-character-v13.png",
+    "Directory": false,
+    "Files": 1,
+    "Bytes": 1193198.0
+  },
+  {
+    "Relative": "docs/images/beizhi-glass-preview-v13.png",
+    "Directory": false,
+    "Files": 1,
+    "Bytes": 1770274.0
+  },
+  {
+    "Relative": "docs/images/beizhi-glass-preview-v14.png",
+    "Directory": false,
+    "Files": 1,
+    "Bytes": 1604813.0
+  },
+  {
+    "Relative": "docs/images/beizhi-glass-preview-v15.png",
+    "Directory": false,
+    "Files": 1,
+    "Bytes": 1814505.0
+  },
+  {
+    "Relative": "docs/images/beizhi-illustration-a-v18.png",
+    "Directory": false,
+    "Files": 1,
+    "Bytes": 1214290.0
+  },
+  {
+    "Relative": "docs/images/beizhi-illustration-b-v18.png",
+    "Directory": false,
+    "Files": 1,
+    "Bytes": 1189231.0
+  },
+  {
+    "Relative": "docs/images/beizhi-illustration-c-v18.png",
+    "Directory": false,
+    "Files": 1,
+    "Bytes": 1148388.0
+  },
+  {
+    "Relative": "docs/images/beizhi-illustration-d-v19.png",
+    "Directory": false,
+    "Files": 1,
+    "Bytes": 1178937.0
+  },
+  {
+    "Relative": "docs/images/beizhi-illustration-e-v19.png",
+    "Directory": false,
+    "Files": 1,
+    "Bytes": 1155071.0
+  },
+  {
+    "Relative": "docs/images/beizhi-illustration-f-v20.png",
+    "Directory": false,
+    "Files": 1,
+    "Bytes": 1110592.0
+  },
+  {
+    "Relative": "docs/images/beizhi-illustration-g-v20.png",
+    "Directory": false,
+    "Files": 1,
+    "Bytes": 1183402.0
+  },
+  {
+    "Relative": "docs/images/category.png",
+    "Directory": false,
+    "Files": 1,
+    "Bytes": 21685.0
+  },
+  {
+    "Relative": "docs/images/delete-category.png",
+    "Directory": false,
+    "Files": 1,
+    "Bytes": 8491.0
+  },
+  {
+    "Relative": "docs/images/family-v02-jianfang.png",
+    "Directory": false,
+    "Files": 1,
+    "Bytes": 1415347.0
+  },
+  {
+    "Relative": "docs/images/family-v02-xiaozhan.png",
+    "Directory": false,
+    "Files": 1,
+    "Bytes": 1454963.0
+  },
+  {
+    "Relative": "docs/images/family-v02-youjian.png",
+    "Directory": false,
+    "Files": 1,
+    "Bytes": 1477457.0
+  },
+  {
+    "Relative": "docs/images/folded-box-color-preview-v01.png",
+    "Directory": false,
+    "Files": 1,
+    "Bytes": 1178521.0
+  },
+  {
+    "Relative": "docs/images/folded-box-color-v01.png",
+    "Directory": false,
+    "Files": 1,
+    "Bytes": 892796.0
+  },
+  {
+    "Relative": "docs/images/folded-box-light-preview-v02.png",
+    "Directory": false,
+    "Files": 1,
+    "Bytes": 1192699.0
+  },
+  {
+    "Relative": "docs/images/folded-box-light-refined-v03.png",
+    "Directory": false,
+    "Files": 1,
+    "Bytes": 1212107.0
+  },
+  {
+    "Relative": "docs/images/folded-box-original-board.png",
+    "Directory": false,
+    "Files": 1,
+    "Bytes": 1311516.0
+  },
+  {
+    "Relative": "docs/images/mascot-cast-detail-v06.png",
+    "Directory": false,
+    "Files": 1,
+    "Bytes": 1841452.0
+  },
+  {
+    "Relative": "docs/images/mascot-cast-detail-v07.png",
+    "Directory": false,
+    "Files": 1,
+    "Bytes": 1764529.0
+  },
+  {
+    "Relative": "docs/images/mascot-family-detail-v06.png",
+    "Directory": false,
+    "Files": 1,
+    "Bytes": 1697765.0
+  },
+  {
+    "Relative": "docs/images/mascot-family-detail-v07.png",
+    "Directory": false,
+    "Files": 1,
+    "Bytes": 1706994.0
+  },
+  {
+    "Relative": "docs/images/mascot-selected-style-v05.png",
+    "Directory": false,
+    "Files": 1,
+    "Bytes": 1861195.0
+  },
+  {
+    "Relative": "docs/images/myth-brand-icons-v03.png",
+    "Directory": false,
+    "Files": 1,
+    "Bytes": 1726129.0
+  },
+  {
+    "Relative": "docs/images/myth-product-icons-v04.png",
+    "Directory": false,
+    "Files": 1,
+    "Bytes": 1756946.0
+  },
+  {
+    "Relative": "docs/images/ordering.png",
+    "Directory": false,
+    "Files": 1,
+    "Bytes": 27516.0
+  },
+  {
+    "Relative": "docs/images/qingti-character-lively-v04.png",
+    "Directory": false,
+    "Files": 1,
+    "Bytes": 1274696.0
+  },
+  {
+    "Relative": "docs/images/qingti-character-steady-v04.png",
+    "Directory": false,
+    "Files": 1,
+    "Bytes": 1537726.0
+  },
+  {
+    "Relative": "docs/images/qingti-cluster-v01.png",
+    "Directory": false,
+    "Files": 1,
+    "Bytes": 1263928.0
+  },
+  {
+    "Relative": "docs/images/qingti-comic-v09.png",
+    "Directory": false,
+    "Files": 1,
+    "Bytes": 1249522.0
+  },
+  {
+    "Relative": "docs/images/qingti-compact-character-v06.png",
+    "Directory": false,
+    "Files": 1,
+    "Bytes": 1142775.0
+  },
+  {
+    "Relative": "docs/images/qingti-family-v01.png",
+    "Directory": false,
+    "Files": 1,
+    "Bytes": 1444408.0
+  },
+  {
+    "Relative": "docs/images/qingti-illustrated-character-v08.png",
+    "Directory": false,
+    "Files": 1,
+    "Bytes": 1295203.0
+  },
+  {
+    "Relative": "docs/images/qingti-leaf-collar-v03.png",
+    "Directory": false,
+    "Files": 1,
+    "Bytes": 1158311.0
+  },
+  {
+    "Relative": "docs/images/qingti-leaf-sprite-v11.png",
+    "Directory": false,
+    "Files": 1,
+    "Bytes": 1375682.0
+  },
+  {
+    "Relative": "docs/images/qingti-little-creature-v12.png",
+    "Directory": false,
+    "Files": 1,
+    "Bytes": 1324786.0
+  },
+  {
+    "Relative": "docs/images/qingti-minimal-refined-v15.png",
+    "Directory": false,
+    "Files": 1,
+    "Bytes": 1174594.0
+  },
+  {
+    "Relative": "docs/images/qingti-minimal-shape-v09.png",
+    "Directory": false,
+    "Files": 1,
+    "Bytes": 1159050.0
+  },
+  {
+    "Relative": "docs/images/qingti-organizer-icon-v14.png",
+    "Directory": false,
+    "Files": 1,
+    "Bytes": 1204704.0
+  },
+  {
+    "Relative": "docs/images/qingti-pair-v02.png",
+    "Directory": false,
+    "Files": 1,
+    "Bytes": 1086772.0
+  },
+  {
+    "Relative": "docs/images/qingti-shape-sketch-v10.png",
+    "Directory": false,
+    "Files": 1,
+    "Bytes": 1636493.0
+  },
+  {
+    "Relative": "docs/images/qingti-single-character-v05.png",
+    "Directory": false,
+    "Files": 1,
+    "Bytes": 1147651.0
+  },
+  {
+    "Relative": "docs/images/qingti-single-v01.png",
+    "Directory": false,
+    "Files": 1,
+    "Bytes": 1202709.0
+  },
+  {
+    "Relative": "docs/images/qingti-soft-drawn-v09.png",
+    "Directory": false,
+    "Files": 1,
+    "Bytes": 1341741.0
+  },
+  {
+    "Relative": "docs/images/qingti-trio-v02.png",
+    "Directory": false,
+    "Files": 1,
+    "Bytes": 1150938.0
+  },
+  {
+    "Relative": "docs/images/qingti-witty-character-v07.png",
+    "Directory": false,
+    "Files": 1,
+    "Bytes": 1487228.0
+  },
+  {
+    "Relative": "docs/images/qingxia-121-category-menu-preview.png",
+    "Directory": false,
+    "Files": 1,
+    "Bytes": 12609.0
+  },
+  {
+    "Relative": "docs/images/qingxia-121-compact-submenu.png",
+    "Directory": false,
+    "Files": 1,
+    "Bytes": 25326.0
+  },
+  {
+    "Relative": "docs/images/qingxia-121-context-menu-preview.png",
+    "Directory": false,
+    "Files": 1,
+    "Bytes": 25452.0
+  },
+  {
+    "Relative": "docs/images/qingxia-121-more-menu-100.png",
+    "Directory": false,
+    "Files": 1,
+    "Bytes": 20836.0
+  },
+  {
+    "Relative": "docs/images/qingxia-collect.png",
+    "Directory": false,
+    "Files": 1,
+    "Bytes": 51159.0
+  },
+  {
+    "Relative": "docs/images/qingxia-context.png",
+    "Directory": false,
+    "Files": 1,
+    "Bytes": 16749.0
+  },
+  {
+    "Relative": "docs/images/qingxia-menu.png",
+    "Directory": false,
+    "Files": 1,
+    "Bytes": 10431.0
+  },
+  {
+    "Relative": "docs/images/qingxia-overview.png",
+    "Directory": false,
+    "Files": 1,
+    "Bytes": 55521.0
+  },
+  {
+    "Relative": "docs/images/qingxia-rename.png",
+    "Directory": false,
+    "Files": 1,
+    "Bytes": 12016.0
+  },
+  {
+    "Relative": "docs/images/qingxia-taskbar-verified.png",
+    "Directory": false,
+    "Files": 1,
+    "Bytes": 2521.0
+  },
+  {
+    "Relative": "docs/images/qingxia-update.png",
+    "Directory": false,
+    "Files": 1,
+    "Bytes": 19687.0
+  },
+  {
+    "Relative": "docs/images/README.md",
+    "Directory": false,
+    "Files": 1,
+    "Bytes": 1110.0
+  },
+  {
+    "Relative": "docs/images/size-150.png",
+    "Directory": false,
+    "Files": 1,
+    "Bytes": 28799.0
+  },
+  {
+    "Relative": "docs/images/size-80.png",
+    "Directory": false,
+    "Files": 1,
+    "Bytes": 26017.0
+  },
+  {
+    "Relative": "docs/images/size-menu.png",
+    "Directory": false,
+    "Files": 1,
+    "Bytes": 11356.0
+  },
+  {
+    "Relative": "docs/images/update.png",
+    "Directory": false,
+    "Files": 1,
+    "Bytes": 4126.0
+  },
+  {
+    "Relative": "native/releases/v0.10.0.md",
+    "Directory": false,
+    "Files": 1,
+    "Bytes": 756.0
+  },
+  {
+    "Relative": "native/releases/v0.10.1.md",
+    "Directory": false,
+    "Files": 1,
+    "Bytes": 534.0
+  },
+  {
+    "Relative": "native/releases/v0.11.0.md",
+    "Directory": false,
+    "Files": 1,
+    "Bytes": 690.0
+  },
+  {
+    "Relative": "native/releases/v0.11.1.md",
+    "Directory": false,
+    "Files": 1,
+    "Bytes": 532.0
+  },
+  {
+    "Relative": "native/releases/v0.11.2.md",
+    "Directory": false,
+    "Files": 1,
+    "Bytes": 598.0
+  },
+  {
+    "Relative": "native/releases/v0.11.3.md",
+    "Directory": false,
+    "Files": 1,
+    "Bytes": 643.0
+  },
+  {
+    "Relative": "native/releases/v0.11.4.md",
+    "Directory": false,
+    "Files": 1,
+    "Bytes": 924.0
+  },
+  {
+    "Relative": "native/releases/v0.12.0.md",
+    "Directory": false,
+    "Files": 1,
+    "Bytes": 1495.0
+  },
+  {
+    "Relative": "native/releases/v0.12.1.md",
+    "Directory": false,
+    "Files": 1,
+    "Bytes": 1039.0
+  },
+  {
+    "Relative": "native/releases/v0.8.0.md",
+    "Directory": false,
+    "Files": 1,
+    "Bytes": 725.0
+  },
+  {
+    "Relative": "native/releases/v0.9.0.md",
+    "Directory": false,
+    "Files": 1,
+    "Bytes": 757.0
+  },
+  {
+    "Relative": "native/releases/v0.9.1.md",
+    "Directory": false,
+    "Files": 1,
+    "Bytes": 427.0
+  }
+]

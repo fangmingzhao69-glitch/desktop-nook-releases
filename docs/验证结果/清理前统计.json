@@ -1,0 +1,62 @@
+[
+  {
+    "Path": "发布",
+    "Files": 70,
+    "Bytes": 2350988661.0
+  },
+  {
+    "Path": "原型",
+    "Files": 135,
+    "Bytes": 16635593.0
+  },
+  {
+    "Path": "test-results",
+    "Files": 954,
+    "Bytes": 3117983116.0
+  },
+  {
+    "Path": "native/artifacts",
+    "Files": 656,
+    "Bytes": 4788321672.0
+  },
+  {
+    "Path": "native/test-results",
+    "Files": 1206,
+    "Bytes": 1987295233.0
+  },
+  {
+    "Path": "native/DesktopNook.App/bin",
+    "Files": 407,
+    "Bytes": 147546570.0
+  },
+  {
+    "Path": "native/DesktopNook.App/obj",
+    "Files": 394,
+    "Bytes": 12775088.0
+  },
+  {
+    "Path": "native/DesktopNook.Core/bin",
+    "Files": 2,
+    "Bytes": 36794.0
+  },
+  {
+    "Path": "native/DesktopNook.Core/obj",
+    "Files": 16,
+    "Bytes": 116699.0
+  },
+  {
+    "Path": "native/DesktopNook.Tests/bin",
+    "Files": 7,
+    "Bytes": 284594.0
+  },
+  {
+    "Path": "native/DesktopNook.Tests/obj",
+    "Files": 22,
+    "Bytes": 326071.0
+  },
+  {
+    "Path": "docs/品牌方案",
+    "Files": 43,
+    "Bytes": 217963.0
+  }
+]
