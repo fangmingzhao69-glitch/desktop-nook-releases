@@ -3,7 +3,8 @@ $ErrorActionPreference = 'Stop'
 $nookRoot = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..'))
 Push-Location $nookRoot
 try {
-    & (Join-Path $PSScriptRoot 'Make-Icon.ps1')
+    powershell.exe -NoProfile -ExecutionPolicy Bypass -STA -File (Join-Path $PSScriptRoot 'Make-Icon.ps1')
+    if ($LASTEXITCODE -ne 0) { throw 'Icon generation failed.' }
     if (-not $SkipTests) {
         dotnet run --project DesktopNook.Tests -c Release -- test-results\core.json
         if ($LASTEXITCODE -ne 0) { throw 'Core checks failed.' }

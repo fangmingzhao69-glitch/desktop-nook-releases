@@ -49,7 +49,7 @@ internal static class OnlineUpdater
     private static Version Normalize(Version v)=>new(v.Major,v.Minor,Math.Max(0,v.Build),Math.Max(0,v.Revision));
     internal static async Task<string> DownloadAsync(HttpClient client,OnlineRelease release,string dataRoot,IProgress<double>? progress,CancellationToken token)
     {
-        if(!TrustedUrl(release.Download))throw new IOException("更新下载地址不属于桌面小筑发布仓库。");
+        if(!TrustedUrl(release.Download))throw new IOException("更新下载地址不属于轻匣发布仓库。");
         string directory=Path.Combine(dataRoot,"updates","download-"+Guid.NewGuid().ToString("N"));Directory.CreateDirectory(directory);
         string partial=Path.Combine(directory,"candidate.partial"),file=Path.Combine(directory,"candidate.exe");
         try

@@ -27,7 +27,7 @@ internal static class LocalUpdater
     internal static (Version Version,bool Installer) Inspect(string path)
     {
         var info=FileVersionInfo.GetVersionInfo(path);
-        if(info.ProductName is not ("DesktopNook" or "桌面小筑"))throw new IOException("请选择桌面小筑的新版本程序或安装包。");
+        if(info.ProductName is not ("DesktopNook" or "桌面小筑" or "轻匣"))throw new IOException("请选择轻匣的新版本程序或安装包。");
         if(!Version.TryParse(info.FileVersion,out var version))throw new IOException("无法读取所选程序版本。");
         version=new Version(version.Major,version.Minor,Math.Max(0,version.Build),Math.Max(0,version.Revision));
         return(version,info.FileDescription?.Contains("安装程序")==true);
@@ -36,11 +36,11 @@ internal static class LocalUpdater
     {
         source=Path.GetFullPath(source);target=Path.GetFullPath(target);
         if(state is not null&&Fingerprint(JsonSerializer.Deserialize<DesktopNook.Core.NookState>(File.ReadAllText(Path.Combine(dataRoot,"state.json")))!)!=Fingerprint(state))
-            throw new IOException("当前运行配置与保存的分类不一致，请重新打开小筑核对后再更新；本次未替换程序。");
+            throw new IOException("当前运行配置与保存的分类不一致，请重新打开轻匣核对后再更新；本次未替换程序。");
         if(source.Equals(target,StringComparison.OrdinalIgnoreCase))throw new IOException("请选择其他位置的新版本文件。");
         var candidate=Inspect(source);var current=Inspect(target);
         if(candidate.Version<current.Version)throw new IOException("所选版本较旧，请选择当前版本或更新版本。");
-        if(candidate.Installer && (!Path.GetFileName(target).Equals("DesktopNook.exe",StringComparison.OrdinalIgnoreCase)||!File.Exists(Path.Combine(Path.GetDirectoryName(target)!,"卸载桌面小筑.exe"))))throw new IOException("当前是免安装版，请选择新版桌面小筑 EXE；安装版可选择安装包覆盖升级。");
+        if(candidate.Installer && (!Path.GetFileName(target).Equals("DesktopNook.exe",StringComparison.OrdinalIgnoreCase)||!File.Exists(Path.Combine(Path.GetDirectoryName(target)!,"卸载桌面小筑.exe"))))throw new IOException("当前是免安装版，请选择新版轻匣 EXE；安装版可选择安装包覆盖升级。");
         var dir=Path.Combine(dataRoot,"updates",Guid.NewGuid().ToString("N"));Directory.CreateDirectory(dir);
         var staged=Path.Combine(dir,candidate.Installer?"package.exe":"candidate.exe");var helper=Path.Combine(dir,"DesktopNook.Updater.exe");
         DesktopNook.Core.NookStore.CopyPreservingStreams(source,staged);DesktopNook.Core.NookStore.CopyPreservingStreams(Environment.ProcessPath!,helper);
@@ -102,7 +102,7 @@ internal static class LocalUpdater
         catch(Exception ex)
         {
             File.WriteAllText(log,JsonSerializer.Serialize(new{success=false,error=ex.Message,backup,replaced},Json));
-            System.Windows.MessageBox.Show("更新未完成：\n"+ex.Message+"\n\n收纳数据保留。","桌面小筑更新");return 1;
+            System.Windows.MessageBox.Show("更新未完成：\n"+ex.Message+"\n\n收纳数据保留。","轻匣更新");return 1;
         }
     }
 }

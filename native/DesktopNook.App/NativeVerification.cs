@@ -25,8 +25,8 @@ internal static class NativeVerification
                 var options=new StartupOptions(optionKey+@"\Run",optionKey+@"\Settings");
                 if(options.Enabled)throw new Exception("自启默认状态异常。");
                 using(var unrelated=Registry.CurrentUser.CreateSubKey(optionKey+@"\Run"))unrelated.SetValue("OtherEntry","keep");
-                options.SetEnabled(true,@"C:\验证 空格\桌面小筑.exe");
-                if(!options.Enabled||options.Command!="\"C:\\验证 空格\\桌面小筑.exe\" --autostart")throw new Exception("自启路径引用异常。");
+                options.SetEnabled(true,@"C:\验证 空格\轻匣.exe");
+                if(!options.Enabled||options.Command!="\"C:\\验证 空格\\轻匣.exe\" --autostart")throw new Exception("自启路径引用异常。");
                 options.CloseEndsProcess=false;if(new StartupOptions(optionKey+@"\Run",optionKey+@"\Settings").CloseEndsProcess)throw new Exception("关闭行为设置未保留。");
                 options.SetEnabled(false);using var check=Registry.CurrentUser.OpenSubKey(optionKey+@"\Run");if(options.Enabled||check?.GetValue("OtherEntry") as string!="keep")throw new Exception("关闭自启影响其他入口。");
                 checks.Add("Startup option persists quoted command, can be disabled and preserves other entries");
@@ -83,7 +83,7 @@ internal static class NativeVerification
             await OleDragVerification.Run(window);checks.Add("Real mouse and OLE roundtrip between owned windows using isolated desktop directory");
             await OleDragVerification.Run(window,"file");checks.Add("Regular document uses actual native OLE drag in and out");
             await OleDragVerification.Run(window,"folder");checks.Add("Complete folder uses actual native OLE drag in and out");
-            var minimize=FindNamedButton(window,"最小化小筑");minimize.RaiseEvent(new RoutedEventArgs(System.Windows.Controls.Button.ClickEvent));
+            var minimize=FindNamedButton(window,"最小化轻匣");minimize.RaiseEvent(new RoutedEventArgs(System.Windows.Controls.Button.ClickEvent));
             if(window.WindowState!=WindowState.Minimized)throw new Exception("最小化按钮未收起。");window.ShowPanel();checks.Add("Minimize button preserves process and collection state");
             window.Render();window.SetStatus("隔离验证模式 · 不操作真实桌面");
             await window.Dispatcher.InvokeAsync(()=>{},DispatcherPriority.ContextIdle);
@@ -100,7 +100,7 @@ internal static class NativeVerification
             if(secondary.Left!=-1800 || Math.Abs(secondary.Width-1075.2)>1)throw new Exception("副屏 DPI 换算校验失败。");
             checks.Add("40 percent larger surfaces and taskbar alignment, screen edges and 150 percent DPI math");
             var actualAnchor=await TaskbarPlacement.FindAsync();
-            if(actualAnchor is null)throw new Exception("本机任务栏未找到桌面小筑按钮。");
+            if(actualAnchor is null)throw new Exception("本机任务栏未找到轻匣按钮。");
             File.WriteAllText(Path.Combine(root,"taskbar-anchor.json"),JsonSerializer.Serialize(new{button=actualAnchor.Button.ToString(),tray=actualAnchor.Tray.ToString(),work=actualAnchor.Work.ToString(),dpi=actualAnchor.Dpi}));
             checks.Add("Live taskbar button bounds discovered using application identity");
             var bitmap=new RenderTargetBitmap((int)Math.Ceiling(window.ActualWidth),(int)Math.Ceiling(window.ActualHeight),96,96,PixelFormats.Pbgra32);bitmap.Render(window);
@@ -140,6 +140,7 @@ internal static class NativeVerification
             if(UiDialogs.ShowUpdate(window,"当前版本："+MainWindow.CurrentVersionLabel+"\n更新到：v9.9.9\n\n"+new string('更',600),"更新布局验证",MessageBoxButton.OKCancel)!=MessageBoxResult.Cancel)throw new Exception("取消更新未生效。");
             if(dialogFailure is not null)throw dialogFailure;
             checks.Add("Compact update confirmation fits panel and can be cancelled without downloading");
+            await BrandVerification.Run(window,root,checks);
             if(Environment.GetCommandLineArgs().Contains("--leave-payloads"))
             {
                 App.Store.Collect(Path.Combine(desktop,"真实文档拖放验证.txt"),"office");App.Store.Collect(Path.Combine(desktop,"真实文件夹拖放验证"),"office");App.Store.CollectRecycleBin("uncategorized");checks.Add("Uninstall fixture retains document, folder and system item alongside shortcuts");

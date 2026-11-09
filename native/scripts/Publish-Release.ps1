@@ -32,7 +32,7 @@ $hashes=@($binary,$setup)|ForEach-Object{(Get-FileHash -LiteralPath $_ -Algorith
 $checksum=Join-Path $stage 'SHA256SUMS.txt'
 [IO.File]::WriteAllLines($checksum,$hashes,[Text.UTF8Encoding]::new($false))
 $readme=@'
-# 桌面小筑 · Windows 发布
+# 轻匣 · Windows 发布
 
 将选中的桌面软件、文件和文件夹收纳到一个任务栏入口，按分类访问。
 
@@ -59,7 +59,7 @@ try {
     }
     & gh repo view $Repository --json name 2>$null | Out-Null
     if($LASTEXITCODE -ne 0) {
-        & gh repo create $Repository --public --description '桌面小筑 Windows 正式版、安装包与在线更新发布仓库'
+        & gh repo create $Repository --public --description '轻匣 Windows 正式版、安装包与在线更新发布仓库'
         if($LASTEXITCODE -ne 0){throw '无法创建发布仓库。'}
         $request=Join-Path $stage 'readme-request.json'
         $payload=@{message='Add release instructions';content=[Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($readme))}|ConvertTo-Json
@@ -78,7 +78,7 @@ try {
     if($existing -and -not $existing.draft -and -not $VerifyOnly){throw '该版本已公开，请使用新版本号，不覆盖已发布文件。'}
     # Publish only the three explicit files, after all uploads and hashes succeed.
     if(-not $existing) {
-        & gh release create $tag $binary $setup $checksum --repo $Repository --target $sourceCommit --draft --title ('桌面小筑 '+$version) --notes-file $NotesFile
+        & gh release create $tag $binary $setup $checksum --repo $Repository --target $sourceCommit --draft --title ('轻匣 '+$version) --notes-file $NotesFile
         if($LASTEXITCODE -ne 0){throw '发行包上传未完成，草稿保留，可再次运行本脚本续传。'}
     } elseif($existing.draft -and -not $VerifyOnly) {
         if($existing.target_commitish -ne $sourceCommit){throw '已有草稿绑定其他源码提交，请检查后使用新版本号。'}

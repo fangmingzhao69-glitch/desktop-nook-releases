@@ -8,13 +8,13 @@ internal static class UiDialogs
 {
     public static void Chrome(Window window,bool compact=false)
     {
-        var body=(UIElement)window.Content;window.Content=null;window.WindowStyle=WindowStyle.None;window.AllowsTransparency=true;window.Background=Brushes.Transparent;
+        window.UseLayoutRounding=true;window.SnapsToDevicePixels=true;TextOptions.SetTextFormattingMode(window,TextFormattingMode.Display);window.FontFamily=new FontFamily("Microsoft YaHei UI, Segoe UI");var body=(UIElement)window.Content;window.Content=null;window.WindowStyle=WindowStyle.None;window.AllowsTransparency=true;window.Background=Brushes.Transparent;
         var dock=new DockPanel();var heading=new Grid{Margin=compact?new Thickness(16,12,12,0):new Thickness(20,16,14,0)};heading.ColumnDefinitions.Add(new(){Width=new GridLength(1,GridUnitType.Star)});heading.ColumnDefinitions.Add(new(){Width=GridLength.Auto});
-        heading.Children.Add(new TextBlock{Text=window.Title,FontSize=compact?14:15,FontWeight=FontWeights.SemiBold,Foreground=new SolidColorBrush(Color.FromRgb(48,65,94)),VerticalAlignment=VerticalAlignment.Center});
+        heading.Children.Add(new TextBlock{Text=window.Title,FontSize=compact?14:15,FontWeight=FontWeights.SemiBold,Foreground=new SolidColorBrush(Color.FromRgb(25,60,88)),VerticalAlignment=VerticalAlignment.Center});
         var close=new Button{Content="×",FontSize=19,Padding=new Thickness(8,1,8,3),Foreground=Brushes.SlateGray};close.Click+=(_,_)=>window.DialogResult=false;Grid.SetColumn(close,1);heading.Children.Add(close);
         heading.MouseLeftButtonDown+=(_,e)=>{if(e.OriginalSource is TextBlock || e.OriginalSource==heading)window.DragMove();};
         DockPanel.SetDock(heading,Dock.Top);dock.Children.Add(heading);dock.Children.Add(body);
-        window.Content=new Border{CornerRadius=new CornerRadius(14),BorderThickness=new Thickness(1),BorderBrush=new SolidColorBrush(Color.FromRgb(216,226,243)),Background=new SolidColorBrush(Color.FromRgb(249,251,255)),Child=dock};
+        window.Content=new Border{CornerRadius=new CornerRadius(14),BorderThickness=new Thickness(1),BorderBrush=(Brush)Application.Current.FindResource("LineBrush"),Background=(Brush)Application.Current.FindResource("PanelBrush"),Child=dock};
     }
     public static MessageBoxResult ShowUpdate(Window owner,string text,string title,MessageBoxButton buttons=MessageBoxButton.OK)=>Show(owner,text,title,buttons,compact:true);
     public static MessageBoxResult Show(Window owner,string text,string title,MessageBoxButton buttons=MessageBoxButton.OK,MessageBoxImage image=MessageBoxImage.None,bool compact=false)

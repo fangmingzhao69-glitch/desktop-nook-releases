@@ -80,13 +80,13 @@ try {
 
     Show-Panel $app
     Set-CloseBehavior $app $false
-    Invoke-UI (Find-UI $app '关闭小筑' ([System.Windows.Automation.ControlType]::Button))
+    Invoke-UI (Find-UI $app '关闭轻匣' ([System.Windows.Automation.ControlType]::Button))
     Wait-Until {$app.Refresh();if($app.HasExited){throw 'Close-to-hide terminated the process'};[NookStartupProbe]::IsIconic($app.MainWindowHandle)} 'close-to-hide'
     $report.CloseToHideWorks=$true
 
     Show-Panel $app
     Set-CloseBehavior $app $true
-    Invoke-UI (Find-UI $app '关闭小筑' ([System.Windows.Automation.ControlType]::Button))
+    Invoke-UI (Find-UI $app '关闭轻匣' ([System.Windows.Automation.ControlType]::Button))
     if(-not $app.WaitForExit(5000)){throw 'Close button did not terminate process'}
     if($app.ExitCode -ne 0){throw 'Close button returned an error'}
     $report.CloseToExitTerminatesProcess=$true

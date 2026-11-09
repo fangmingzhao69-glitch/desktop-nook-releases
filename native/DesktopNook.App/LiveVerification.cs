@@ -14,7 +14,7 @@ internal static class LiveVerification
         var before=File.Exists(Path.Combine(data,"state.json"))?NookStore.HashFile(Path.Combine(data,"state.json")):"";
         var bin=new WindowsRecycleBin();var snapshot=bin.Capture();
         File.WriteAllText(Path.Combine(root,"recycle-original.json"),JsonSerializer.Serialize(snapshot));
-        var source=Path.Combine(desktop,"小筑验收-"+Guid.NewGuid().ToString("N")+".lnk");
+        var source=Path.Combine(desktop,"轻匣验收-"+Guid.NewGuid().ToString("N")+".lnk");
         NookStore? store=null;NookItem? entry=null;string? originalHash=null;
         try
         {

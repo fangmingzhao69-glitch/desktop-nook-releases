@@ -80,13 +80,13 @@ public partial class MainWindow : Window
         foreach(var category in Store.State.Categories) AddTab(category.Name,category.Id);
         var visible=VisibleOrderedItems().Select(item=>new IconEntry(item,item.Kind=="recycle-bin"?"":Store.ManagedPath(item))).ToList();
         Icons.ItemsSource=visible; EmptyState.Visibility=visible.Count==0?Visibility.Visible:Visibility.Collapsed;
-        EmptyText.Text=_activeCategory is null?"给桌面图标，一个小家":"此分类还没有图标";
+        EmptyText.Text=_activeCategory is null?"把常用图标，放进轻匣":"此分类还没有图标";
         TotalCount.Text=Store.State.Items.Count.ToString();
         Summary.Text=(_activeCategory is null?"全部":Store.State.Categories.Single(c=>c.Id==_activeCategory).Name)+" · "+visible.Count+" 个图标";
     }
     private void AddTab(string name,string? id)
     {
-        var button=new Button { Content=name,Tag=id,FontSize=11,Padding=new Thickness(9,5,9,5),Margin=new Thickness(0,0,4,0),Background=id==_activeCategory?Brush("#E1E8FA"):Brushes.Transparent,Foreground=id==_activeCategory?Brush("#4966B9"):Brush("#7C89A2"),ToolTip=id is null?"显示所有图标":name+" · 右键管理分类" };
+        var button=new Button { Content=name,Tag=id,FontSize=11,Padding=new Thickness(9,5,9,5),Margin=new Thickness(0,0,4,0),Background=id==_activeCategory?Brush("#DDF2FF"):Brushes.Transparent,Foreground=id==_activeCategory?Brush("#0877BE"):Brush("#698398"),ToolTip=id is null?"显示所有图标":name+" · 右键管理分类" };
         AutomationProperties.SetAutomationId(button,"Category-"+(id??"all"));
         button.Click+=(_,_)=>SelectCategory(id);
         button.MouseRightButtonUp+=(_,e)=>{e.Handled=true;if(id is not null) CategoryMenu(button,id);};
@@ -106,7 +106,7 @@ public partial class MainWindow : Window
     {
         try { App.ReloadStore();Render(); } catch(Exception recovery) { SetStatus("恢复未完成："+recovery.Message); }
         _interactions++;
-        try { UiDialogs.Show(this,exception.Message,"桌面小筑",MessageBoxButton.OK,MessageBoxImage.Information); }
+        try { UiDialogs.Show(this,exception.Message,"轻匣",MessageBoxButton.OK,MessageBoxImage.Information); }
         finally { _interactions--; }
     }
     private void OnCollect(object sender,RoutedEventArgs e)
@@ -178,7 +178,7 @@ public partial class MainWindow : Window
         Menu("从本地文件更新…",()=>_ = SelectUpdateAsync()),
         Menu("全部移回桌面",RestoreAll,Store.State.Items.Count>0),
         Menu("创建开始菜单入口",()=>Run(()=>ShortcutInstaller.Install(),"已创建开始菜单入口，可右键固定到任务栏")),
-        Menu("如何固定到任务栏",()=>{_interactions++;try{UiDialogs.Show(this,"右键任务栏上的“桌面小筑”图标，选择“固定到任务栏”。\n\n固定后点击同一个入口即可打开或收起小筑。","桌面小筑");}finally{_interactions--;}}),
+        Menu("如何固定到任务栏",()=>{_interactions++;try{UiDialogs.Show(this,"右键任务栏上的“轻匣”图标，选择“固定到任务栏”。\n\n固定后点击同一个入口即可打开或收起轻匣。","轻匣");}finally{_interactions--;}}),
         Menu("打开数据目录",()=>Process.Start(new ProcessStartInfo("explorer.exe",Store.DataDirectory){UseShellExecute=true})),
         new Separator(),Menu("退出并结束进程",Quit)
     ]);
@@ -188,9 +188,9 @@ public partial class MainWindow : Window
         _interactions++;
         try
         {
-            var picker=new Microsoft.Win32.OpenFileDialog{Title="选择桌面小筑新版本",Filter="桌面小筑程序或安装包 (*.exe)|*.exe",CheckFileExists=true};if(picker.ShowDialog(this)!=true)return;
+            var picker=new Microsoft.Win32.OpenFileDialog{Title="选择轻匣新版本",Filter="轻匣程序或安装包 (*.exe)|*.exe",CheckFileExists=true};if(picker.ShowDialog(this)!=true)return;
             var source=picker.FileName;var target=Environment.ProcessPath!;var candidate=await Task.Run(()=>LocalUpdater.Inspect(source));
-            if(UiDialogs.ShowUpdate(this,"当前版本："+CurrentVersionLabel+"\n更新到：v"+candidate.Version.ToString(3)+"\n\n程序会在原位置更新，保留分类、收纳内容和设置，完成后自动打开。","更新桌面小筑",MessageBoxButton.OKCancel)!=MessageBoxResult.OK)return;
+            if(UiDialogs.ShowUpdate(this,"当前版本："+CurrentVersionLabel+"\n更新到：v"+candidate.Version.ToString(3)+"\n\n程序会在原位置更新，保留分类、收纳内容和设置，完成后自动打开。","更新轻匣",MessageBoxButton.OKCancel)!=MessageBoxResult.OK)return;
             SetStatus("正在准备更新…");var staged=await Task.Run(()=>LocalUpdater.Stage(source,target,Store.DataDirectory,App.IsSandbox?Path.GetDirectoryName(Store.DataDirectory):null,options:App.Options,state:Store.State));
             var helper=new ProcessStartInfo(staged.Helper){UseShellExecute=false,CreateNoWindow=true};helper.ArgumentList.Add("--apply-update");helper.ArgumentList.Add(staged.Plan);Process.Start(helper);Quit();
         }
@@ -234,11 +234,11 @@ public partial class MainWindow : Window
         _interactions++;
         try
         {
-            if(UiDialogs.Show(this,"将 "+Store.State.Items.Count+" 个图标全部移回桌面？","桌面小筑",MessageBoxButton.OKCancel)!=MessageBoxResult.OK)return;
+            if(UiDialogs.Show(this,"将 "+Store.State.Items.Count+" 个图标全部移回桌面？","轻匣",MessageBoxButton.OKCancel)!=MessageBoxResult.OK)return;
             var restored=0;var remaining=new List<string>();
             foreach(var item in Store.State.Items.ToArray()) {if(RestoreItem(item.Id))restored++;else remaining.Add(item.Name);}
             SetStatus("已移回 "+restored+" 个，剩余 "+remaining.Count+" 个");
-            if(remaining.Count>0)UiDialogs.Show(this,"这些图标仍保留在小筑，可稍后重试：\n"+string.Join("\n",remaining),"恢复结果",MessageBoxButton.OK,MessageBoxImage.Information);
+            if(remaining.Count>0)UiDialogs.Show(this,"这些图标仍保留在轻匣，可稍后重试：\n"+string.Join("\n",remaining),"恢复结果",MessageBoxButton.OK,MessageBoxImage.Information);
         }
         finally{_interactions--;}
     }
@@ -247,7 +247,7 @@ public partial class MainWindow : Window
         try {Store.Restore(id);ShellIntegration.RefreshDesktop();Render();SetStatus("已移回桌面");return true;}
         catch(NameConflictException)
         {
-            _interactions++;try{if(UiDialogs.Show(this,"桌面已有同名文件。是否使用新名称恢复？原文件不会被覆盖。","桌面小筑",MessageBoxButton.OKCancel)!=MessageBoxResult.OK)return false;return Run(()=>Store.Restore(id,true),"已改名移回桌面");}finally{_interactions--;}
+            _interactions++;try{if(UiDialogs.Show(this,"桌面已有同名文件。是否使用新名称恢复？原文件不会被覆盖。","轻匣",MessageBoxButton.OKCancel)!=MessageBoxResult.OK)return false;return Run(()=>Store.Restore(id,true),"已改名移回桌面");}finally{_interactions--;}
         }
         catch(Exception ex){ShowFailure(ex);return false;}
     }
@@ -266,7 +266,7 @@ public partial class MainWindow : Window
         var siblings=Store.State.Items.Where(i=>i.CategoryId==item.CategoryId).ToList();var index=siblings.FindIndex(i=>i.Id==item.Id);
         var move=new MenuItem{Header="移动到分类"};foreach(var cat in Store.State.Categories)move.Items.Add(Menu(cat.Name,()=>Run(()=>Store.MoveItem(item.Id,cat.Id),"已移动分类")));
         var own=new List<object>{Menu("移回桌面",()=>RestoreItem(item.Id)),move,Menu("修改显示名称",()=>Rename()),Menu("前移",()=>Run(()=>Store.OrderItem(item.Id,-1)),index>0),Menu("后移",()=>Run(()=>Store.OrderItem(item.Id,1)),index<siblings.Count-1),new Separator()};
-        void Rename(){var name=Ask("显示名称","图标在小筑中的名称",item.Name);if(name is not null)Run(()=>Store.RenameItem(item.Id,name));}
+        void Rename(){var name=Ask("显示名称","图标在轻匣中的名称",item.Name);if(name is not null)Run(()=>Store.RenameItem(item.Id,name));}
         try
         {
             var shell=new ShellContextMenu(this,Store,item);
@@ -277,7 +277,7 @@ public partial class MainWindow : Window
                 {
                     if(verb.Equals("rename",StringComparison.OrdinalIgnoreCase))Rename();
                     else if(verb.Equals("delete",StringComparison.OrdinalIgnoreCase))
-                    {if(item.Kind=="recycle-bin")RestoreItem(item.Id);else if(UiDialogs.Show(this,"从小筑移除这个入口？恢复副本会保留，软件不会卸载。","移除入口",MessageBoxButton.OKCancel)==MessageBoxResult.OK)Run(()=>Store.ArchiveItem(item.Id),"入口已移除，恢复副本保留");}
+                    {if(item.Kind=="recycle-bin")RestoreItem(item.Id);else if(UiDialogs.Show(this,"从轻匣移除这个入口？恢复副本会保留，软件不会卸载。","移除入口",MessageBoxButton.OKCancel)==MessageBoxResult.OK)Run(()=>Store.ArchiveItem(item.Id),"入口已移除，恢复副本保留");}
                     else if(verb.Equals("cut",StringComparison.OrdinalIgnoreCase))
                     {if(item.Kind=="recycle-bin"){RestoreItem(item.Id);return;}string? restored=null;if(Run(()=>restored=Store.Restore(item.Id),"已移回桌面并剪切")){var data=new DataObject(DataFormats.FileDrop,new[]{restored!});data.SetData("Preferred DropEffect",new MemoryStream(BitConverter.GetBytes(2)));Clipboard.SetDataObject(data,true);}}
                     else Run(invoke);
@@ -332,8 +332,8 @@ public partial class MainWindow : Window
             if(e.Data.GetDataPresent(ItemFormat) && e.Data.GetData(ItemFormat) is string id)Run(()=>Store.MoveItem(id,categoryId),"已移动分类");
             else
             {
-                if(e.Data.GetDataPresent(DataFormats.FileDrop) && e.Data.GetData(DataFormats.FileDrop) is string[] files)foreach(var path in files){if(!Run(()=>Store.Collect(path,categoryId),"已收进小筑"))break;}
-                if(ShellIntegration.ContainsRecycleBin(e.Data) && !Store.State.Items.Any(i=>i.Kind=="recycle-bin"))Run(()=>Store.CollectRecycleBin(categoryId),"回收站已收进小筑");
+                if(e.Data.GetDataPresent(DataFormats.FileDrop) && e.Data.GetData(DataFormats.FileDrop) is string[] files)foreach(var path in files){if(!Run(()=>Store.Collect(path,categoryId),"已收进轻匣"))break;}
+                if(ShellIntegration.ContainsRecycleBin(e.Data) && !Store.State.Items.Any(i=>i.Kind=="recycle-bin"))Run(()=>Store.CollectRecycleBin(categoryId),"回收站已收进轻匣");
             }
             _activeCategory=categoryId;Render();ShellIntegration.RefreshDesktop();e.Effects=e.Data.GetDataPresent(ItemFormat)?DragDropEffects.Move:DragDropEffects.Copy;
         }

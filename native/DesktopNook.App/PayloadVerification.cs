@@ -7,7 +7,7 @@ internal static class PayloadVerification
 {
     public static int Run(string reportRoot)
     {
-        Directory.CreateDirectory(reportRoot);var desktop=Environment.GetFolderPath(Environment.SpecialFolder.DesktopDirectory);var prefix="小筑文件验收-"+Guid.NewGuid().ToString("N");var file=Path.Combine(desktop,prefix+".txt");var folder=Path.Combine(desktop,prefix);var checks=new List<string>();var failure="";NookStore? store=null;
+        Directory.CreateDirectory(reportRoot);var desktop=Environment.GetFolderPath(Environment.SpecialFolder.DesktopDirectory);var prefix="轻匣文件验收-"+Guid.NewGuid().ToString("N");var file=Path.Combine(desktop,prefix+".txt");var folder=Path.Combine(desktop,prefix);var checks=new List<string>();var failure="";NookStore? store=null;
         try
         {
             File.WriteAllText(file,"desktop document");Directory.CreateDirectory(Path.Combine(folder,"空目录"));File.WriteAllText(Path.Combine(folder,"资料.txt"),"folder original");
