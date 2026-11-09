@@ -50,11 +50,11 @@ internal static class BrandVerification
             try
             {
                 using(var key=Microsoft.Win32.Registry.CurrentUser.CreateSubKey(reg))key.SetValue("InstallLocation",Path.GetDirectoryName(Environment.ProcessPath!)!);
-                BrandMigration.Refresh(App.Store.DataDirectory,folder,pinned,reg);
+                var publicIcons=Path.Combine(root,"public-icon-cache");BrandMigration.Refresh(App.Store.DataDirectory,folder,pinned,reg,publicIcons);
                 dynamic updatedPin=shell.CreateShortcut(ownedPath);
-                try{if((string)updatedPin.TargetPath!=Environment.ProcessPath||(string)updatedPin.Arguments!=args||(string)updatedPin.WorkingDirectory!=root||!((string)updatedPin.IconLocation).Contains("branding\\Qingxia-"+MainWindow.CurrentVersionLabel[1..]+".ico"))throw new Exception("固定入口迁移未保留目标或参数。");}
+                try{if((string)updatedPin.TargetPath!=Environment.ProcessPath||(string)updatedPin.Arguments!=args||(string)updatedPin.WorkingDirectory!=root||!((string)updatedPin.IconLocation).Contains(publicIcons+"\\Qingxia-"+MainWindow.CurrentVersionLabel[1..]+".ico"))throw new Exception("固定入口迁移未保留目标或参数。");}
                 finally{Marshal.FinalReleaseComObject(updatedPin);}
-                using(var key=Microsoft.Win32.Registry.CurrentUser.OpenSubKey(reg))if(key?.GetValue("DisplayName") as string!="轻匣")throw new Exception("安装显示名未迁移。");
+                if((File.GetAttributes(Path.Combine(publicIcons,"Qingxia-"+MainWindow.CurrentVersionLabel[1..]+".ico"))&FileAttributes.Encrypted)!=0)throw new Exception("公开图标仍被 EFS 加密。");using(var key=Microsoft.Win32.Registry.CurrentUser.OpenSubKey(reg))if(key?.GetValue("DisplayName") as string!="轻匣")throw new Exception("安装显示名未迁移。");
                 if(LocalUpdater.Hash(otherPath)!=otherHash||!File.Exists(legacy)||LocalUpdater.Hash(Path.Combine(App.Store.DataDirectory,"state.json"))!=stateHash)throw new Exception("迁移影响了其他入口或收纳配置。");
             }
             finally{Microsoft.Win32.Registry.CurrentUser.DeleteSubKeyTree(reg,false);}

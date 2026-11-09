@@ -2,7 +2,7 @@
 
 一个运行于 Windows 的桌面收纳工具：把自己选择的桌面快捷方式、文件或文件夹收进分类面板，再通过任务栏上的一个入口访问。没有选择收纳的项目继续留在桌面。
 
-**当前源码版本：0.12.1。** 版本发布后可在软件内确认并从 GitHub 下载更新。本仓库保存原生 Windows 源码、开发文档及正式发行包，沿用 `desktop-nook-releases` 仓库名称和在线更新地址。
+**当前源码版本：0.12.2。** 版本发布后可在软件内确认并从 GitHub 下载更新。本仓库保存原生 Windows 源码、开发文档及正式发行包，沿用 `desktop-nook-releases` 仓库名称和在线更新地址。
 
 [下载最新正式版](https://github.com/fangmingzhao69-glitch/desktop-nook-releases/releases/latest) · [使用说明](docs/使用说明.md) · [开发与构建](docs/开发与构建.md) · [架构与数据](docs/架构与数据.md) · [反馈问题](https://github.com/fangmingzhao69-glitch/desktop-nook-releases/issues)
 
