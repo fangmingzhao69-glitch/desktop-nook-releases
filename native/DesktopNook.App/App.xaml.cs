@@ -61,6 +61,7 @@ public partial class App : Application
             Recycle = IsSandbox ? new SandboxRecycle(root) : new WindowsRecycleBin();
             Store = new NookStore(IsSandbox ? Path.Combine(root, "Data") : root, desktops, Recycle);
             var window = new MainWindow(); MainWindow = window;
+            if(!IsSandbox)Dispatcher.BeginInvoke(()=>{try{BrandMigration.Refresh(Store.DataDirectory);}catch(Exception){window.SetStatus("入口图标刷新未完成，可稍后重新打开轻匣重试。");}},System.Windows.Threading.DispatcherPriority.ContextIdle);
             window.KeepOpenForVerification=IsSandbox&&e.Args.Contains("--keep-open-verification");
             if(e.Args.Contains("--autostart")){window.ShowActivated=false;window.WindowState=WindowState.Minimized;}
             window.Show();

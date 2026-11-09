@@ -25,7 +25,7 @@ internal static class MenuLayout
         menu.MaxWidth=Math.Min(358,width);
         menu.MinWidth=Math.Min(202,menu.MaxWidth);
         menu.MaxHeight=height;
-        SetBodyWidth(menu,Math.Max(100,menu.MaxWidth-24));
-        SetBodyHeight(menu,Math.Max(60,height-24));
+        SetBodyWidth(menu,Math.Max(100,menu.MaxWidth-36));
+        SetBodyHeight(menu,Math.Max(60,height-64));
     }
 }

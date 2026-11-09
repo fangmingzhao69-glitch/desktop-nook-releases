@@ -39,6 +39,26 @@ internal static class BrandVerification
             Legacy(Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.System),"cmd.exe"));
             ShortcutInstaller.Install(folder);
             if(!File.Exists(legacy))throw new Exception("错误移除了其他目标的快捷方式。");
+            var pinned=Path.Combine(root,"pinned-fixture");Directory.CreateDirectory(pinned);
+            var ownedPath=Path.Combine(pinned,"桌面小筑.lnk");dynamic pin=shell.CreateShortcut(ownedPath);
+            string args="--sandbox \""+root+"\"";
+            try{pin.TargetPath=Environment.ProcessPath!;pin.Arguments=args;pin.WorkingDirectory=root;pin.IconLocation=Environment.ProcessPath+",0";pin.Save();}finally{Marshal.FinalReleaseComObject(pin);}
+            var otherPath=Path.Combine(pinned,"other.lnk");dynamic other=shell.CreateShortcut(otherPath);
+            try{other.TargetPath=Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.System),"cmd.exe");other.IconLocation=other.TargetPath+",0";other.Save();}finally{Marshal.FinalReleaseComObject(other);}
+            var otherHash=LocalUpdater.Hash(otherPath);var stateHash=LocalUpdater.Hash(Path.Combine(App.Store.DataDirectory,"state.json"));
+            var reg=@"Software\DesktopNook\BrandVerification\"+Guid.NewGuid().ToString("N");
+            try
+            {
+                using(var key=Microsoft.Win32.Registry.CurrentUser.CreateSubKey(reg))key.SetValue("InstallLocation",Path.GetDirectoryName(Environment.ProcessPath!)!);
+                BrandMigration.Refresh(App.Store.DataDirectory,folder,pinned,reg);
+                dynamic updatedPin=shell.CreateShortcut(ownedPath);
+                try{if((string)updatedPin.TargetPath!=Environment.ProcessPath||(string)updatedPin.Arguments!=args||(string)updatedPin.WorkingDirectory!=root||!((string)updatedPin.IconLocation).Contains("branding\\Qingxia-"+MainWindow.CurrentVersionLabel[1..]+".ico"))throw new Exception("固定入口迁移未保留目标或参数。");}
+                finally{Marshal.FinalReleaseComObject(updatedPin);}
+                using(var key=Microsoft.Win32.Registry.CurrentUser.OpenSubKey(reg))if(key?.GetValue("DisplayName") as string!="轻匣")throw new Exception("安装显示名未迁移。");
+                if(LocalUpdater.Hash(otherPath)!=otherHash||!File.Exists(legacy)||LocalUpdater.Hash(Path.Combine(App.Store.DataDirectory,"state.json"))!=stateHash)throw new Exception("迁移影响了其他入口或收纳配置。");
+            }
+            finally{Microsoft.Win32.Registry.CurrentUser.DeleteSubKeyTree(reg,false);}
+            checks.Add("Pinned icon migration uses versioned ICO, preserves pin path/target/arguments and other shortcuts, and refreshes install branding");
         }
         finally{Marshal.FinalReleaseComObject(shell);}
         checks.Add("Start-menu rename migrates only matching legacy target and preserves unrelated links");

@@ -22,10 +22,7 @@ internal static class ShortcutInstaller
         dynamic shell=Activator.CreateInstance(type)!;dynamic shortcut=shell.CreateShortcut(link);
         try{shortcut.TargetPath=program;shortcut.WorkingDirectory=Path.GetDirectoryName(program);shortcut.IconLocation=program+",0";shortcut.Description="轻匣 — 给桌面图标，一个小家";shortcut.Save();}
         finally{Marshal.FinalReleaseComObject(shortcut);Marshal.FinalReleaseComObject(shell);}
-        var iid=typeof(IPropertyStore).GUID;Marshal.ThrowExceptionForHR(SHGetPropertyStoreFromParsingName(link,IntPtr.Zero,2,ref iid,out var store));
-        var key=new PropertyKey{Format=new Guid("9F4C2855-9F79-4B39-A8D0-E1D42DE1D5F3"),Id=5};
-        var value=new Variant{Type=31,Text=Marshal.StringToCoTaskMemUni("DesktopNook.DesktopNook")};
-        try{store.SetValue(ref key,ref value);store.Commit();}finally{Marshal.FreeCoTaskMem(value.Text);Marshal.FinalReleaseComObject(store);}
+        SetIdentity(link,program+",0",program,"");
         var legacy=Path.Combine(folder,"桌面小筑.lnk");
         if(File.Exists(legacy))
         {
@@ -34,5 +31,20 @@ internal static class ShortcutInstaller
             finally { Marshal.FinalReleaseComObject(oldLink);Marshal.FinalReleaseComObject(oldShell); }
         }
         return link;
+    }
+    internal static void SetIdentity(string link,string icon,string program,string arguments)
+    {
+        var iid=typeof(IPropertyStore).GUID;Marshal.ThrowExceptionForHR(SHGetPropertyStoreFromParsingName(link,IntPtr.Zero,2,ref iid,out var store));
+        try
+        {
+            void Set(uint id,string text)
+            {
+                var key=new PropertyKey{Format=new Guid("9F4C2855-9F79-4B39-A8D0-E1D42DE1D5F3"),Id=id};
+                var value=new Variant{Type=31,Text=Marshal.StringToCoTaskMemUni(text)};
+                try{store.SetValue(ref key,ref value);}finally{Marshal.FreeCoTaskMem(value.Text);}
+            }
+            Set(5,"DesktopNook.DesktopNook");Set(4,"轻匣");Set(3,icon);Set(2,"\""+program+"\""+(arguments.Length>0?" "+arguments:""));store.Commit();
+        }
+        finally{Marshal.FinalReleaseComObject(store);}
     }
 }
