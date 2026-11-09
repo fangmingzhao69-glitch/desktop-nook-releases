@@ -90,11 +90,17 @@ internal static class LocalUpdater
             using var updated=Process.Start(start)??throw new IOException("新版程序未能启动，备份已保留。");
             var confirmed=false;for(var i=0;i<100;i++){if(File.Exists(ready))
             {
-                using var actual=JsonDocument.Parse(File.ReadAllText(ready));var value=actual.RootElement;
-                confirmed=value.GetProperty("version").GetString()==plan.Version&&value.GetProperty("pid").GetInt32()==updated.Id
-                    &&(string.IsNullOrEmpty(plan.StateFingerprint)||(value.TryGetProperty("stateFingerprint",out var fingerprint)&&fingerprint.GetString()==plan.StateFingerprint))
-                    &&(plan.CloseEndsProcess is null||(value.TryGetProperty("closeEndsProcess",out var closing)&&closing.GetBoolean()==plan.CloseEndsProcess));
-                break;
+                try
+                {
+                    using var actual=JsonDocument.Parse(File.ReadAllText(ready));var value=actual.RootElement;
+                    confirmed=value.GetProperty("version").GetString()==plan.Version&&value.GetProperty("pid").GetInt32()==updated.Id
+                        &&(string.IsNullOrEmpty(plan.StateFingerprint)||(value.TryGetProperty("stateFingerprint",out var fingerprint)&&fingerprint.GetString()==plan.StateFingerprint))
+                        &&(plan.CloseEndsProcess is null||(value.TryGetProperty("closeEndsProcess",out var closing)&&closing.GetBoolean()==plan.CloseEndsProcess));
+                    break;
+                }
+                catch(IOException) { /* Scanner/EFS locks are transient; keep waiting. */ }
+                catch(UnauthorizedAccessException) { }
+                catch(JsonException) { /* A legacy writer may still be publishing. */ }
             }if(updated.HasExited)break;Thread.Sleep(100);}
             File.WriteAllText(log,JsonSerializer.Serialize(new{success=confirmed,version=plan.Version,replaced,backup,processId=updated.Id,reason=confirmed?"":"新版未确认就绪，旧程序备份保留"},Json));
             return confirmed?0:2;

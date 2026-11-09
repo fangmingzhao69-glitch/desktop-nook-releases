@@ -81,8 +81,15 @@ public partial class App : Application
     {
         var temp=path+".tmp-"+Environment.ProcessId;
         File.WriteAllText(temp,System.Text.Json.JsonSerializer.Serialize(new{version=System.Reflection.Assembly.GetExecutingAssembly().GetName().Version!.ToString(),pid=Environment.ProcessId,stateFingerprint=LocalUpdater.Fingerprint(Store.State),closeEndsProcess=Options.CloseEndsProcess,categoryIds=Store.State.Categories.Select(c=>c.Id).ToArray(),dataRoot=Store.DataDirectory}));
-        File.Move(temp,path,true);
+        // Old updaters open this path immediately after File.Exists. Publishing a hard
+        // link to the closed, complete file avoids the transient rename/delete handle
+        // that can deny that first read on encrypted NTFS profiles. Keep the source
+        // link in the update staging folder until normal update cleanup.
+        if(!CreateHardLink(path,temp,IntPtr.Zero))File.Move(temp,path,true);
     }
+    [System.Runtime.InteropServices.DllImport("kernel32.dll",EntryPoint="CreateHardLinkW",CharSet=System.Runtime.InteropServices.CharSet.Unicode,SetLastError=true)]
+    [return:System.Runtime.InteropServices.MarshalAs(System.Runtime.InteropServices.UnmanagedType.Bool)]
+    private static extern bool CreateHardLink(string fileName,string existingFileName,IntPtr securityAttributes);
     protected override void OnExit(ExitEventArgs e) { _stop?.Dispose();_activate?.Dispose(); if (_ownsMutex) _mutex?.ReleaseMutex(); _mutex?.Dispose(); base.OnExit(e); }
 }
 
