@@ -32,7 +32,7 @@ internal sealed class CollectWindow : Window
     public CollectWindow(NookStore store,string selectedCategory)
     {
         _defaultCategory=store.DefaultCategoryId;
-        Title="收纳图标";Width=470.4;Height=515.2;ResizeMode=ResizeMode.NoResize;WindowStartupLocation=WindowStartupLocation.CenterOwner;ShowInTaskbar=false;Background=new SolidColorBrush(Color.FromRgb(246,248,253));FontSize=13;
+        Title="添加图标";Width=470.4;Height=515.2;ResizeMode=ResizeMode.NoResize;WindowStartupLocation=WindowStartupLocation.CenterOwner;ShowInTaskbar=false;Background=new SolidColorBrush(Color.FromRgb(246,248,253));FontSize=13;
         var root=new Grid{Margin=new Thickness(15)};root.RowDefinitions.Add(new(){Height=GridLength.Auto});root.RowDefinitions.Add(new(){Height=new GridLength(1,GridUnitType.Star)});root.RowDefinitions.Add(new(){Height=GridLength.Auto});root.RowDefinitions.Add(new(){Height=GridLength.Auto});
         root.Children.Add(new TextBlock{Text="选择桌面图标，也可以直接拖入轻匣。",Foreground=Brushes.SlateGray,Margin=new Thickness(0,0,0,10)});
         var list=new StackPanel();var scroll=new ScrollViewer{Content=list,VerticalScrollBarVisibility=ScrollBarVisibility.Auto};Grid.SetRow(scroll,1);root.Children.Add(scroll);
