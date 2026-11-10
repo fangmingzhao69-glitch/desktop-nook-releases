@@ -31,9 +31,32 @@ internal static class ShellIntegration
     private delegate bool EnumCallback(IntPtr hwnd,IntPtr param);
     [StructLayout(LayoutKind.Sequential)] private struct PointNative { public int X,Y; }
     [StructLayout(LayoutKind.Sequential,CharSet=CharSet.Unicode)] private struct ShellFileInfo { public IntPtr Icon; public int Index; public uint Attributes; [MarshalAs(UnmanagedType.ByValTStr,SizeConst=260)] public string Display; [MarshalAs(UnmanagedType.ByValTStr,SizeConst=80)] public string Type; }
-    private static readonly System.Collections.Concurrent.ConcurrentDictionary<string,ImageSource> Icons = new(StringComparer.OrdinalIgnoreCase);
+    internal sealed class IconCache
+    {
+        internal const long Limit=8L*1024*1024;
+        private readonly object _gate=new();
+        private readonly Dictionary<string,(ImageSource Image,long Bytes,LinkedListNode<string> Node)> _images=new(StringComparer.OrdinalIgnoreCase);
+        private readonly LinkedList<string> _recent=new();
+        internal long Bytes {get;private set;}
+        internal int Count {get{lock(_gate)return _images.Count;}}
+        internal bool TryGetValue(string key,out ImageSource image)
+        {
+            lock(_gate){if(_images.TryGetValue(key,out var entry)){_recent.Remove(entry.Node);_recent.AddLast(entry.Node);image=entry.Image;return true;}image=null!;return false;}
+        }
+        internal void Add(string key,ImageSource image)
+        {
+            long bytes=image is BitmapSource bitmap?(long)bitmap.PixelWidth*bitmap.PixelHeight*4:0;
+            lock(_gate)
+            {
+                if(_images.Remove(key,out var old)){Bytes-=old.Bytes;_recent.Remove(old.Node);}
+                _images.Add(key,(image,bytes,_recent.AddLast(key)));Bytes+=bytes;
+                while(Bytes>Limit||_images.Count>256){var first=_recent.First!;Bytes-=_images[first.Value].Bytes;_images.Remove(first.Value);_recent.RemoveFirst();}
+            }
+        }
+    }
+    private static readonly IconCache Icons=new();
     private static readonly System.Collections.Concurrent.ConcurrentDictionary<string,bool> Loading=new();
-    public static event Action? IconReady;
+    public static event Action<string,int,ImageSource>? IconReady;
     internal static IntPtr VerificationDesktopHandle { get; set; }
     public static void SetAppId(string id) => Marshal.ThrowExceptionForHR(SetCurrentProcessExplicitAppUserModelID(id));
     public static ImageSource AppIcon { get; } = new BitmapImage(new Uri("pack://application:,,,/Assets/AppIcon.png"));
@@ -45,9 +68,11 @@ internal static class ShellIntegration
         {
             foreach(var job in IconJobs.GetConsumingEnumerable())
             {
-                try{Icons[job.Key]=SharpIcons.Load(job.Path,job.Pixels)??AppIcon;}
-                catch {Icons[job.Key]=AppIcon;}
-                finally{Loading.TryRemove(job.Key,out _);IconReady?.Invoke();}
+                ImageSource image;
+                try{image=SharpIcons.Load(job.Path,job.Pixels)??AppIcon;}
+                catch {image=AppIcon;}
+                Icons.Add(job.Key,image);Loading.TryRemove(job.Key,out _);
+                IconReady?.Invoke(job.Path,job.Pixels,image);
             }
         }){IsBackground=true,Name="DesktopNook shell icons"};
         worker.SetApartmentState(ApartmentState.STA);worker.Start();

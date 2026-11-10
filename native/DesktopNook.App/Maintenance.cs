@@ -15,8 +15,13 @@ internal static class Maintenance
         {
             Process? running=null;
             try{var identity=File.ReadAllLines(Path.Combine(root,"instance.pid"));var candidate=Process.GetProcessById(int.Parse(identity[0]));if(candidate.Id!=Environment.ProcessId&&string.Equals(candidate.MainModule?.FileName,identity[1],StringComparison.OrdinalIgnoreCase))running=candidate;}catch{}
-            try{using var stop=EventWaitHandle.OpenExisting("Local\\DesktopNook-Stop-"+signature);stop.Set();}catch(WaitHandleCannotBeOpenedException){}
-            try{owned=mutex.WaitOne(10000);}catch(AbandonedMutexException){owned=true;}
+            // The main process owns its mutex before registering the stop event.
+            // Retry the signal while it starts instead of losing an early request.
+            for(int attempt=0;attempt<100&&!owned;attempt++)
+            {
+                try{using var stop=EventWaitHandle.OpenExisting("Local\\DesktopNook-Stop-"+signature);stop.Set();}catch(WaitHandleCannotBeOpenedException){}
+                try{owned=mutex.WaitOne(100);}catch(AbandonedMutexException){owned=true;}
+            }
             if(!owned)return 2;
             if(running is not null && !running.WaitForExit(10000))return 2;
             if(command=="stop")return 0;

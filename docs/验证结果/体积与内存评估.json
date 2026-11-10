@@ -1,0 +1,58 @@
+{
+  "Scenario": "Isolated copies of 56 current catalog entries; mutable content replaced with tiny fixtures; no live payload moved",
+  "Samples": "5, 10, 15 seconds after WaitForInputIdle; warm runs compared separately",
+  "Results": [
+    {
+      "Variant": "baseline",
+      "ExeBytes": 140283533,
+      "WorkingSetBytes": 213557248,
+      "PrivateBytes": 123957248,
+      "Handles": 1291,
+      "CpuMs": 3218.75
+    },
+    {
+      "Variant": "baseline-repeat",
+      "ExeBytes": 140283533,
+      "WorkingSetBytes": 216535040,
+      "PrivateBytes": 123695104,
+      "Handles": 1294,
+      "CpuMs": 3234.375
+    },
+    {
+      "Variant": "compressed",
+      "ExeBytes": 65197808,
+      "WorkingSetBytes": 326770688,
+      "PrivateBytes": 191430656,
+      "Handles": 1298,
+      "CpuMs": 3078.125
+    },
+    {
+      "Variant": "shared-runtime",
+      "ExeBytes": 754293,
+      "WorkingSetBytes": 210460672,
+      "PrivateBytes": 123129856,
+      "Handles": 1215,
+      "CpuMs": 2796.875
+    },
+    {
+      "Variant": "viewport-cache-warm",
+      "ExeBytes": 140287629,
+      "WorkingSetBytes": 206229504,
+      "PrivateBytes": 121729024,
+      "Handles": 1175,
+      "CpuMs": 2609.375
+    },
+    {
+      "Variant": "delivery-0125-warm",
+      "ExeBytes": 758389,
+      "WorkingSetBytes": 203051008,
+      "PrivateBytes": 121868288,
+      "Handles": 1117,
+      "CpuMs": 2343.75
+    }
+  ],
+  "IconChecksPassed": true,
+  "IconCheckResults": 11,
+  "FullNativeSuite": "37 checks passed after fixing detached visual-tree access; the earlier incomplete run was not an OLE-only failure",
+  "InstalledVersionUnchanged": "Evidence recorded before installation of 0.12.5"
+}

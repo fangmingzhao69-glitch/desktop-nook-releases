@@ -7,6 +7,7 @@ $preferences=Join-Path $Profile 'Data\preferences.json'
 $preferenceHash=if(Test-Path -LiteralPath $preferences){(Get-FileHash -LiteralPath $preferences).Hash}else{$null}
 $exe=Join-Path $InstallDir 'DesktopNook.exe'
 $app=Start-Process -FilePath $exe -ArgumentList @('--sandbox',('"'+$Profile+'"')) -WindowStyle Hidden -PassThru
+if(-not $app.WaitForInputIdle(15000)){throw 'Sandbox application did not become ready before upgrade'}
 Run-Setup
 if((Get-FileHash -LiteralPath (Join-Path $Profile 'Data\state.json')).Hash -ne $before){throw 'Upgrade changed user state'}
 if($preferenceHash -and (Get-FileHash -LiteralPath $preferences).Hash -ne $preferenceHash){throw 'Upgrade changed preferences'}

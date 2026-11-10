@@ -20,10 +20,17 @@ internal static class OleDragVerification
     [DllImport("user32.dll")]private static extern bool SetWindowPos(IntPtr window,IntPtr after,int x,int y,int width,int height,uint flags);
     [DllImport("user32.dll")]private static extern void mouse_event(uint flags,uint x,uint y,uint data,UIntPtr extra);
     private static void Move(Point point)=>SetCursorPos((int)point.X,(int)point.Y);
+    private static Task Pointer(Action action)
+    {
+        var done=new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        new Thread(()=>{try{action();done.SetResult();}catch(Exception ex){done.SetException(ex);}finally{mouse_event(4,0,0,0,UIntPtr.Zero);}}){IsBackground=true,Name="Isolated OLE pointer"}.Start();
+        return done.Task;
+    }
     public static async Task Run(MainWindow main,string kind="shortcut")
     {
         if(!App.IsSandbox)throw new InvalidOperationException("OLE verification requires sandbox.");
         GetCursorPos(out var originalCursor);
+        void Progress(string stage)=>File.WriteAllText(Path.Combine(Path.GetDirectoryName(App.Store.DataDirectory)!,"ole-"+kind+"-progress.txt"),stage);
         var hostLeft=main.Left>=225?main.Left-225:Math.Min(SystemParameters.WorkArea.Right-220,main.Left+main.Width+16);
         var host=new Window{Title="轻匣隔离拖放验证",Width=210,Height=105,Left=hostLeft,Top=Math.Max(10,main.Top),ShowInTaskbar=false,Topmost=true,ResizeMode=ResizeMode.NoResize};
         var source=new Button{Content="独立测试目录",FontSize=12};host.Content=source;
@@ -44,16 +51,19 @@ internal static class OleDragVerification
             if(GetAncestor(WindowFromPoint(new CursorPoint{X=(int)targetPoint.X,Y=(int)targetPoint.Y}),2)!=new WindowInteropHelper(main).Handle)throw new Exception("验证目标窗口未处于可交互位置。");
             Move(sourcePoint);mouse_event(2,0,0,0,UIntPtr.Zero);await Task.Delay(100);
             if((GetAsyncKeyState(1)&0x8000)==0)throw new Exception("验证输入未建立鼠标按下状态。");
-            var incomingPointer=Task.Run(()=>{try{Thread.Sleep(700);for(var i=1;i<=20;i++){Move(new Point(sourcePoint.X+(targetPoint.X-sourcePoint.X)*i/20,sourcePoint.Y+(targetPoint.Y-sourcePoint.Y)*i/20));Thread.Sleep(40);}Thread.Sleep(250);mouse_event(4,0,0,0,UIntPtr.Zero);}finally{mouse_event(4,0,0,0,UIntPtr.Zero);}});
+            Progress("incoming");
+            var incomingPointer=Pointer(()=>{Thread.Sleep(700);for(var i=1;i<=20;i++){Move(new Point(sourcePoint.X+(targetPoint.X-sourcePoint.X)*i/20,sourcePoint.Y+(targetPoint.Y-sourcePoint.Y)*i/20));Thread.Sleep(40);}Thread.Sleep(250);mouse_event(4,0,0,0,UIntPtr.Zero);});
             var data=new DataObject(DataFormats.FileDrop,new[]{file});
             var result=DragDrop.DoDragDrop(source,data,DragDropEffects.Copy|DragDropEffects.Move|DragDropEffects.Link);
             await incomingPointer;await main.Dispatcher.InvokeAsync(()=>{},DispatcherPriority.ContextIdle);
+            Progress("incoming complete");
             var item=App.Store.State.Items.SingleOrDefault(i=>i.OriginalPath==file)??throw new Exception("真实 OLE FileDrop 未触发收纳，结果："+result);
             if(File.Exists(file)||Directory.Exists(file))throw new Exception("收纳后测试桌面仍有原入口。");
             main.UpdateLayout();var button=main.IconButton(item.Id);
             var from=button.PointToScreen(new Point(button.ActualWidth/2,button.ActualHeight/2));
             var to=source.PointToScreen(new Point(source.ActualWidth/2,source.ActualHeight/2));
-            await Task.Run(()=>
+            Progress("outgoing");
+            await Pointer(()=>
             {
                 try
                 {
@@ -64,6 +74,7 @@ internal static class OleDragVerification
                 finally{mouse_event(4,0,0,0,UIntPtr.Zero);}
             });
             await main.Dispatcher.InvokeAsync(()=>{},DispatcherPriority.ContextIdle);
+            Progress("outgoing complete");
             if((!File.Exists(file)&&!Directory.Exists(file))||App.Store.State.Items.Any(i=>i.Id==item.Id))throw new Exception("真实鼠标拖出未完成独立测试桌面的恢复。");
         }
         finally
