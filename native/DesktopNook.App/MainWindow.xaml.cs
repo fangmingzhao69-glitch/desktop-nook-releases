@@ -223,9 +223,9 @@ public partial class MainWindow : Window
             var helper=new ProcessStartInfo(staged.Helper){UseShellExecute=false,CreateNoWindow=true};helper.ArgumentList.Add("--apply-update");helper.ArgumentList.Add(staged.Plan);
             if(Process.Start(helper) is null)throw new IOException("无法启动更新助手。");Quit();
         }
-        catch(Exception)
+        catch(Exception ex)
         {
-            if(manual){SetStatus("更新检查未完成");UiDialogs.ShowUpdate(this,$"当前版本：{CurrentVersionLabel}\n暂时无法完成在线更新，请检查网络或系统代理后重试。也可以使用“从本地文件更新”。","在线更新");}
+            if(manual){SetStatus("更新检查未完成");UiDialogs.ShowUpdate(this,$"当前版本：{CurrentVersionLabel}\n{OnlineUpdater.FailureMessage(ex)}\n也可以使用“从本地文件更新”。","在线更新");}
         }
         finally{_onlineBusy=false;if(manual)_interactions--;}
     }

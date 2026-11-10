@@ -1,5 +1,6 @@
 using System.IO;
 using System.Net.Http;
+using System.Net;
 using System.Security.Cryptography;
 using System.Text.Json;
 
@@ -12,6 +13,7 @@ internal static class OnlineUpdater
     internal const string Repository="fangmingzhao69-glitch/desktop-nook-releases";
     internal const string AssetName="DesktopNook-win-x64.exe";
     internal static readonly Uri Latest=new($"https://api.github.com/repos/{Repository}/releases/latest");
+    internal static readonly Uri LatestPage=new($"https://github.com/{Repository}/releases/latest");
     internal static HttpClient CreateClient()
     {
         // HttpClient uses the Windows proxy settings; no account token is shipped.
@@ -21,11 +23,53 @@ internal static class OnlineUpdater
     }
     internal static async Task<OnlineRelease?> CheckAsync(HttpClient client,Version current,CancellationToken token=default)
     {
+        try { return await CheckApiAsync(client,current,token); }
+        catch(HttpRequestException ex) when(ex.StatusCode is null or HttpStatusCode.Forbidden or HttpStatusCode.TooManyRequests || (int?)ex.StatusCode>=500) { }
+        catch(OperationCanceledException) when(!token.IsCancellationRequested) { }
+        return await CheckReleasePageAsync(client,current,token);
+    }
+    private static async Task<OnlineRelease?> CheckApiAsync(HttpClient client,Version current,CancellationToken token)
+    {
         using var timeout=CancellationTokenSource.CreateLinkedTokenSource(token);timeout.CancelAfter(TimeSpan.FromSeconds(25));
         using var response=await client.GetAsync(Latest,timeout.Token);response.EnsureSuccessStatusCode();
         using var json=JsonDocument.Parse(await response.Content.ReadAsStringAsync(timeout.Token));var root=json.RootElement;
         return Parse(root,current);
     }
+    internal static async Task<OnlineRelease?> CheckReleasePageAsync(HttpClient client,Version current,CancellationToken token=default)
+    {
+        using var timeout=CancellationTokenSource.CreateLinkedTokenSource(token);timeout.CancelAfter(TimeSpan.FromSeconds(40));
+        // GitHub's public release page and assets remain available when its REST API is rate limited.
+        using var page=await client.GetAsync(LatestPage,HttpCompletionOption.ResponseHeadersRead,timeout.Token);page.EnsureSuccessStatusCode();
+        var location=page.RequestMessage?.RequestUri;
+        string prefix=$"/{Repository}/releases/tag/";
+        if(location is null || location.Scheme!=Uri.UriSchemeHttps || location.Host!="github.com" || !location.IsDefaultPort || !string.IsNullOrEmpty(location.UserInfo)
+            || !string.IsNullOrEmpty(location.Query) || !string.IsNullOrEmpty(location.Fragment) || !location.AbsolutePath.StartsWith(prefix,StringComparison.Ordinal))
+            throw new IOException("无法核验官方发行页的版本地址。");
+        var tag=location.AbsolutePath[prefix.Length..];
+        if(!Version.TryParse(tag.TrimStart('v','V'),out var version))throw new IOException("官方发行页的版本号无效。");
+        version=Normalize(version);
+        if(version<=Normalize(current))return null;
+        // Pin every subsequent request to this exact tag, so a concurrent release cannot mix metadata.
+        var download=new Uri($"https://github.com/{Repository}/releases/download/{tag}/{AssetName}");
+        using var checksum=await client.GetAsync(new Uri(download,"SHA256SUMS.txt"),HttpCompletionOption.ResponseHeadersRead,timeout.Token);checksum.EnsureSuccessStatusCode();
+        await checksum.Content.LoadIntoBufferAsync(64*1024,timeout.Token);
+        var matches=(await checksum.Content.ReadAsStringAsync(timeout.Token)).Split('\n')
+            .Select(line=>line.Trim().Split((char[]?)null,StringSplitOptions.RemoveEmptyEntries))
+            .Where(parts=>parts.Length==2 && parts[1].TrimStart('*')==AssetName).ToList();
+        if(matches.Count!=1 || matches[0][0].Length!=64 || !matches[0][0].All(Uri.IsHexDigit))throw new IOException("官方发行包缺少唯一有效的 SHA-256 校验值。");
+        using var request=new HttpRequestMessage(HttpMethod.Head,download);
+        using var asset=await client.SendAsync(request,HttpCompletionOption.ResponseHeadersRead,timeout.Token);asset.EnsureSuccessStatusCode();
+        if(asset.Content.Headers.ContentLength is not long size || size<=0 || size>512L*1024*1024)throw new IOException("无法核验官方更新文件的大小。");
+        return new(version,download,size,matches[0][0],$"新版已发布，更新说明：{location}");
+    }
+    internal static string FailureMessage(Exception exception)=>exception switch
+    {
+        HttpRequestException {StatusCode:HttpStatusCode.Forbidden or HttpStatusCode.TooManyRequests}=>"GitHub 请求受到限制，官方备用通道也暂时不可用，请稍后重试。",
+        HttpRequestException=>"无法连接官方更新服务，请检查网络或系统代理后重试。",
+        OperationCanceledException=>"连接官方更新服务超时，请稍后重试。",
+        IOException=>exception.Message,
+        _=>"无法读取官方更新信息，请稍后重试。"
+    };
     internal static OnlineRelease? Parse(JsonElement root,Version current)
     {
         if(root.GetProperty("draft").GetBoolean()||root.GetProperty("prerelease").GetBoolean())return null;
