@@ -141,6 +141,7 @@ internal static class NativeVerification
             if(dialogFailure is not null)throw dialogFailure;
             checks.Add("Compact update confirmation fits panel and can be cancelled without downloading");
             await BrandVerification.Run(window,root,checks);
+            await MotionVerification.Run(window,root,checks);
             if(Environment.GetCommandLineArgs().Contains("--leave-payloads"))
             {
                 App.Store.Collect(Path.Combine(desktop,"真实文档拖放验证.txt"),"office");App.Store.Collect(Path.Combine(desktop,"真实文件夹拖放验证"),"office");App.Store.CollectRecycleBin("uncategorized");checks.Add("Uninstall fixture retains document, folder and system item alongside shortcuts");

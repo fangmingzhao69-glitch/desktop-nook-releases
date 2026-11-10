@@ -1,5 +1,5 @@
 {
-  "passed": 40,
+  "passed": 57,
   "failure": "",
   "checks": [
     "Startup option persists quoted command, can be disabled and preserves other entries",
@@ -41,7 +41,24 @@
     "Collect tiles highlight without checkbox glyphs; independent toggles retain multi-selection and deselect only the clicked item",
     "Collect icons/details switch preserves selection/category, defaults to icons and persists a chosen default through preference writes",
     "Collect window stays within 90 percent of normal/smaller owner dimensions with its action footer visible",
-    "Branded collect, checkboxes, category dropdown and rename dialog work without changing collection data"
+    "Branded collect, checkboxes, category dropdown and rename dialog work without changing collection data",
+    "Enabled reveal creates short-lived opacity/translation clocks",
+    "Completed reveal restores opacity/transform and releases all clocks",
+    "Interrupted/replaced reveal can be cancelled without residual visual state",
+    "Selection changes immediately without waiting for animation",
+    "Selection feedback settles to the exact highlight without idle clocks",
+    "Turning motion off finishes current transitions and prevents new clocks",
+    "System mode follows the Windows client-area animation preference",
+    "Minimize immediately cancels visual motion #0",
+    "Minimize immediately cancels visual motion #1",
+    "Minimize immediately cancels visual motion #2",
+    "Minimize immediately cancels visual motion #3",
+    "Rapid panel toggles obey the last requested state without delayed minimization",
+    "100 repeated reveal/replace/cancel cycles leave no clocks or transforms",
+    "Equivalent motion-off stress also leaves no active clocks",
+    "Closing a window cancels motion for its unloaded content",
+    "Motion preference survives other settings and fresh preference readers",
+    "Motion and preference stress do not change collection/index ordering"
   ],
   "realDesktopModified": false
 }

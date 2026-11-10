@@ -60,6 +60,7 @@ public partial class App : Application
             if (IsSandbox) Directory.CreateDirectory(desktops[0]);
             Recycle = IsSandbox ? new SandboxRecycle(root) : new WindowsRecycleBin();
             Store = new NookStore(IsSandbox ? Path.Combine(root, "Data") : root, desktops, Recycle);
+            UiMotion.Configure(Options.MotionMode);
             var window = new MainWindow(); MainWindow = window;
             if(!IsSandbox)Dispatcher.BeginInvoke(()=>{try{BrandMigration.Refresh(Store.DataDirectory);}catch(Exception){window.SetStatus("入口图标刷新未完成，可稍后重新打开轻匣重试。");}},System.Windows.Threading.DispatcherPriority.ContextIdle);
             window.KeepOpenForVerification=IsSandbox&&e.Args.Contains("--keep-open-verification");

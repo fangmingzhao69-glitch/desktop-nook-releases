@@ -15,6 +15,7 @@ internal static class UpdateVerification
         var options=new StartupOptions(@"Software\DesktopNook\Sandbox\"+signature+@"\Run",@"Software\DesktopNook\Sandbox\"+signature+@"\Settings",Path.Combine(data,"preferences.json"));
         options.CloseEndsProcess=false;options.WriteWindowSize(new(){Free=true,Locked=false,Width=800,Height=500});
         options.DefaultCollectView="details";
+        options.MotionMode="off";
         foreach(var category in store.State.Categories)
         {
             for(int n=0;n<3;n++){var path=Path.Combine(desktop,category.Id+n+".url");File.WriteAllText(path,"[InternetShortcut]\r\nURL=https://example.invalid/\r\n");store.Collect(path,category.Id);}
@@ -31,11 +32,12 @@ internal static class UpdateVerification
         bool uncheckedPreferenceRetained=!ready.RootElement.GetProperty("closeEndsProcess").GetBoolean();
         using var savedPreferences=JsonDocument.Parse(File.ReadAllText(Path.Combine(data,"preferences.json")));
         bool collectViewRetained=savedPreferences.RootElement.GetProperty("CollectView").GetString()=="details";
+        bool motionModeRetained=savedPreferences.RootElement.GetProperty("MotionMode").GetString()=="off";
         var reloaded=new DesktopNook.Core.NookStore(data,[desktop],new SandboxRecycle(profile));
         bool categoryOrdersRetained=orders.All(pair=>reloaded.OrderedItems(pair.Key).Select(i=>i.Id).SequenceEqual(pair.Value));
-        var ok=result==0&&deletedCategoryRetained&&uncheckedPreferenceRetained&&collectViewRetained&&categoryOrdersRetained&&LocalUpdater.Inspect(target).Version==LocalUpdater.Inspect(candidate).Version&&LocalUpdater.Hash(Path.Combine(data,"state.json"))==before&&File.ReadAllText(store.ManagedPath(item))=="user edited data";
+        var ok=result==0&&deletedCategoryRetained&&uncheckedPreferenceRetained&&collectViewRetained&&motionModeRetained&&categoryOrdersRetained&&LocalUpdater.Inspect(target).Version==LocalUpdater.Inspect(candidate).Version&&LocalUpdater.Hash(Path.Combine(data,"state.json"))==before&&File.ReadAllText(store.ManagedPath(item))=="user edited data";
         var stop=new ProcessStartInfo(target){UseShellExecute=false,CreateNoWindow=true};stop.ArgumentList.Add("--maintenance=stop");stop.ArgumentList.Add("--sandbox");stop.ArgumentList.Add(profile);using(var process=Process.Start(stop)!){process.WaitForExit();}
-        File.WriteAllText(Path.Combine(root,"update-verification.json"),JsonSerializer.Serialize(new{success=ok,helperExit=result,oldVersion=LocalUpdater.Inspect(oldExe).Version.ToString(),newVersion=LocalUpdater.Inspect(target).Version.ToString(),deletedCategoryRetained,uncheckedPreferenceRetained,collectViewRetained,categoryOrdersRetained,orderedCategories=orders.Count,configurationHashUnchanged=LocalUpdater.Hash(Path.Combine(data,"state.json"))==before,payloadUnchanged=File.ReadAllText(store.ManagedPath(item))=="user edited data",newProcessConfirmed=updateResult.RootElement.GetProperty("success").GetBoolean()},new JsonSerializerOptions{WriteIndented=true}));
+        File.WriteAllText(Path.Combine(root,"update-verification.json"),JsonSerializer.Serialize(new{success=ok,helperExit=result,oldVersion=LocalUpdater.Inspect(oldExe).Version.ToString(),newVersion=LocalUpdater.Inspect(target).Version.ToString(),deletedCategoryRetained,uncheckedPreferenceRetained,collectViewRetained,motionModeRetained,categoryOrdersRetained,orderedCategories=orders.Count,configurationHashUnchanged=LocalUpdater.Hash(Path.Combine(data,"state.json"))==before,payloadUnchanged=File.ReadAllText(store.ManagedPath(item))=="user edited data",newProcessConfirmed=updateResult.RootElement.GetProperty("success").GetBoolean()},new JsonSerializerOptions{WriteIndented=true}));
         return ok?0:1;
     }
 }

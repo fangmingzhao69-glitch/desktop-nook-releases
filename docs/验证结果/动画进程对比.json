@@ -1,0 +1,60 @@
+{
+  "scenario": "Same isolated 56-item dataset in separate processes; each sample is 5/10/15 seconds after WaitForInputIdle",
+  "on": {
+    "Name": "motion-0129-final-on",
+    "ExeBytes": 807029,
+    "ReadyMs": 478,
+    "Samples": [
+      {
+        "ElapsedMs": 5488,
+        "WorkingSet": 215601152,
+        "Private": 147841024,
+        "Handles": 1106,
+        "CPU": 3921.875
+      },
+      {
+        "ElapsedMs": 10515,
+        "WorkingSet": 215556096,
+        "Private": 147759104,
+        "Handles": 1103,
+        "CPU": 3921.875
+      },
+      {
+        "ElapsedMs": 15533,
+        "WorkingSet": 215539712,
+        "Private": 147714048,
+        "Handles": 1102,
+        "CPU": 3921.875
+      }
+    ]
+  },
+  "off": {
+    "Name": "motion-0129-final-off",
+    "ExeBytes": 807029,
+    "ReadyMs": 342,
+    "Samples": [
+      {
+        "ElapsedMs": 5345,
+        "WorkingSet": 216125440,
+        "Private": 134459392,
+        "Handles": 1115,
+        "CPU": 3625.0
+      },
+      {
+        "ElapsedMs": 10358,
+        "WorkingSet": 216084480,
+        "Private": 134356992,
+        "Handles": 1112,
+        "CPU": 3625.0
+      },
+      {
+        "ElapsedMs": 15373,
+        "WorkingSet": 216072192,
+        "Private": 134307840,
+        "Handles": 1111,
+        "CPU": 3625.0
+      }
+    ]
+  },
+  "note": "No forced GC. Shell/driver/cache variation and timer scheduling affect process snapshots; these are observations rather than universal animation overhead guarantees."
+}

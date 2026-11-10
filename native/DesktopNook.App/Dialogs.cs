@@ -91,7 +91,7 @@ internal sealed class CollectWindow : Window
     private void UpdateDefaultButton(){bool same=App.Options.DefaultCollectView==ViewMode;_saveDefault.Content=same?"默认视图":"设为默认";_saveDefault.IsEnabled=!same;_saveDefault.ToolTip="当前默认："+(App.Options.DefaultCollectView=="icons"?"图标":"详细列表");}
     internal void SetView(string mode)
     {
-        if(mode is not ("icons" or "details"))throw new ArgumentException("无效视图");ViewMode=mode;
+        if(mode is not ("icons" or "details"))throw new ArgumentException("无效视图");bool changed=ViewMode!=mode;UiMotion.StopReveal(_scroll);ViewMode=mode;
         _scroll.Content=null;
         Panel panel=mode=="icons"?new WrapPanel{Orientation=Orientation.Horizontal}:new StackPanel();
         foreach(var check in _checks)
@@ -113,5 +113,7 @@ internal sealed class CollectWindow : Window
         if(_checks.Count==0)panel.Children.Add(new TextBlock{Text="没有待添加的桌面项目",Margin=new Thickness(4,20,4,0),Foreground=Brushes.SlateGray});
         _scroll.Content=panel;_scroll.ScrollToTop();
         _icons.Background=mode=="icons"?new SolidColorBrush(Color.FromRgb(221,242,255)):Brushes.Transparent;_details.Background=mode=="details"?new SolidColorBrush(Color.FromRgb(221,242,255)):Brushes.Transparent;UpdateDefaultButton();
+        UiMotion.RefreshFeedback(_icons);UiMotion.RefreshFeedback(_details);
+        if(changed&&IsLoaded)UiMotion.Reveal(_scroll,110,0);
     }
 }

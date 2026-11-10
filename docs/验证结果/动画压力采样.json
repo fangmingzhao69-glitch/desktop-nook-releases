@@ -1,0 +1,21 @@
+{
+  "cyclesPerMode": 100,
+  "on": {
+    "elapsedMs": 821,
+    "cpuMs": 125,
+    "privateBefore": 248852480,
+    "privateAfter": 245190656,
+    "idleSampleMs": 500,
+    "idleCpuMs": 15.625
+  },
+  "off": {
+    "elapsedMs": 1804,
+    "cpuMs": 46.875,
+    "privateBefore": 245190656,
+    "privateAfter": 202137600,
+    "idleSampleMs": 500,
+    "idleCpuMs": 0
+  },
+  "activeClocks": 0,
+  "forcedGc": false
+}

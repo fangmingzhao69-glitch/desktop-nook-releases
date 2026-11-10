@@ -6,7 +6,7 @@ using System.Text.Json.Serialization;
 namespace DesktopNook.App;
 internal sealed class StartupOptions(string runKey = @"Software\Microsoft\Windows\CurrentVersion\Run",string settingsKey = @"Software\DesktopNook\Settings",string? preferencesPath=null)
 {
-    private sealed class Preferences {public bool? CloseEndsProcess {get;set;} public WindowSizePreference? WindowSize {get;set;} [JsonIgnore(Condition=JsonIgnoreCondition.WhenWritingNull)]public string? CollectView {get;set;}}
+    private sealed class Preferences {public bool? CloseEndsProcess {get;set;} public WindowSizePreference? WindowSize {get;set;} [JsonIgnore(Condition=JsonIgnoreCondition.WhenWritingNull)]public string? CollectView {get;set;} [JsonIgnore(Condition=JsonIgnoreCondition.WhenWritingNull)]public string? MotionMode {get;set;}}
     private Preferences? ReadPreferences()
     {
         if(preferencesPath is null)return null;
@@ -29,7 +29,13 @@ internal sealed class StartupOptions(string runKey = @"Software\Microsoft\Window
         finally{if(File.Exists(temp))File.Delete(temp);}
     }
     private string? SavedCollectView {get{var saved=ReadPreferences()?.CollectView;if(saved is "icons" or "details")return saved;using var key=Registry.CurrentUser.OpenSubKey(settingsKey);return key?.GetValue("CollectView") as string;}}
-    private Preferences Snapshot()=>new(){CloseEndsProcess=CloseEndsProcess,WindowSize=ReadWindowSize(),CollectView=SavedCollectView};
+    private string? SavedMotionMode {get{var saved=ReadPreferences()?.MotionMode;if(saved is "system" or "on" or "off")return saved;using var key=Registry.CurrentUser.OpenSubKey(settingsKey);return key?.GetValue("MotionMode") as string;}}
+    private Preferences Snapshot()=>new(){CloseEndsProcess=CloseEndsProcess,WindowSize=ReadWindowSize(),CollectView=SavedCollectView,MotionMode=SavedMotionMode};
+    internal string MotionMode
+    {
+        get=>SavedMotionMode is "on" or "off"?SavedMotionMode:"system";
+        set{if(value is not ("system" or "on" or "off"))throw new ArgumentException("无效动画设置。");var preferences=Snapshot();preferences.MotionMode=value;SavePreferences(preferences);using var key=Registry.CurrentUser.CreateSubKey(settingsKey,true);key.SetValue("MotionMode",value);key.Flush();}
+    }
     internal string DefaultCollectView
     {
         get=>SavedCollectView=="details"?"details":"icons";

@@ -37,7 +37,7 @@ public partial class MainWindow : Window
         Closed+=(_,_)=>_updateTimer.Stop();
         Render();
     }
-    private void OnLoaded(object sender,RoutedEventArgs e) { TaskbarPlacement.EnableToggle(this);Place(); if(Store.RecoveryMessages.Count>0) SetStatus(Store.RecoveryMessages.Last());if(!App.IsSandbox){_updateTimer.Start();_=CheckOnlineUpdateAsync(false);} }
+    private void OnLoaded(object sender,RoutedEventArgs e) { TaskbarPlacement.EnableToggle(this);Place();if(WindowState==WindowState.Normal)UiMotion.Reveal(Surface,180); if(Store.RecoveryMessages.Count>0) SetStatus(Store.RecoveryMessages.Last());if(!App.IsSandbox){_updateTimer.Start();_=CheckOnlineUpdateAsync(false);} }
     internal void SetAvailableRelease(OnlineRelease? release)
     {
         _latestRelease=release;
@@ -49,13 +49,14 @@ public partial class MainWindow : Window
     {
         if(_resizing || KeepOpenForVerification || !IsLoaded || WindowState!=WindowState.Normal)return;
         var version=++_placementVersion;
-        TaskbarPlacement.Apply(this,TaskbarPlacement.Fallback(),PreferredWindowSize);
+        var fallback=TaskbarPlacement.Fallback();if(TaskbarPlacement.WouldMove(this,fallback,PreferredWindowSize))UiMotion.StopReveal(Surface);
+        TaskbarPlacement.Apply(this,fallback,PreferredWindowSize);
         var anchor=await TaskbarPlacement.FindAsync();
-        if(anchor is not null && version==_placementVersion && !_resizing && !KeepOpenForVerification && WindowState==WindowState.Normal)TaskbarPlacement.Apply(this,anchor,PreferredWindowSize);
+        if(anchor is not null && version==_placementVersion && !_resizing && !KeepOpenForVerification && WindowState==WindowState.Normal){if(TaskbarPlacement.WouldMove(this,anchor,PreferredWindowSize))UiMotion.StopReveal(Surface);TaskbarPlacement.Apply(this,anchor,PreferredWindowSize);}
     }
     public void ShowPanel() { WindowState=WindowState.Normal; Show(); Place(); Activate(); }
     public void TogglePanel(){if(WindowState==WindowState.Normal&&IsVisible)WindowState=WindowState.Minimized;else ShowPanel();}
-    private void OnStateChanged(object? sender,EventArgs e) { if(WindowState==WindowState.Normal) Place(); }
+    private void OnStateChanged(object? sender,EventArgs e) { if(WindowState==WindowState.Normal){Place();if(IsLoaded)UiMotion.Reveal(Surface,180);}else UiMotion.CancelAll(); }
     private void OnDeactivated(object? sender,EventArgs e)
     {
         if(TaskbarPlacement.PointerOverButton())return;
@@ -69,7 +70,7 @@ public partial class MainWindow : Window
     }
     private void OnCloseButton(object sender,RoutedEventArgs e)=>Close();
     private void OnMinimizeButton(object sender,RoutedEventArgs e)=>WindowState=WindowState.Minimized;
-    public void Quit() { _allowExit=true; Application.Current.Shutdown(); }
+    public void Quit() { UiMotion.CancelAll();_allowExit=true; Application.Current.Shutdown(); }
     internal void QuitForMaintenance(){if(!_dragging&&_interactions==0)Quit();}
     public void SetStatus(string message) { Status.Text=message;Status.ToolTip=message; }
     public void Render()
@@ -95,7 +96,7 @@ public partial class MainWindow : Window
         button.PreviewKeyDown+=(_,e)=>{if(e.Key is Key.Left or Key.Right or Key.Home or Key.End){var buttons=Tabs.Children.OfType<Button>().ToList();var current=buttons.IndexOf(button);var next=e.Key==Key.Home?0:e.Key==Key.End?buttons.Count-1:(current+(e.Key==Key.Left?-1:1)+buttons.Count)%buttons.Count;SelectCategory(buttons[next].Tag as string);Tabs.Children.OfType<Button>().ElementAt(next).Focus();e.Handled=true;}};
         Tabs.Children.Add(button);
     }
-    public void SelectCategory(string? id) { _activeCategory=id;Render(); }
+    public void SelectCategory(string? id) {bool changed=_activeCategory!=id;UiMotion.StopReveal(Icons); _activeCategory=id;Render();if(changed)UiMotion.Reveal(Icons,110,0); }
     private static SolidColorBrush Brush(string color) => new((Color)ColorConverter.ConvertFromString(color));
     private bool Run(Action action,string? message=null)
     {
@@ -134,12 +135,13 @@ public partial class MainWindow : Window
     }
     private void Popup(FrameworkElement owner,IEnumerable<object> entries,Action? closed=null)
     {
+        UiMotion.StopReveal(Surface);UiMotion.StopReveal(Icons);
         var menu=new ContextMenu { PlacementTarget=owner };
         MenuLayout.Adapt(menu,this);
         LastMenu=menu;
         foreach(var entry in entries)menu.Items.Add(entry);
-        menu.Opened+=(_,_)=>_menus++;
-        menu.Closed+=(_,_)=>{_menus=Math.Max(0,_menus-1);if(closed is not null)Dispatcher.BeginInvoke(closed,System.Windows.Threading.DispatcherPriority.ContextIdle);};
+        menu.Opened+=(_,_)=>{_menus++;UiMotion.Reveal(menu,100,0);};
+        menu.Closed+=(_,_)=>{UiMotion.StopReveal(menu);_menus=Math.Max(0,_menus-1);if(closed is not null)Dispatcher.BeginInvoke(closed,System.Windows.Threading.DispatcherPriority.ContextIdle);};
         menu.IsOpen=true;
     }
     private static MenuItem Menu(string name,Action action,bool enabled=true) {var item=new MenuItem{Header=name,IsEnabled=enabled};item.Click+=(_,_)=>action();return item;}
@@ -172,8 +174,13 @@ public partial class MainWindow : Window
         var closing=new MenuItem{Header="关闭时结束进程",IsCheckable=true,IsChecked=options.CloseEndsProcess};
         closing.Checked+=(_,_)=>Run(()=>options.CloseEndsProcess=true,"关闭按钮将退出程序");
         closing.Unchecked+=(_,_)=>Run(()=>options.CloseEndsProcess=false,"关闭按钮将收起面板");
+        var motion=new MenuItem{Header="动画效果"};
+        foreach(var (name,mode) in new[]{("跟随系统（默认）","system"),("开启","on"),("关闭","off")})
+        {
+            var choice=Menu(name,()=>Run(()=>{options.MotionMode=mode;UiMotion.Configure(mode);},"动画效果已更新"));choice.IsCheckable=true;choice.IsChecked=options.MotionMode==mode;motion.Items.Add(choice);
+        }
         Popup((FrameworkElement)sender,[
-        startup,closing,WindowSizeMenu(),new Separator(),
+        startup,closing,WindowSizeMenu(),motion,new Separator(),
         Menu(UpdateMenuText,()=>_ = CheckOnlineUpdateAsync(true)),
         Menu("从本地文件更新…",()=>_ = SelectUpdateAsync()),
         Menu("全部移回桌面",RestoreAll,Store.State.Items.Count>0),
@@ -289,7 +296,7 @@ public partial class MainWindow : Window
         }
         catch(Exception ex){own.Add(Menu("打开",()=>Run(()=>ShellIntegration.Launch(Store,item))));SetStatus("系统扩展菜单暂不可用："+ex.Message);Popup(button,own);}
     }
-    private void OnIconDown(object sender,MouseButtonEventArgs e) => _mouseDown=e.GetPosition(this);
+    private void OnIconDown(object sender,MouseButtonEventArgs e) {UiMotion.StopReveal(Surface);UiMotion.StopReveal(Icons);_mouseDown=e.GetPosition(this);}
     private void OnIconMove(object sender,MouseEventArgs e)
     {
         if(_dragging || e.LeftButton!=MouseButtonState.Pressed || sender is not Button button || button.Tag is not NookItem item)return;
@@ -315,6 +322,7 @@ public partial class MainWindow : Window
     private void OnDragOver(object sender,DragEventArgs e) => HandleDragOver(e);
     private void HandleDragOver(DragEventArgs e,bool onCategory=false)
     {
+        UiMotion.StopReveal(Surface);UiMotion.StopReveal(Icons);
         if(!onCategory && e.Data.GetDataPresent(ItemFormat)){OrderDragOver(e);return;}
         try{var accepted=CanImport(e.Data);e.Effects=accepted?(e.Data.GetDataPresent(ItemFormat)?DragDropEffects.Move:DragDropEffects.Copy):DragDropEffects.None;DropOutline.Visibility=accepted?Visibility.Visible:Visibility.Collapsed;e.Handled=true;}
         catch{e.Effects=DragDropEffects.None;e.Handled=true;}
