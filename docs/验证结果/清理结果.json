@@ -1,0 +1,14 @@
+{
+  "InventoryDate": "2026-11-10",
+  "RunAt": "2026-11-10T09:36:40.9019649+08:00",
+  "Mode": "execute",
+  "Targets": 177,
+  "Files": 4168.0,
+  "GiB": 11.471,
+  "RetainedVersion": "0.12.2",
+  "ReleaseHashesVerified": true,
+  "GitHistoryPreserved": true,
+  "StateHashUnchanged": true,
+  "PreferencesHashUnchanged": true,
+  "Completed": true
+}
