@@ -173,6 +173,22 @@ Test("Uncategorized deletion survives recovery from both damaged indexes",root=>
     File.WriteAllText(Path.Combine(data,"state.json"),"broken");File.WriteAllText(Path.Combine(data,"state.json.bak"),"broken");store=new(data,[desktop],bin);
     Assert(!store.State.Categories.Any(c=>c.Id=="uncategorized")&&store.State.Items.Count==1&&store.State.Items[0].CategoryId!="uncategorized"&&File.Exists(store.ManagedPath(item)),"deletion marker prevents default resurrection during recovery");
 });
+Test("Independent category order survives stale and damaged indexes",root=>{
+    var(desktop,data,bin)=Setup(root);var store=new NookStore(data,[desktop],bin);var expected=new Dictionary<string,string[]>();
+    foreach(var category in new[]{"office","design","dev"}){var items=Enumerable.Range(0,4).Select(n=>store.Collect(FileAt(desktop,category+n+".lnk"),category)).ToArray();var ids=items.Reverse().Select(i=>i.Id).ToArray();store.ReorderItems(category,ids);expected[category]=ids;}
+    var hashes=store.State.Items.ToDictionary(i=>i.Id,i=>NookStore.HashFile(store.ManagedPath(i)));
+    var stale=JsonSerializer.Deserialize<NookState>(File.ReadAllText(Path.Combine(data,"state.json")))!;stale.Items.Reverse();File.WriteAllText(Path.Combine(data,"state.json"),JsonSerializer.Serialize(stale));
+    store=new(data,[desktop],bin);foreach(var category in expected.Keys)Assert(store.OrderedItems(category).Select(i=>i.Id).SequenceEqual(expected[category]),"stale valid index must use independent category order");
+    File.WriteAllText(Path.Combine(data,"state.json"),"broken");File.WriteAllText(Path.Combine(data,"state.json.bak"),"broken");
+    store=new(data,[desktop],bin);foreach(var category in expected.Keys)Assert(store.OrderedItems(category).Select(i=>i.Id).SequenceEqual(expected[category]),"manifest recovery must retain each category custom order");
+    Assert(store.State.Items.All(i=>NookStore.HashFile(store.ManagedPath(i))==hashes[i.Id]),"sorting never changes payloads");
+});
+Test("Order record follows membership and never resurrects moved or removed entries",root=>{
+    var(desktop,data,bin)=Setup(root);var store=new NookStore(data,[desktop],bin);var a=store.Collect(FileAt(desktop,"a.lnk"),"office");var b=store.Collect(FileAt(desktop,"b.lnk"),"office");store.ReorderItems("office",new[]{b.Id,a.Id});
+    var c=store.Collect(FileAt(desktop,"c.lnk"),"office");store.MoveItem(b.Id,"dev");store.MoveItem(b.Id,"office");store=new(data,[desktop],bin);
+    Assert(store.OrderedItems("office").Select(i=>i.Id).SequenceEqual(new[]{a.Id,c.Id,b.Id}),"new and moved-back entries append without stale rank");
+    store.ArchiveItem(c.Id);store=new(data,[desktop],bin);Assert(store.OrderedItems("office").Select(i=>i.Id).SequenceEqual(new[]{a.Id,b.Id}),"removed entry stays removed");
+});
 var failed = results.Count(r => JsonSerializer.Serialize(r).Contains("\"passed\":false"));
 var output = args.FirstOrDefault() ?? Path.Combine(runRoot,"results.json");Directory.CreateDirectory(Path.GetDirectoryName(Path.GetFullPath(output))!);
 File.WriteAllText(output,JsonSerializer.Serialize(new{passed=results.Count-failed,failed,runRoot,checks=results},new JsonSerializerOptions{WriteIndented=true}));

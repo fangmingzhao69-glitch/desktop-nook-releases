@@ -39,7 +39,41 @@ internal static class SharpIcons
     public static ImageSource? Load(string path,int pixels=96)
     {
         var resolved=ResolveIconPath(path);
-        return LoadShellImage(resolved,pixels) ?? (resolved!=path?LoadShellImage(path,pixels):null);
+        return LoadPackagedIcon(resolved,pixels)??LoadShellImage(resolved,pixels) ?? (resolved!=path?LoadShellImage(path,pixels):null);
+    }
+    private static ImageSource? LoadPackagedIcon(string path,int pixels)
+    {
+        const string prefix="shell:AppsFolder\\";
+        var id=path.StartsWith(prefix,StringComparison.OrdinalIgnoreCase)?path[prefix.Length..]:path;
+        if(!id.Contains('!')||id.Contains(':')||id.Contains('\\')||id.Contains('/'))return null;
+        object? shell=null,folder=null,item=null;
+        try
+        {
+            shell=Activator.CreateInstance(Type.GetTypeFromProgID("Shell.Application")!);folder=((dynamic)shell!).NameSpace("shell:AppsFolder");
+            if(folder is null)return null;item=((dynamic)folder).ParseName(id);if(item is null)return null;
+            string root=Convert.ToString(((dynamic)item).ExtendedProperty("System.AppUserModel.PackageInstallPath"))??"";
+            string logo=Convert.ToString(((dynamic)item).ExtendedProperty("System.Tile.SmallLogoPath"))??"";
+            if(string.IsNullOrWhiteSpace(root)||string.IsNullOrWhiteSpace(logo))return null;
+            root=Path.TrimEndingDirectorySeparator(Path.GetFullPath(root));var full=Path.GetFullPath(Path.Combine(root,logo));
+            if(!full.StartsWith(root+Path.DirectorySeparatorChar,StringComparison.OrdinalIgnoreCase))return null;
+            var directory=Path.GetDirectoryName(full)!;var stem=Path.GetFileNameWithoutExtension(full);
+            if(!Directory.Exists(directory))return null;
+            var candidates=new List<(string Path,int Width,int Theme)>();
+            var header=new byte[24];
+            foreach(var file in Directory.EnumerateFiles(directory,stem+"*.png"))
+            {
+                using var stream=File.OpenRead(file);if(stream.Read(header)!=24||header[0]!=137||header[1]!=80||header[2]!=78||header[3]!=71)continue;
+                int width=System.Buffers.Binary.BinaryPrimitives.ReadInt32BigEndian(header.AsSpan(16,4));if(width is <=0 or >1024)continue;
+                string name=Path.GetFileName(file);
+                int theme=name.Contains("lightunplated",StringComparison.OrdinalIgnoreCase)?0:name.Contains("altform-unplated",StringComparison.OrdinalIgnoreCase)?1:2;
+                candidates.Add((file,width,theme));
+            }
+            var best=candidates.OrderBy(c=>c.Width>=pixels?0:1).ThenBy(c=>c.Width>=pixels?c.Width:-c.Width).ThenBy(c=>c.Theme).FirstOrDefault();
+            if(best.Path is null)return null;
+            using var input=File.OpenRead(best.Path);var image=new BitmapImage();image.BeginInit();image.CacheOption=BitmapCacheOption.OnLoad;image.DecodePixelWidth=Math.Min(pixels,best.Width);image.StreamSource=input;image.EndInit();image.Freeze();return image;
+        }
+        catch{return null;}
+        finally{foreach(var com in new[]{item,folder,shell})if(com is not null&&Marshal.IsComObject(com))Marshal.FinalReleaseComObject(com);}
     }
     private static ImageSource? LoadShellImage(string path,int requestedPixels)
     {

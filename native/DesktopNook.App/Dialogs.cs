@@ -75,7 +75,17 @@ internal sealed class CollectWindow : Window
         _categories=new ComboBox{ItemsSource=store.State.Categories,DisplayMemberPath="Name",SelectedValuePath="Id",SelectedValue=selectedCategory,Padding=new Thickness(4)};categoryPanel.Children.Add(_categories);Grid.SetRow(categoryPanel,3);root.Children.Add(categoryPanel);
         var footer=new DockPanel();var buttons=new StackPanel{Orientation=Orientation.Horizontal};buttons.Children.Add(new Button{Content="取消",IsCancel=true,Margin=new Thickness(0,0,8,0),FontSize=13});_accept.Click+=(_,_)=>{if(Selection.Count>0)DialogResult=true;};buttons.Children.Add(_accept);DockPanel.SetDock(buttons,Dock.Right);footer.Children.Add(buttons);footer.Children.Add(_count);Grid.SetRow(footer,4);root.Children.Add(footer);
         Content=root;UiDialogs.Chrome(this);SetView(App.Options.DefaultCollectView);UpdateSelection();
+        SourceInitialized+=(_,_)=>FitToOwner();
         if(errors.Count>0)_count.ToolTip=string.Join("\n",errors);
+    }
+    private void FitToOwner()
+    {
+        if(Owner is not Window owner)return;
+        var work=TaskbarPlacement.WorkArea(owner);
+        double width=Math.Min(owner.ActualWidth*.88,work.Width-24),height=Math.Min(owner.ActualHeight*.88,work.Height-24);
+        MinWidth=Math.Min(320,width);MinHeight=Math.Min(280,height);MaxWidth=width;MaxHeight=height;
+        Width=Math.Min(620,width);Height=Math.Min(640,height);
+        Left=owner.Left+(owner.ActualWidth-Width)/2;Top=owner.Top+(owner.ActualHeight-Height)/2;
     }
     private void UpdateSelection(){_accept.IsEnabled=Selection.Count>0;_count.Text=$"已选 {Selection.Count} / {_checks.Count} 项";}
     private void UpdateDefaultButton(){bool same=App.Options.DefaultCollectView==ViewMode;_saveDefault.Content=same?"默认视图":"设为默认";_saveDefault.IsEnabled=!same;_saveDefault.ToolTip="当前默认："+(App.Options.DefaultCollectView=="icons"?"图标":"详细列表");}

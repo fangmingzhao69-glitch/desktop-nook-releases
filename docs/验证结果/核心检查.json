@@ -1,6 +1,7 @@
 {
-  "passed": 42,
+  "passed": 44,
   "failed": 0,
+  "runRoot": "C:\\Users\\23584\\AppData\\Local\\Temp\\DesktopNook-Tests-c57a27755c3e409c829cd11a8052746e",
   "checks": [
     {
       "name": "Roundtrip preserves shortcut bytes and persistent category",
@@ -168,6 +169,14 @@
     },
     {
       "name": "Uncategorized deletion survives recovery from both damaged indexes",
+      "passed": true
+    },
+    {
+      "name": "Independent category order survives stale and damaged indexes",
+      "passed": true
+    },
+    {
+      "name": "Order record follows membership and never resurrects moved or removed entries",
       "passed": true
     }
   ]

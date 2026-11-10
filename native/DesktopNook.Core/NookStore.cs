@@ -19,6 +19,35 @@ public sealed class NookStore
     private string JournalPath => Path.Combine(DataDirectory, "migration.json");
     private string Vault => Path.Combine(DataDirectory, "vault");
     private string CategoryPolicyPath=>Path.Combine(DataDirectory,"category-policy.json");
+    private string OrderPath=>Path.Combine(DataDirectory,"item-order.json");
+    private sealed class ItemOrder {public Dictionary<string,List<string>> Categories {get;set;}=[];}
+    private void SaveOrder(NookState state)=>WriteAtomic(OrderPath,new ItemOrder{Categories=state.Categories.ToDictionary(c=>c.Id,c=>state.Items.Where(i=>i.CategoryId==c.Id).Select(i=>i.Id).ToList())},true);
+    private bool ApplyOrder(bool recovering)
+    {
+        ItemOrder? saved=null;
+        foreach(var path in recovering?new[]{OrderPath,OrderPath+".bak"}:new[]{OrderPath})
+        {
+            if(!File.Exists(path))continue;
+            try
+            {
+                var order=Read<ItemOrder>(path);
+                if(order.Categories is null||order.Categories.Values.Any(ids=>ids is null||ids.Count!=ids.Distinct(StringComparer.Ordinal).Count()||ids.Any(id=>!Guid.TryParseExact(id,"N",out _))))throw new JsonException("排序记录无效。");
+                saved=order;break;
+            }
+            catch(Exception ex) when(ex is IOException or JsonException){RecoveryMessages.Add("排序记录不可用，保留索引中的现有顺序。");}
+        }
+        if(saved is null)return false;
+        bool changed=false;
+        foreach(var category in State.Categories)
+        {
+            if(!saved.Categories.TryGetValue(category.Id,out var ids))continue;
+            var ranks=ids.Select((id,index)=>(id,index)).ToDictionary(pair=>pair.id,pair=>pair.index);
+            var siblings=State.Items.Where(i=>i.CategoryId==category.Id).OrderBy(i=>ranks.GetValueOrDefault(i.Id,int.MaxValue)).ToArray();
+            int position=0;
+            for(int n=0;n<State.Items.Count;n++)if(State.Items[n].CategoryId==category.Id){var item=siblings[position++];changed|=State.Items[n].Id!=item.Id;State.Items[n]=item;}
+        }
+        return changed;
+    }
     private sealed class CategoryPolicy {public bool UncategorizedRemoved {get;set;}}
     private bool UncategorizedRemoved()
     {
@@ -130,7 +159,7 @@ public sealed class NookStore
         }
         finally { if (File.Exists(temp)) File.Delete(temp); if(File.Exists(backupTemp))File.Delete(backupTemp); }
     }
-    private void Save(NookState next) { Validate(next); WriteAtomic(StatePath, next, true); State = next;RememberCategoryDeletion(); }
+    private void Save(NookState next) { Validate(next); SaveOrder(next);WriteAtomic(StatePath, next, true); State = next;RememberCategoryDeletion(); }
     private static T Clone<T>(T value) => JsonSerializer.Deserialize<T>(JsonSerializer.Serialize(value, Json), Json)!;
     private void SaveManifest(NookItem item, bool restored) => WriteAtomic(ManifestPath(item), new Manifest { Item = item, Restored = restored });
     private void Begin(Migration migration)
@@ -163,8 +192,10 @@ public sealed class NookStore
             State.Categories.RemoveAll(c=>c.Id=="uncategorized");State.Version=2;reconcile=true;
             RecoveryMessages.Add("已保留删除未分类的选择，收纳内容保留在现有分类。");
         }
+        reconcile|=ApplyOrder(reconcile);
         RecoverPending();
         if (!File.Exists(StatePath) || reconcile) Save(State);
+        else SaveOrder(State);
         RememberCategoryDeletion();
     }
     private void ReconcileManifests()

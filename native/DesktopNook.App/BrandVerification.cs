@@ -69,6 +69,8 @@ internal static class BrandVerification
         try
         {
             collect.Show();await collect.Dispatcher.InvokeAsync(()=>{},DispatcherPriority.ContextIdle);
+            void Fits(CollectWindow dialog){if(dialog.ActualWidth>owner.ActualWidth*.9||dialog.ActualHeight>owner.ActualHeight*.9)throw new Exception("添加窗口超过主面板比例边界。");}
+            Fits(collect);
             var category=Find<ComboBox>(collect).Single();
             category.IsDropDownOpen=true;await collect.Dispatcher.InvokeAsync(()=>{},DispatcherPriority.ContextIdle);
             if(category.SelectedValue as string!=App.Store.DefaultCategoryId||category.ItemContainerGenerator.ContainerFromIndex(0) is not ComboBoxItem)throw new Exception("分类下拉框未正确显示。");
@@ -98,6 +100,15 @@ internal static class BrandVerification
             if(!collect.Selection.SequenceEqual(selected))throw new Exception("切回图标后丢失选择。");
             App.Options.DefaultCollectView="icons";
             checks.Add("Collect icons/details switch preserves selection/category, defaults to icons and persists a chosen default through preference writes");
+            double width=owner.Width,height=owner.Height;
+            try
+            {
+                owner.Width=width*.8;owner.Height=height*.8;await owner.Dispatcher.InvokeAsync(()=>{},DispatcherPriority.ContextIdle);
+                var smaller=new CollectWindow(App.Store,categoryBefore){Owner=owner};
+                try{smaller.Show();await smaller.Dispatcher.InvokeAsync(()=>{},DispatcherPriority.ContextIdle);Fits(smaller);var accept=Find<Button>(smaller).Single(b=>b.IsDefault);if(accept.TranslatePoint(new Point(0,accept.ActualHeight),smaller).Y>smaller.ActualHeight)throw new Exception("缩小后的添加按钮超出窗口。");Save(smaller,Path.Combine(root,"collect-small-owner-preview.png"));}finally{smaller.Close();}
+            }
+            finally{owner.Width=width;owner.Height=height;}
+            checks.Add("Collect window stays within 90 percent of normal/smaller owner dimensions with its action footer visible");
         }
         finally{collect.Close();}
         var edit=new TextDialog("分类名称","为分类起一个名字","常用工具"){Owner=owner};

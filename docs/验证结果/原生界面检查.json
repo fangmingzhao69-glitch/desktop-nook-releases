@@ -1,5 +1,5 @@
 {
-  "passed": 39,
+  "passed": 40,
   "failure": "",
   "checks": [
     "Startup option persists quoted command, can be disabled and preserves other entries",
@@ -40,6 +40,7 @@
     "Start-menu rename migrates only matching legacy target and preserves unrelated links",
     "Collect tiles highlight without checkbox glyphs; independent toggles retain multi-selection and deselect only the clicked item",
     "Collect icons/details switch preserves selection/category, defaults to icons and persists a chosen default through preference writes",
+    "Collect window stays within 90 percent of normal/smaller owner dimensions with its action footer visible",
     "Branded collect, checkboxes, category dropdown and rename dialog work without changing collection data"
   ],
   "realDesktopModified": false

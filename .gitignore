@@ -21,6 +21,8 @@
 **/.DesktopNookVault/
 **/state.json
 **/state.json.bak
+**/item-order.json
+**/item-order.json.bak
 **/migration.json
 **/instance.pid
 **/category-map.json

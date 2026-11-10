@@ -16,6 +16,10 @@ internal static class OrderingVerification
     [DllImport("user32.dll")]private static extern bool SetCursorPos(int x,int y);
     [DllImport("user32.dll")]private static extern void mouse_event(uint flags,uint x,uint y,uint data,UIntPtr extra);
     [DllImport("user32.dll")]private static extern void keybd_event(byte key,byte scan,uint flags,UIntPtr extra);
+    [DllImport("user32.dll")]private static extern bool SetForegroundWindow(IntPtr window);
+    [DllImport("user32.dll")]private static extern bool SetWindowPos(IntPtr window,IntPtr after,int x,int y,int width,int height,uint flags);
+    [DllImport("user32.dll")]private static extern IntPtr WindowFromPoint(CursorPoint point);
+    [DllImport("user32.dll")]private static extern IntPtr GetAncestor(IntPtr window,uint flag);
     internal static async Task Run(MainWindow window,string root)
     {
         var checks=new List<string>();string failure="";GetCursorPos(out var original);Window? host=null;
@@ -26,6 +30,8 @@ internal static class OrderingVerification
         bool captured=false;
         async Task Drag(Point from,Point to,bool cancel=false)
         {
+            var handle=new System.Windows.Interop.WindowInteropHelper(window).Handle;SetWindowPos(handle,(IntPtr)(-1),0,0,0,0,0x43);SetForegroundWindow(handle);await Task.Delay(150);
+            if(GetAncestor(WindowFromPoint(new(){X=(int)from.X,Y=(int)from.Y}),2)!=handle)throw new Exception("排序验证窗口被其他窗口遮挡，无法注入拖动。");
             SetCursorPos((int)from.X,(int)from.Y);mouse_event(2,0,0,0,UIntPtr.Zero);await Task.Delay(100);
             await Task.Run(()=>{try{for(int n=1;n<=18;n++){SetCursorPos((int)(from.X+(to.X-from.X)*n/18),(int)(from.Y+(to.Y-from.Y)*n/18));Thread.Sleep(35);}Thread.Sleep(100);
                 if(!captured){window.Dispatcher.Invoke(()=>{window.UpdateLayout();var image=new RenderTargetBitmap((int)Math.Ceiling(window.ActualWidth),(int)Math.Ceiling(window.ActualHeight),96,96,PixelFormats.Pbgra32);image.Render(window);var png=new PngBitmapEncoder();png.Frames.Add(BitmapFrame.Create(image));using var file=File.Create(Path.Combine(root,"direct-ordering.png"));png.Save(file);});captured=true;}
