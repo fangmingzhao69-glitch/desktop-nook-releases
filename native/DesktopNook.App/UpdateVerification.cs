@@ -14,6 +14,7 @@ internal static class UpdateVerification
         var signature=Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(profile.ToUpperInvariant())))[..20];
         var options=new StartupOptions(@"Software\DesktopNook\Sandbox\"+signature+@"\Run",@"Software\DesktopNook\Sandbox\"+signature+@"\Settings",Path.Combine(data,"preferences.json"));
         options.CloseEndsProcess=false;options.WriteWindowSize(new(){Free=true,Locked=false,Width=800,Height=500});
+        options.DefaultCollectView="details";
         var targetDir=Path.Combine(root,"portable");Directory.CreateDirectory(targetDir);var target=Path.Combine(targetDir,"DesktopNook.exe");File.Copy(oldExe,target,false);
         var before=LocalUpdater.Hash(Path.Combine(data,"state.json"));var staged=LocalUpdater.Stage(candidate,target,data,profile,0,options,store.State);
         var helperStart=new ProcessStartInfo(staged.Helper){UseShellExecute=false,CreateNoWindow=true};helperStart.ArgumentList.Add("--apply-update");helperStart.ArgumentList.Add(staged.Plan);
@@ -22,9 +23,11 @@ internal static class UpdateVerification
         using var ready=JsonDocument.Parse(File.ReadAllText(Path.Combine(Path.GetDirectoryName(staged.Plan)!,"ready.json")));
         bool deletedCategoryRetained=!ready.RootElement.GetProperty("categoryIds").EnumerateArray().Any(c=>c.GetString()=="uncategorized");
         bool uncheckedPreferenceRetained=!ready.RootElement.GetProperty("closeEndsProcess").GetBoolean();
-        var ok=result==0&&deletedCategoryRetained&&uncheckedPreferenceRetained&&LocalUpdater.Inspect(target).Version==LocalUpdater.Inspect(candidate).Version&&LocalUpdater.Hash(Path.Combine(data,"state.json"))==before&&File.ReadAllText(store.ManagedPath(item))=="user edited data";
+        using var savedPreferences=JsonDocument.Parse(File.ReadAllText(Path.Combine(data,"preferences.json")));
+        bool collectViewRetained=savedPreferences.RootElement.GetProperty("CollectView").GetString()=="details";
+        var ok=result==0&&deletedCategoryRetained&&uncheckedPreferenceRetained&&collectViewRetained&&LocalUpdater.Inspect(target).Version==LocalUpdater.Inspect(candidate).Version&&LocalUpdater.Hash(Path.Combine(data,"state.json"))==before&&File.ReadAllText(store.ManagedPath(item))=="user edited data";
         var stop=new ProcessStartInfo(target){UseShellExecute=false,CreateNoWindow=true};stop.ArgumentList.Add("--maintenance=stop");stop.ArgumentList.Add("--sandbox");stop.ArgumentList.Add(profile);using(var process=Process.Start(stop)!){process.WaitForExit();}
-        File.WriteAllText(Path.Combine(root,"update-verification.json"),JsonSerializer.Serialize(new{success=ok,helperExit=result,oldVersion=LocalUpdater.Inspect(oldExe).Version.ToString(),newVersion=LocalUpdater.Inspect(target).Version.ToString(),deletedCategoryRetained,uncheckedPreferenceRetained,configurationHashUnchanged=LocalUpdater.Hash(Path.Combine(data,"state.json"))==before,payloadUnchanged=File.ReadAllText(store.ManagedPath(item))=="user edited data",newProcessConfirmed=updateResult.RootElement.GetProperty("success").GetBoolean()},new JsonSerializerOptions{WriteIndented=true}));
+        File.WriteAllText(Path.Combine(root,"update-verification.json"),JsonSerializer.Serialize(new{success=ok,helperExit=result,oldVersion=LocalUpdater.Inspect(oldExe).Version.ToString(),newVersion=LocalUpdater.Inspect(target).Version.ToString(),deletedCategoryRetained,uncheckedPreferenceRetained,collectViewRetained,configurationHashUnchanged=LocalUpdater.Hash(Path.Combine(data,"state.json"))==before,payloadUnchanged=File.ReadAllText(store.ManagedPath(item))=="user edited data",newProcessConfirmed=updateResult.RootElement.GetProperty("success").GetBoolean()},new JsonSerializerOptions{WriteIndented=true}));
         return ok?0:1;
     }
 }

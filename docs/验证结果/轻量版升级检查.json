@@ -1,10 +1,11 @@
 {
   "success": true,
   "helperExit": 0,
-  "oldVersion": "0.12.4.0",
-  "newVersion": "0.12.5.0",
+  "oldVersion": "0.12.5.0",
+  "newVersion": "0.12.6.0",
   "deletedCategoryRetained": true,
   "uncheckedPreferenceRetained": true,
+  "collectViewRetained": true,
   "configurationHashUnchanged": true,
   "payloadUnchanged": true,
   "newProcessConfirmed": true

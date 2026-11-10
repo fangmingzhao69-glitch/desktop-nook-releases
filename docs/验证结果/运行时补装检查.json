@@ -1,0 +1,48 @@
+﻿{
+    "passed":  7,
+    "realRuntimeInstalled":  false,
+    "cases":  [
+                  {
+                      "name":  "present",
+                      "exit":  0,
+                      "marker":  "installed",
+                      "passed":  true
+                  },
+                  {
+                      "name":  "install",
+                      "exit":  0,
+                      "marker":  "installed",
+                      "passed":  true
+                  },
+                  {
+                      "name":  "reboot",
+                      "exit":  0,
+                      "marker":  "reboot",
+                      "passed":  true
+                  },
+                  {
+                      "name":  "failure",
+                      "exit":  24,
+                      "marker":  "original",
+                      "passed":  true
+                  },
+                  {
+                      "name":  "uac-cancel",
+                      "exit":  1602,
+                      "marker":  "original",
+                      "passed":  true
+                  },
+                  {
+                      "name":  "consent-cancel",
+                      "exit":  1602,
+                      "marker":  "original",
+                      "passed":  true
+                  },
+                  {
+                      "name":  "silent-missing",
+                      "exit":  23,
+                      "marker":  "original",
+                      "passed":  true
+                  }
+              ]
+}

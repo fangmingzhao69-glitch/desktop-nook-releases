@@ -1,0 +1,8 @@
+{
+  "version": "10.0.14",
+  "bytes": 60035296,
+  "sha512Verified": true,
+  "microsoftSignatureVerified": true,
+  "realInstallationExecuted": false,
+  "note": "Host already has .NET 10. Download/signature verified; component execution branches use isolated exit-code fixtures."
+}

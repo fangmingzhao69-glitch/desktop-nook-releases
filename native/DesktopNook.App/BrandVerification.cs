@@ -74,7 +74,23 @@ internal static class BrandVerification
             category.IsDropDownOpen=false;collect.UpdateLayout();if(!Find<TextBlock>(category).Any(t=>t.Text==App.Store.State.Categories.Single(c=>c.Id==App.Store.DefaultCategoryId).Name))throw new Exception("分类下拉框未显示可见名称。");
             var checkbox=Find<CheckBox>(collect).First();checkbox.IsChecked=true;collect.UpdateLayout();
             if(collect.Selection.Count!=1||!Find<Button>(collect).Single(b=>b.IsDefault).IsEnabled)throw new Exception("勾选后收纳按钮未启用。");
+            if(collect.ViewMode!="icons")throw new Exception("新用户默认视图不是图标。");
+            await collect.Dispatcher.InvokeAsync(()=>{},DispatcherPriority.ContextIdle);await Task.Delay(1000);
             Save(collect,Path.Combine(root,"collect-brand-preview.png"));
+            var selected=collect.Selection.Single();var categoryBefore=collect.CategoryId;
+            collect.SetView("details");collect.UpdateLayout();
+            await collect.Dispatcher.InvokeAsync(()=>{},DispatcherPriority.ContextIdle);await Task.Delay(1000);
+            if(collect.Selection.Single()!=selected||collect.CategoryId!=categoryBefore)throw new Exception("切换视图丢失选择或分类。");
+            Save(collect,Path.Combine(root,"collect-details-preview.png"));
+            Find<Button>(collect).Single(b=>System.Windows.Automation.AutomationProperties.GetAutomationId(b)=="CollectView-SaveDefault").RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            bool closeBefore=App.Options.CloseEndsProcess;App.Options.CloseEndsProcess=!closeBefore;App.Options.CloseEndsProcess=closeBefore;
+            App.Options.WriteWindowSize(App.Options.ReadWindowSize());App.Options.PersistForUpdate();
+            var reopened=new CollectWindow(App.Store,categoryBefore){Owner=owner};
+            try{if(reopened.ViewMode!="details")throw new Exception("默认视图没有跨窗口保存。");}finally{reopened.Close();}
+            collect.SetView("icons");collect.UpdateLayout();
+            if(collect.Selection.Single()!=selected)throw new Exception("切回图标后丢失勾选。");
+            App.Options.DefaultCollectView="icons";
+            checks.Add("Collect icons/details switch preserves selection/category, defaults to icons and persists a chosen default through preference writes");
         }
         finally{collect.Close();}
         var edit=new TextDialog("分类名称","为分类起一个名字","常用工具"){Owner=owner};
