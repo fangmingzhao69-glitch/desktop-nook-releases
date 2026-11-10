@@ -33,6 +33,7 @@ public static class UiMotion
     private static readonly ConditionalWeakTable<Control,FeedbackState> FeedbackStates=new();
     private static bool _subscribed;
     internal static string Mode {get;private set;}="system";
+    internal static event Action? ModeChanged;
     internal static bool Enabled=>Mode=="on"||(Mode=="system"&&SystemParameters.ClientAreaAnimation);
     internal static int ActiveClocks=>Jobs.Count;
     internal static Action<string,FrameworkElement>? ProbeObserver {get;set;}
@@ -48,6 +49,7 @@ public static class UiMotion
         if(!_subscribed){SystemParameters.StaticPropertyChanged+=SystemChanged;_subscribed=true;}
         CancelAll();
         foreach(var pair in FeedbackStates)if(pair.Key.IsLoaded)Paint(pair.Key,false);
+        ModeChanged?.Invoke();
     }
     private static void SystemChanged(object? sender,PropertyChangedEventArgs e)
     {

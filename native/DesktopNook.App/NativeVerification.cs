@@ -60,7 +60,7 @@ internal static class NativeVerification
             }
             checks.Add("Real Shell context menu includes open, properties, copy and extension entries");
             checks.Add("Shell context-menu open verb executes the controlled shortcut successfully");
-            window.TogglePanel();if(window.WindowState!=WindowState.Minimized)throw new Exception("第二次点击未收起。");window.TogglePanel();if(window.WindowState!=WindowState.Normal)throw new Exception("单击未打开。");
+            window.TogglePanel();await Task.Delay(650);if(window.WindowState!=WindowState.Minimized)throw new Exception("第二次点击未收起。");window.TogglePanel();if(window.WindowState!=WindowState.Normal)throw new Exception("单击未打开。");
             checks.Add("Panel toggle opens and minimizes without terminating process");
             ShellIntegration.Launch(App.Store,entry);
             for(var i=0;i<40 && !File.Exists(Path.Combine(root,"shortcut-launched.txt"));i++)await Task.Delay(100);
@@ -84,7 +84,7 @@ internal static class NativeVerification
             await OleDragVerification.Run(window,"file");checks.Add("Regular document uses actual native OLE drag in and out");
             await OleDragVerification.Run(window,"folder");checks.Add("Complete folder uses actual native OLE drag in and out");
             var minimize=FindNamedButton(window,"最小化轻匣");minimize.RaiseEvent(new RoutedEventArgs(System.Windows.Controls.Button.ClickEvent));
-            if(window.WindowState!=WindowState.Minimized)throw new Exception("最小化按钮未收起。");window.ShowPanel();checks.Add("Minimize button preserves process and collection state");
+            await Task.Delay(650);if(window.WindowState!=WindowState.Minimized)throw new Exception("最小化按钮未收起。");window.ShowPanel();checks.Add("Minimize button preserves process and collection state");
             window.Render();window.SetStatus("隔离验证模式 · 不操作真实桌面");
             await window.Dispatcher.InvokeAsync(()=>{},DispatcherPriority.ContextIdle);
             var positions=window.IconPositions();

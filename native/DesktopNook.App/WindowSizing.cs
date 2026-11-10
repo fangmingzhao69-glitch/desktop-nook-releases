@@ -51,7 +51,7 @@ public partial class MainWindow
             var border=new FrameworkElementFactory(typeof(Border));border.SetValue(Border.BackgroundProperty,new SolidColorBrush(Color.FromArgb(1,81,115,218)));
             thumb.Template=new ControlTemplate(typeof(Thumb)){VisualTree=border};
             // Corners go last and win hit testing over the edge strips.
-            thumb.DragStarted+=(_,_)=>{_resizing=true;_interactions++;_placementVersion++;_resizeStart=new Rect(Left,Top,ActualWidth,ActualHeight);_resizePointer=PointToScreen(Mouse.GetPosition(this));};
+            thumb.DragStarted+=(_,_)=>{FinishPanelMotion();_resizing=true;_interactions++;_placementVersion++;_resizeStart=new Rect(Left,Top,ActualWidth,ActualHeight);_resizePointer=PointToScreen(Mouse.GetPosition(this));};
             thumb.DragDelta+=ResizeDelta;
             thumb.DragCompleted+=(_,e)=>
             {

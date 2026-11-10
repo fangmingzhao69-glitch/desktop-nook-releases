@@ -1,7 +1,6 @@
 {
   "passed": 44,
   "failed": 0,
-  "runRoot": "C:\\Users\\23584\\AppData\\Local\\Temp\\DesktopNook-Tests-c57a27755c3e409c829cd11a8052746e",
   "checks": [
     {
       "name": "Roundtrip preserves shortcut bytes and persistent category",

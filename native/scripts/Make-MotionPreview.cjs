@@ -1,8 +1,8 @@
 // Encode recorded, isolated screen frames. Node built-ins only; no app dependency.
 const fs=require('node:fs'),path=require('node:path'),zlib=require('node:zlib');
-const [root,output]=process.argv.slice(2);if(!root||!output)throw Error('Usage: node Make-MotionPreview.cjs frame-directory output.png');
-const files=fs.readdirSync(root).filter(n=>/^screen-\d+\.png$/.test(n)).sort();
-const trace=JSON.parse(fs.readFileSync(path.join(root,'motion-visibility.json'),'utf8')).rows.filter(r=>r.cycle===0);
+const [root,output,prefix='screen']=process.argv.slice(2);if(!root||!output||!['screen','close'].includes(prefix))throw Error('Usage: node Make-MotionPreview.cjs frame-directory output.png [screen|close]');
+const files=fs.readdirSync(root).filter(n=>new RegExp('^'+prefix+'-\\d+\\.png$').test(n)).sort();
+const trace=JSON.parse(fs.readFileSync(path.join(root,'motion-visibility.json'),'utf8')).rows.filter(r=>r.cycle===(prefix==='close'?1:0));
 function chunks(file){const b=fs.readFileSync(file),out=[];for(let n=8;n<b.length;){const len=b.readUInt32BE(n);out.push({type:b.toString('ascii',n+4,n+8),data:b.subarray(n+8,n+8+len)});n+=len+12;}return out;}
 const frames=files.map(n=>chunks(path.join(root,n))),header=frames[0].find(c=>c.type==='IHDR').data;
 const width=header.readUInt32BE(0),height=header.readUInt32BE(4);

@@ -22,9 +22,10 @@ internal static class MotionVisibilityVerification
     [DllImport("gdi32.dll")]private static extern bool BitBlt(IntPtr target,int x,int y,int width,int height,IntPtr source,int sx,int sy,uint flags);
     [DllImport("gdi32.dll")]private static extern bool DeleteObject(IntPtr h);
     [DllImport("gdi32.dll")]private static extern bool DeleteDC(IntPtr h);
-    private static void Capture(IntPtr window,string path)
+    private static void Capture(IntPtr window,string path,Bounds? fixedBounds=null)
     {
         if(!GetWindowRect(window,out var b))throw new IOException("无法读取测试窗口边界。");
+        if(fixedBounds.HasValue)b=fixedBounds.Value;
         var screen=GetDC(IntPtr.Zero);var dc=CreateCompatibleDC(screen);var bitmap=CreateCompatibleBitmap(screen,b.Right-b.Left,b.Bottom-b.Top);var old=SelectObject(dc,bitmap);
         try
         {
@@ -50,8 +51,11 @@ internal static class MotionVisibilityVerification
                 UiMotion.Configure(cycle==3?"off":"on");
                 owner.WindowState=WindowState.Minimized;await Task.Delay(400);long start=clock.ElapsedMilliseconds;
                 owner.ShowPanel();var handle=new WindowInteropHelper(owner).Handle;SetWindowPos(handle,(IntPtr)(-1),0,0,0,0,0x43);SetForegroundWindow(handle);
-                for(int n=0;n<22;n++){await Task.Delay(16);var p=owner.Surface.RenderTransform.Transform(new Point());double opacity=owner.Surface.Opacity;rows.Add(new{cycle,ms=clock.ElapsedMilliseconds-start,opacity,y=p.Y,clocks=UiMotion.ActiveClocks,state=owner.WindowState.ToString(),owner.Left,owner.Top});if(opacity is >.01 and <.99)intermediate++;if(cycle==3&&(opacity!=1||Math.Abs(p.Y)>.01))throw new Exception("关闭动画仍出现过渡帧。");if(cycle==0)Capture(handle,Path.Combine(root,$"screen-{n:D2}.png"));}
+                if(cycle==1){await Task.Delay(750);owner.BeginHidePanel();start=clock.ElapsedMilliseconds;}
+                GetWindowRect(handle,out var bounds);
+                for(int n=0;n<28;n++){await Task.Delay(16);var angles=owner.PanelMotion.Angles;double opacity=owner.Surface.Opacity;rows.Add(new{cycle,ms=clock.ElapsedMilliseconds-start,opacity,angles,bytes=owner.PanelMotion.SnapshotBytes,clocks=owner.PanelMotion.ActiveClocks,state=owner.WindowState.ToString(),owner.Left,owner.Top});if(angles.Any(a=>a>1&&a<83))intermediate++;if(cycle==3&&(opacity!=1||owner.PanelMotion.Active))throw new Exception("关闭动画仍出现过渡帧。");if(cycle<2)Capture(handle,Path.Combine(root,$"{(cycle==0?"screen":"close")}-{n:D2}.png"),bounds);}
                 if(cycle<3&&intermediate<3)throw new Exception("实际恢复路径未采到足够的过渡中间帧。");
+                await Task.Delay(600);if(owner.PanelMotion.Active||owner.PanelMotion.SnapshotBytes!=0||owner.PanelMotion.Failure is not null)throw new Exception("百叶资源未释放或图形失败："+owner.PanelMotion.Failure);
             }
         }
         catch(Exception ex){failure=ex.ToString();}

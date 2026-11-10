@@ -33,13 +33,13 @@ public partial class MainWindow : Window
     internal List<Point> IconPositions() => FindVisualChildren<Button>(Icons).Select(b=>b.TranslatePoint(new Point(0,0),this)).ToList();
     public MainWindow()
     {
-        InitializeComponent();InitializeSizing();Activated+=(_,_)=>{Place();if(IsLoaded&&!App.IsSandbox&&DateTime.UtcNow-_lastUpdateCheck>TimeSpan.FromMinutes(15))_=CheckOnlineUpdateAsync(false);};
+        InitializeComponent();InitializePanelMotion();InitializeSizing();Activated+=(_,_)=>{Place();if(IsLoaded&&!App.IsSandbox&&DateTime.UtcNow-_lastUpdateCheck>TimeSpan.FromMinutes(15))_=CheckOnlineUpdateAsync(false);};
         SourceInitialized+=(_,_)=>UiMotion.PrepareWindow(this);
         _updateTimer.Tick+=(_,_)=>_=CheckOnlineUpdateAsync(false);
         Closed+=(_,_)=>_updateTimer.Stop();
         Render();
     }
-    private void OnLoaded(object sender,RoutedEventArgs e) { TaskbarPlacement.EnableToggle(this);Place();if(WindowState==WindowState.Normal)UiMotion.Reveal(Surface,320,18); if(Store.RecoveryMessages.Count>0) SetStatus(Store.RecoveryMessages.Last());if(!App.IsSandbox){_updateTimer.Start();_=CheckOnlineUpdateAsync(false);} }
+    private void OnLoaded(object sender,RoutedEventArgs e) { TaskbarPlacement.EnableToggle(this);Place();if(WindowState==WindowState.Normal)OpenPanelMotion(); if(Store.RecoveryMessages.Count>0) SetStatus(Store.RecoveryMessages.Last());if(!App.IsSandbox){_updateTimer.Start();_=CheckOnlineUpdateAsync(false);} }
     internal void SetAvailableRelease(OnlineRelease? release)
     {
         _latestRelease=release;
@@ -56,23 +56,23 @@ public partial class MainWindow : Window
         var anchor=await TaskbarPlacement.FindAsync();
         if(anchor is not null && version==_placementVersion && !_resizing && !KeepOpenForVerification && WindowState==WindowState.Normal){if(TaskbarPlacement.WouldMove(this,anchor,PreferredWindowSize))UiMotion.StopReveal(Surface);TaskbarPlacement.Apply(this,anchor,PreferredWindowSize);}
     }
-    public void ShowPanel() { WindowState=WindowState.Normal; Show(); Place(); Activate(); }
-    public void TogglePanel(){if(WindowState==WindowState.Normal&&IsVisible)WindowState=WindowState.Minimized;else ShowPanel();}
-    private void OnStateChanged(object? sender,EventArgs e) { if(WindowState==WindowState.Normal){Place();if(IsLoaded)UiMotion.Reveal(Surface,320,18);}else UiMotion.CancelAll(); }
+    public void ShowPanel() { bool reverse=_hidePending;WindowState=WindowState.Normal;Show();Place();if(reverse)OpenPanelMotion();Activate(); }
+    public void TogglePanel(){if(_hidePending)ShowPanel();else if(WindowState==WindowState.Normal&&IsVisible)BeginHidePanel();else ShowPanel();}
+    private void OnStateChanged(object? sender,EventArgs e) { if(WindowState==WindowState.Normal){Place();if(IsLoaded)OpenPanelMotion();}else {FinishPanelMotion();UiMotion.CancelAll();} }
     private void OnDeactivated(object? sender,EventArgs e)
     {
         if(HoldVisibleForMotionProbe||TaskbarPlacement.PointerOverButton())return;
-        Dispatcher.BeginInvoke(()=>{if(!KeepOpenForVerification&&!IsActive&&_interactions==0&&!_dragging&&_menus==0&&WindowState!=WindowState.Minimized)WindowState=WindowState.Minimized;},System.Windows.Threading.DispatcherPriority.Background);
+        Dispatcher.BeginInvoke(()=>{if(!KeepOpenForVerification&&!IsActive&&_interactions==0&&!_dragging&&_menus==0&&WindowState!=WindowState.Minimized)BeginHidePanel();},System.Windows.Threading.DispatcherPriority.Background);
     }
     private void OnClosing(object? sender,CancelEventArgs e)
     {
         if(_allowExit)return;e.Cancel=true;
         if(_dragging||_interactions>0)return;
-        if(App.Options.CloseEndsProcess){_allowExit=true;e.Cancel=false;Dispatcher.BeginInvoke(()=>Application.Current.Shutdown());}else WindowState=WindowState.Minimized;
+        if(App.Options.CloseEndsProcess){_allowExit=true;e.Cancel=false;Dispatcher.BeginInvoke(()=>Application.Current.Shutdown());}else BeginHidePanel();
     }
     private void OnCloseButton(object sender,RoutedEventArgs e)=>Close();
-    private void OnMinimizeButton(object sender,RoutedEventArgs e)=>WindowState=WindowState.Minimized;
-    public void Quit() { UiMotion.CancelAll();_allowExit=true; Application.Current.Shutdown(); }
+    private void OnMinimizeButton(object sender,RoutedEventArgs e)=>BeginHidePanel();
+    public void Quit() { FinishPanelMotion();UiMotion.CancelAll();_allowExit=true; Application.Current.Shutdown(); }
     internal void QuitForMaintenance(){if(!_dragging&&_interactions==0)Quit();}
     public void SetStatus(string message) { Status.Text=message;Status.ToolTip=message; }
     public void Render()
@@ -98,11 +98,11 @@ public partial class MainWindow : Window
         button.PreviewKeyDown+=(_,e)=>{if(e.Key is Key.Left or Key.Right or Key.Home or Key.End){var buttons=Tabs.Children.OfType<Button>().ToList();var current=buttons.IndexOf(button);var next=e.Key==Key.Home?0:e.Key==Key.End?buttons.Count-1:(current+(e.Key==Key.Left?-1:1)+buttons.Count)%buttons.Count;SelectCategory(buttons[next].Tag as string);Tabs.Children.OfType<Button>().ElementAt(next).Focus();e.Handled=true;}};
         Tabs.Children.Add(button);
     }
-    public void SelectCategory(string? id) {bool changed=_activeCategory!=id;UiMotion.StopReveal(Icons); _activeCategory=id;Render();if(changed)UiMotion.Reveal(Icons,180,0); }
+    public void SelectCategory(string? id) {FinishPanelMotion();bool changed=_activeCategory!=id;UiMotion.StopReveal(Icons); _activeCategory=id;Render();if(changed)UiMotion.Reveal(Icons,180,0); }
     private static SolidColorBrush Brush(string color) => new((Color)ColorConverter.ConvertFromString(color));
     private bool Run(Action action,string? message=null)
     {
-        try { action();Render();if(message is not null)SetStatus(message);return true; }
+        try { FinishPanelMotion();action();Render();if(message is not null)SetStatus(message);return true; }
         catch(Exception ex) { ShowFailure(ex);return false; }
     }
     public void ShowFailure(Exception exception)
@@ -114,6 +114,7 @@ public partial class MainWindow : Window
     }
     private void OnCollect(object sender,RoutedEventArgs e)
     {
+        FinishPanelMotion();
         _interactions++;
         try
         {
@@ -137,7 +138,7 @@ public partial class MainWindow : Window
     }
     private void Popup(FrameworkElement owner,IEnumerable<object> entries,Action? closed=null)
     {
-        UiMotion.StopReveal(Surface);UiMotion.StopReveal(Icons);
+        FinishPanelMotion();UiMotion.StopReveal(Surface);UiMotion.StopReveal(Icons);
         var menu=new ContextMenu { PlacementTarget=owner };
         MenuLayout.Adapt(menu,this);
         LastMenu=menu;
@@ -263,7 +264,7 @@ public partial class MainWindow : Window
     private void OnIconClick(object sender,RoutedEventArgs e)
     {
         if(_dragging || DateTime.UtcNow<_suppressUntil)return;
-        if(((Button)sender).Tag is NookItem item)Run(()=>{ShellIntegration.Launch(Store,item);if(!KeepOpenForVerification)WindowState=WindowState.Minimized;});
+        if(((Button)sender).Tag is NookItem item)Run(()=>{ShellIntegration.Launch(Store,item);if(!KeepOpenForVerification)BeginHidePanel();});
     }
     private void OnIconRightClick(object sender,MouseButtonEventArgs e)
     {
@@ -298,7 +299,7 @@ public partial class MainWindow : Window
         }
         catch(Exception ex){own.Add(Menu("打开",()=>Run(()=>ShellIntegration.Launch(Store,item))));SetStatus("系统扩展菜单暂不可用："+ex.Message);Popup(button,own);}
     }
-    private void OnIconDown(object sender,MouseButtonEventArgs e) {UiMotion.StopReveal(Surface);UiMotion.StopReveal(Icons);_mouseDown=e.GetPosition(this);}
+    private void OnIconDown(object sender,MouseButtonEventArgs e) {FinishPanelMotion();UiMotion.StopReveal(Surface);UiMotion.StopReveal(Icons);_mouseDown=e.GetPosition(this);}
     private void OnIconMove(object sender,MouseEventArgs e)
     {
         if(_dragging || e.LeftButton!=MouseButtonState.Pressed || sender is not Button button || button.Tag is not NookItem item)return;
@@ -324,7 +325,7 @@ public partial class MainWindow : Window
     private void OnDragOver(object sender,DragEventArgs e) => HandleDragOver(e);
     private void HandleDragOver(DragEventArgs e,bool onCategory=false)
     {
-        UiMotion.StopReveal(Surface);UiMotion.StopReveal(Icons);
+        FinishPanelMotion();UiMotion.StopReveal(Surface);UiMotion.StopReveal(Icons);
         if(!onCategory && e.Data.GetDataPresent(ItemFormat)){OrderDragOver(e);return;}
         try{var accepted=CanImport(e.Data);e.Effects=accepted?(e.Data.GetDataPresent(ItemFormat)?DragDropEffects.Move:DragDropEffects.Copy):DragDropEffects.None;DropOutline.Visibility=accepted?Visibility.Visible:Visibility.Collapsed;e.Handled=true;}
         catch{e.Effects=DragDropEffects.None;e.Handled=true;}
@@ -351,7 +352,8 @@ public partial class MainWindow : Window
     }
     private void OnKeyDown(object sender,KeyEventArgs e)
     {
-        if(e.Key==Key.Escape && !_dragging){e.Handled=true;if(!KeepOpenForVerification)WindowState=WindowState.Minimized;return;}
+        if(e.Key==Key.Escape && !_dragging){e.Handled=true;if(!KeepOpenForVerification)BeginHidePanel();return;}
+        if(_shutter.Active)FinishPanelMotion();
         if(e.OriginalSource is not Button button || button.Tag is not NookItem)return;
         if(e.Key==Key.Apps || (e.Key==Key.F10&&Keyboard.Modifiers.HasFlag(ModifierKeys.Shift))){e.Handled=true;ShowIconMenu(button,(NookItem)button.Tag);return;}
         if(e.Key is Key.Left or Key.Right or Key.Up or Key.Down)

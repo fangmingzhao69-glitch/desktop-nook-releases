@@ -1,15 +1,18 @@
 using System.Diagnostics;
 using System.IO;
+using System.Runtime.InteropServices;
 using System.Text.Json;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
 using System.Windows.Media;
 using System.Windows.Threading;
+using System.Windows.Interop;
 
 namespace DesktopNook.App;
 internal static class MotionVerification
 {
+    [DllImport("user32.dll")]private static extern IntPtr SendMessage(IntPtr h,int message,IntPtr wParam,IntPtr lParam);
     internal static async Task Run(MainWindow owner,string root,List<string> checks)
     {
         if(!App.IsSandbox)throw new InvalidOperationException("动画检查只允许隔离目录。");
@@ -20,7 +23,7 @@ internal static class MotionVerification
         var host=new Window{Content=panel,Width=180,Height=130,Left=-32000,Top=-32000,WindowStartupLocation=WindowStartupLocation.Manual,ShowInTaskbar=false,ShowActivated=false};
         int passed=0;
         void Check(bool condition,string text){if(!condition)throw new Exception(text);checks.Add(text);passed++;}
-        async Task Settle(){await Task.Delay(420);await owner.Dispatcher.InvokeAsync(()=>{},DispatcherPriority.ContextIdle);}
+        async Task Settle(){await Task.Delay(650);await owner.Dispatcher.InvokeAsync(()=>{},DispatcherPriority.ContextIdle);}
         try
         {
             UiMotion.Configure("on");host.Show();host.UpdateLayout();await owner.Dispatcher.InvokeAsync(()=>{},DispatcherPriority.ContextIdle);
@@ -35,17 +38,34 @@ internal static class MotionVerification
             UiMotion.Reveal(panel);Check(!panel.HasAnimatedProperties&&UiMotion.ActiveClocks==0&&panel.Opacity==1,"Turning motion off finishes current transitions and prevents new clocks");
             UiMotion.Configure("system");Check(UiMotion.Enabled==SystemParameters.ClientAreaAnimation,"System mode follows the Windows client-area animation preference");
             UiMotion.Configure("on");owner.ShowPanel();
-            for(int n=0;n<4;n++){owner.TogglePanel();Check(owner.WindowState==WindowState.Minimized&&UiMotion.ActiveClocks==0,"Minimize immediately cancels visual motion #"+n);owner.TogglePanel();}
-            await Settle();Check(owner.WindowState==WindowState.Normal&&UiMotion.ActiveClocks==0,"Rapid panel toggles obey the last requested state without delayed minimization");
+            await Settle();owner.BeginHidePanel();
+            Check(owner.WindowState==WindowState.Normal&&owner.PanelMotion.Active&&owner.PanelMotion.Closing,"Close keeps the native window visible while shutters play");
+            Check(owner.PanelMotion.LastStartOrder.SequenceEqual(new[]{0,1,2,3,4}),"Closing shutters start from top to bottom");
+            await Task.Delay(150);Check(owner.PanelMotion.Angles.Any(a=>a>1&&a<83),"Closing produces actual intermediate 3D rotations");
+            await Settle();Check(owner.WindowState==WindowState.Minimized&&!owner.PanelMotion.Active&&owner.PanelMotion.SnapshotBytes==0,"Completed close minimizes and releases snapshot and clocks");
+            owner.ShowPanel();Check(owner.PanelMotion.Active&&owner.PanelMotion.LastStartOrder.SequenceEqual(new[]{4,3,2,1,0}),"Opening shutters start from bottom to top");
+            Check(owner.PanelMotion.SnapshotBytes<=8*1024*1024+16384&&owner.PanelMotion.Failure is null,"Five strips share one bounded snapshot without graphics errors");
+            await Settle();Check(!owner.PanelMotion.Active&&owner.PanelMotion.SnapshotBytes==0,"Completed opening releases all shutter resources");
+            for(int n=0;n<4;n++){owner.TogglePanel();await Task.Delay(70);owner.TogglePanel();}
+            await Settle();Check(owner.WindowState==WindowState.Normal&&UiMotion.ActiveClocks==0&&!owner.PanelMotion.Active,"Rapid reversed panel toggles obey the last request without delayed minimization");
+            owner.BeginHidePanel();await Task.Delay(60);UiMotion.Configure("off");Check(owner.WindowState==WindowState.Minimized&&!owner.PanelMotion.Active,"Turning motion off during close commits hiding immediately");
+            owner.ShowPanel();Check(!owner.PanelMotion.Active,"Motion-off restore skips snapshots and shutters");UiMotion.Configure("on");
+            var hwnd=new WindowInteropHelper(owner).Handle;
+            SendMessage(hwnd,0x112,(IntPtr)0xf020,IntPtr.Zero);
+            Check(owner.PanelMotion.Closing&&owner.WindowState==WindowState.Normal,"Native taskbar minimize command waits for closing shutters");
+            await Settle();Check(owner.WindowState==WindowState.Minimized,"Native minimize commits after shutter completion");
+            owner.ShowPanel();await Task.Delay(90);owner.WindowState=WindowState.Minimized;
+            Check(!owner.PanelMotion.Active&&owner.PanelMotion.SnapshotBytes==0,"Externally forced minimization releases an interrupted shutter immediately");
+            owner.ShowPanel();await Settle();
             using var process=Process.GetCurrentProcess();process.Refresh();long beforePrivate=process.PrivateMemorySize64;double beforeCpu=process.TotalProcessorTime.TotalMilliseconds;
             var watch=Stopwatch.StartNew();
-            for(int n=0;n<100;n++){UiMotion.Reveal(panel,60);UiMotion.Reveal(panel,60);UiMotion.StopReveal(panel);await Task.Delay(5);}
+            for(int n=0;n<100;n++){owner.BeginHidePanel();await Task.Delay(5);owner.ShowPanel();owner.FinishPanelMotion();UiMotion.Reveal(panel,60);UiMotion.StopReveal(panel);}
             await Settle();process.Refresh();
-            Check(UiMotion.ActiveClocks==0&&panel.RenderTransform.Value.IsIdentity,"100 repeated reveal/replace/cancel cycles leave no clocks or transforms");
+            Check(UiMotion.ActiveClocks==0&&!owner.PanelMotion.Active&&owner.PanelMotion.SnapshotBytes==0&&owner.WindowState==WindowState.Normal&&panel.RenderTransform.Value.IsIdentity,"100 shutter close/reverse/cancel cycles leave no clocks or snapshots");
             long onElapsed=watch.ElapsedMilliseconds,onPrivate=process.PrivateMemorySize64;double onCpu=process.TotalProcessorTime.TotalMilliseconds-beforeCpu;
             double idleStart=process.TotalProcessorTime.TotalMilliseconds;await Task.Delay(500);process.Refresh();double onIdleCpu=process.TotalProcessorTime.TotalMilliseconds-idleStart;
             UiMotion.Configure("off");watch.Restart();process.Refresh();long offPrivateBefore=process.PrivateMemorySize64;double offCpuBefore=process.TotalProcessorTime.TotalMilliseconds;
-            for(int n=0;n<100;n++){UiMotion.Reveal(panel,60);UiMotion.Reveal(panel,60);UiMotion.StopReveal(panel);await Task.Delay(5);}
+            for(int n=0;n<100;n++){owner.BeginHidePanel();await Task.Delay(5);owner.ShowPanel();owner.FinishPanelMotion();UiMotion.Reveal(panel,60);UiMotion.StopReveal(panel);}
             await Settle();process.Refresh();long offElapsed=watch.ElapsedMilliseconds,offPrivate=process.PrivateMemorySize64;double offCpu=process.TotalProcessorTime.TotalMilliseconds-offCpuBefore;
             idleStart=process.TotalProcessorTime.TotalMilliseconds;await Task.Delay(500);process.Refresh();double offIdleCpu=process.TotalProcessorTime.TotalMilliseconds-idleStart;
             Check(UiMotion.ActiveClocks==0,"Equivalent motion-off stress also leaves no active clocks");
