@@ -23,6 +23,7 @@ public partial class MainWindow : Window
     internal string UpdateMenuText=>_latestRelease is null?$"检查在线更新（当前 {CurrentVersionLabel}）…":$"更新到 v{_latestRelease.Version.ToString(3)}（当前 {CurrentVersionLabel}）…";
     private Point _mouseDown; private bool _dragging; private int _interactions; private int _menus; private bool _allowExit; private DateTime _suppressUntil;
     public bool KeepOpenForVerification { get; set; }
+    internal bool HoldVisibleForMotionProbe {get;set;}
     public NookStore Store => App.Store;
     public string? ActiveCategory => _activeCategory;
     public int VisibleCount => Icons.Items.Count;
@@ -33,11 +34,12 @@ public partial class MainWindow : Window
     public MainWindow()
     {
         InitializeComponent();InitializeSizing();Activated+=(_,_)=>{Place();if(IsLoaded&&!App.IsSandbox&&DateTime.UtcNow-_lastUpdateCheck>TimeSpan.FromMinutes(15))_=CheckOnlineUpdateAsync(false);};
+        SourceInitialized+=(_,_)=>UiMotion.PrepareWindow(this);
         _updateTimer.Tick+=(_,_)=>_=CheckOnlineUpdateAsync(false);
         Closed+=(_,_)=>_updateTimer.Stop();
         Render();
     }
-    private void OnLoaded(object sender,RoutedEventArgs e) { TaskbarPlacement.EnableToggle(this);Place();if(WindowState==WindowState.Normal)UiMotion.Reveal(Surface,180); if(Store.RecoveryMessages.Count>0) SetStatus(Store.RecoveryMessages.Last());if(!App.IsSandbox){_updateTimer.Start();_=CheckOnlineUpdateAsync(false);} }
+    private void OnLoaded(object sender,RoutedEventArgs e) { TaskbarPlacement.EnableToggle(this);Place();if(WindowState==WindowState.Normal)UiMotion.Reveal(Surface,320,18); if(Store.RecoveryMessages.Count>0) SetStatus(Store.RecoveryMessages.Last());if(!App.IsSandbox){_updateTimer.Start();_=CheckOnlineUpdateAsync(false);} }
     internal void SetAvailableRelease(OnlineRelease? release)
     {
         _latestRelease=release;
@@ -56,10 +58,10 @@ public partial class MainWindow : Window
     }
     public void ShowPanel() { WindowState=WindowState.Normal; Show(); Place(); Activate(); }
     public void TogglePanel(){if(WindowState==WindowState.Normal&&IsVisible)WindowState=WindowState.Minimized;else ShowPanel();}
-    private void OnStateChanged(object? sender,EventArgs e) { if(WindowState==WindowState.Normal){Place();if(IsLoaded)UiMotion.Reveal(Surface,180);}else UiMotion.CancelAll(); }
+    private void OnStateChanged(object? sender,EventArgs e) { if(WindowState==WindowState.Normal){Place();if(IsLoaded)UiMotion.Reveal(Surface,320,18);}else UiMotion.CancelAll(); }
     private void OnDeactivated(object? sender,EventArgs e)
     {
-        if(TaskbarPlacement.PointerOverButton())return;
+        if(HoldVisibleForMotionProbe||TaskbarPlacement.PointerOverButton())return;
         Dispatcher.BeginInvoke(()=>{if(!KeepOpenForVerification&&!IsActive&&_interactions==0&&!_dragging&&_menus==0&&WindowState!=WindowState.Minimized)WindowState=WindowState.Minimized;},System.Windows.Threading.DispatcherPriority.Background);
     }
     private void OnClosing(object? sender,CancelEventArgs e)
@@ -96,7 +98,7 @@ public partial class MainWindow : Window
         button.PreviewKeyDown+=(_,e)=>{if(e.Key is Key.Left or Key.Right or Key.Home or Key.End){var buttons=Tabs.Children.OfType<Button>().ToList();var current=buttons.IndexOf(button);var next=e.Key==Key.Home?0:e.Key==Key.End?buttons.Count-1:(current+(e.Key==Key.Left?-1:1)+buttons.Count)%buttons.Count;SelectCategory(buttons[next].Tag as string);Tabs.Children.OfType<Button>().ElementAt(next).Focus();e.Handled=true;}};
         Tabs.Children.Add(button);
     }
-    public void SelectCategory(string? id) {bool changed=_activeCategory!=id;UiMotion.StopReveal(Icons); _activeCategory=id;Render();if(changed)UiMotion.Reveal(Icons,110,0); }
+    public void SelectCategory(string? id) {bool changed=_activeCategory!=id;UiMotion.StopReveal(Icons); _activeCategory=id;Render();if(changed)UiMotion.Reveal(Icons,180,0); }
     private static SolidColorBrush Brush(string color) => new((Color)ColorConverter.ConvertFromString(color));
     private bool Run(Action action,string? message=null)
     {
@@ -140,7 +142,7 @@ public partial class MainWindow : Window
         MenuLayout.Adapt(menu,this);
         LastMenu=menu;
         foreach(var entry in entries)menu.Items.Add(entry);
-        menu.Opened+=(_,_)=>{_menus++;UiMotion.Reveal(menu,100,0);};
+        menu.Opened+=(_,_)=>{_menus++;UiMotion.Reveal(menu,160,0);};
         menu.Closed+=(_,_)=>{UiMotion.StopReveal(menu);_menus=Math.Max(0,_menus-1);if(closed is not null)Dispatcher.BeginInvoke(closed,System.Windows.Threading.DispatcherPriority.ContextIdle);};
         menu.IsOpen=true;
     }

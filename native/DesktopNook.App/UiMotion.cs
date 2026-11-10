@@ -1,5 +1,6 @@
 using System.ComponentModel;
 using System.Runtime.CompilerServices;
+using System.Runtime.InteropServices;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
@@ -7,11 +8,18 @@ using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Media.Animation;
 using System.Windows.Threading;
+using System.Windows.Interop;
 
 namespace DesktopNook.App;
 
 public static class UiMotion
 {
+    [DllImport("dwmapi.dll")]private static extern int DwmSetWindowAttribute(IntPtr window,int attribute,ref int value,int size);
+    internal static void PrepareWindow(Window window)
+    {
+        // Keep taskbar state semantics, while letting this window own its visible transition.
+        int disabled=1;_ = DwmSetWindowAttribute(new WindowInteropHelper(window).Handle,3,ref disabled,sizeof(int));
+    }
     private sealed record Job(AnimationClock Clock,EventHandler Completed);
     private sealed record RevealState(Transform Original,TranslateTransform Offset);
     private sealed class FeedbackState
@@ -27,6 +35,7 @@ public static class UiMotion
     internal static string Mode {get;private set;}="system";
     internal static bool Enabled=>Mode=="on"||(Mode=="system"&&SystemParameters.ClientAreaAnimation);
     internal static int ActiveClocks=>Jobs.Count;
+    internal static Action<string,FrameworkElement>? ProbeObserver {get;set;}
     internal static void RefreshFeedback(Control control){if(control.IsLoaded)Paint(control,true);}
     public static readonly DependencyProperty FeedbackProperty=DependencyProperty.RegisterAttached("Feedback",typeof(string),typeof(UiMotion),new PropertyMetadata(null,FeedbackChanged));
     public static string? GetFeedback(DependencyObject value)=>(string?)value.GetValue(FeedbackProperty);
@@ -66,17 +75,19 @@ public static class UiMotion
         target.Unloaded-=RevealUnloaded;
         Stop(target,UIElement.OpacityProperty);Stop(state.Offset,TranslateTransform.YProperty);
         target.RenderTransform=state.Original;
+        ProbeObserver?.Invoke("stop",target);
     }
-    internal static void Reveal(FrameworkElement target,int milliseconds=150,double distance=6)
+    internal static void Reveal(FrameworkElement target,int milliseconds=220,double distance=10)
     {
         bool continuing=Reveals.TryGetValue(target,out var previous);
-        double from=continuing?target.Opacity:.45,fromY=continuing?previous!.Offset.Y:distance;
+        double from=continuing?target.Opacity:0,fromY=continuing?previous!.Offset.Y:distance;
         StopReveal(target);
         if(!Enabled||!target.IsLoaded||!target.IsVisible||Window.GetWindow(target) is Window {WindowState:WindowState.Minimized})return;
         var original=target.RenderTransform;var offset=new TranslateTransform();
         target.RenderTransform=new TransformGroup{Children=new TransformCollection{original,offset}};
         Reveals[target]=new(original,offset);
         target.Unloaded+=RevealUnloaded;
+        ProbeObserver?.Invoke("begin",target);
         var ease=new QuadraticEase{EasingMode=EasingMode.EaseOut};
         Animate(offset,TranslateTransform.YProperty,new DoubleAnimation(fromY,0,TimeSpan.FromMilliseconds(milliseconds)){EasingFunction=ease,FillBehavior=FillBehavior.Stop});
         Animate(target,UIElement.OpacityProperty,new DoubleAnimation(from,(double)target.GetAnimationBaseValue(UIElement.OpacityProperty),TimeSpan.FromMilliseconds(milliseconds)){EasingFunction=ease,FillBehavior=FillBehavior.Stop},()=>StopReveal(target));
@@ -139,9 +150,9 @@ public static class UiMotion
         bool pressed=control is ButtonBase button&&button.IsPressed;
         if(GetFeedback(control)=="primary")
         {
-            double to=!control.IsEnabled?0:pressed ? .22 : control.IsMouseOver ? .12 : 0,from=state.Surface.Opacity;
+            double to=!control.IsEnabled?0:pressed ? .28 : control.IsMouseOver ? .18 : 0,from=state.Surface.Opacity;
             Stop(state.Surface,UIElement.OpacityProperty);state.Surface.Opacity=to;
-            if(animate&&Enabled&&Math.Abs(from-to)>.001)Animate(state.Surface,UIElement.OpacityProperty,new DoubleAnimation(from,to,TimeSpan.FromMilliseconds(90)){FillBehavior=FillBehavior.Stop});
+            if(animate&&Enabled&&Math.Abs(from-to)>.001)Animate(state.Surface,UIElement.OpacityProperty,new DoubleAnimation(from,to,TimeSpan.FromMilliseconds(140)){FillBehavior=FillBehavior.Stop});
             return;
         }
         bool selected=control is ToggleButton {IsChecked:true};
@@ -149,6 +160,6 @@ public static class UiMotion
         Color toColor=selected?Color.FromRgb(221,242,255):!control.IsEnabled?baseColor:pressed?Color.FromRgb(208,233,249):control.IsMouseOver?Color.FromRgb(225,243,255):baseColor;
         var brush=state.Brush!;var fromColor=brush.Color;
         Stop(brush,SolidColorBrush.ColorProperty);brush.Color=toColor;
-        if(animate&&Enabled&&fromColor!=toColor)Animate(brush,SolidColorBrush.ColorProperty,new ColorAnimation(fromColor,toColor,TimeSpan.FromMilliseconds(selected?100:90)){FillBehavior=FillBehavior.Stop});
+        if(animate&&Enabled&&fromColor!=toColor)Animate(brush,SolidColorBrush.ColorProperty,new ColorAnimation(fromColor,toColor,TimeSpan.FromMilliseconds(selected?160:140)){FillBehavior=FillBehavior.Stop});
     }
 }

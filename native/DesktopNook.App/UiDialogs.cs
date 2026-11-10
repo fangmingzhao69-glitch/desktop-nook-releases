@@ -15,7 +15,7 @@ internal static class UiDialogs
         heading.MouseLeftButtonDown+=(_,e)=>{if(e.OriginalSource is TextBlock || e.OriginalSource==heading)window.DragMove();};
         DockPanel.SetDock(heading,Dock.Top);dock.Children.Add(heading);dock.Children.Add(body);
         window.Content=new Border{CornerRadius=new CornerRadius(14),BorderThickness=new Thickness(1),BorderBrush=(Brush)Application.Current.FindResource("LineBrush"),Background=(Brush)Application.Current.FindResource("PanelBrush"),Child=dock};
-        var surface=(FrameworkElement)window.Content;window.Loaded+=(_,_)=>UiMotion.Reveal(surface);window.Closed+=(_,_)=>UiMotion.StopReveal(surface);
+        var surface=(FrameworkElement)window.Content;window.SourceInitialized+=(_,_)=>UiMotion.PrepareWindow(window);window.Loaded+=(_,_)=>UiMotion.Reveal(surface);window.Closed+=(_,_)=>UiMotion.StopReveal(surface);
     }
     public static MessageBoxResult ShowUpdate(Window owner,string text,string title,MessageBoxButton buttons=MessageBoxButton.OK)=>Show(owner,text,title,buttons,compact:true);
     public static MessageBoxResult Show(Window owner,string text,string title,MessageBoxButton buttons=MessageBoxButton.OK,MessageBoxImage image=MessageBoxImage.None,bool compact=false)

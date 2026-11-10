@@ -20,7 +20,7 @@ internal static class MotionVerification
         var host=new Window{Content=panel,Width=180,Height=130,Left=-32000,Top=-32000,WindowStartupLocation=WindowStartupLocation.Manual,ShowInTaskbar=false,ShowActivated=false};
         int passed=0;
         void Check(bool condition,string text){if(!condition)throw new Exception(text);checks.Add(text);passed++;}
-        async Task Settle(){await Task.Delay(260);await owner.Dispatcher.InvokeAsync(()=>{},DispatcherPriority.ContextIdle);}
+        async Task Settle(){await Task.Delay(420);await owner.Dispatcher.InvokeAsync(()=>{},DispatcherPriority.ContextIdle);}
         try
         {
             UiMotion.Configure("on");host.Show();host.UpdateLayout();await owner.Dispatcher.InvokeAsync(()=>{},DispatcherPriority.ContextIdle);

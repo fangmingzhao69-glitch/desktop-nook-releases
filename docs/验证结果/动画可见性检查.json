@@ -1,0 +1,31 @@
+{
+  "failure": "",
+  "realPlacementPath": true,
+  "screenCaptured": true,
+  "cycles": [
+    {
+      "cycle": "0",
+      "intermediateFrames": 8,
+      "firstOpacity": 0.2431723170225586,
+      "firstY": 13.622898293593945
+    },
+    {
+      "cycle": "1",
+      "intermediateFrames": 16,
+      "firstOpacity": 0.22287180137343754,
+      "firstY": 13.988307575278125
+    },
+    {
+      "cycle": "2",
+      "intermediateFrames": 16,
+      "firstOpacity": 0.18549600624843743,
+      "firstY": 14.661071887528127
+    },
+    {
+      "cycle": "3",
+      "intermediateFrames": 0,
+      "firstOpacity": 1,
+      "firstY": 0
+    }
+  ]
+}

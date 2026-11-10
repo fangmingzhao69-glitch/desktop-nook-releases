@@ -1,7 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
     <OutputType>WinExe</OutputType><TargetFramework>net10.0-windows</TargetFramework><UseWPF>true</UseWPF>
-    <AssemblyName>DesktopNook</AssemblyName><RootNamespace>DesktopNook.App</RootNamespace><Version>0.12.9</Version><Product>DesktopNook</Product><Title>轻匣</Title><AssemblyTitle>轻匣</AssemblyTitle><Description>轻匣 — 让桌面有序，常用随手可取</Description>
+    <AssemblyName>DesktopNook</AssemblyName><RootNamespace>DesktopNook.App</RootNamespace><Version>0.12.10</Version><Product>DesktopNook</Product><Title>轻匣</Title><AssemblyTitle>轻匣</AssemblyTitle><Description>轻匣 — 让桌面有序，常用随手可取</Description>
     <ApplicationIcon>Assets\AppIcon.ico</ApplicationIcon><ApplicationManifest>app.manifest</ApplicationManifest>
   </PropertyGroup>
   <ItemGroup><Page Remove="Assets\AppIconDrawing.xaml" /><None Include="Assets\AppIconDrawing.xaml" /><ProjectReference Include="..\DesktopNook.Core\DesktopNook.Core.csproj" /><Resource Include="Assets\AppIcon.png" /><Resource Include="Assets\AppIcon.ico" /></ItemGroup>

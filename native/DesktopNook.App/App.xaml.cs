@@ -73,6 +73,7 @@ public partial class App : Application
             var readyIndex=Array.IndexOf(e.Args,"--update-ready");if(readyIndex>=0)Dispatcher.BeginInvoke(()=>WriteUpdateReady(e.Args[readyIndex+1]),System.Windows.Threading.DispatcherPriority.Loaded);
             DispatcherUnhandledException += (_, args) => { args.Handled = true; window.ShowFailure(args.Exception); };
             if (e.Args.Contains("--ui-self-test")) Dispatcher.BeginInvoke(async () => await NativeVerification.Run(window, root), System.Windows.Threading.DispatcherPriority.Loaded);
+            if (e.Args.Contains("--motion-visibility-self-test")) Dispatcher.BeginInvoke(async () => await MotionVisibilityVerification.Run(window, root), System.Windows.Threading.DispatcherPriority.Loaded);
             if (e.Args.Contains("--size-self-test")) Dispatcher.BeginInvoke(async () => await SizingVerification.Run(window, root), System.Windows.Threading.DispatcherPriority.Loaded);
             if (e.Args.Contains("--order-self-test")) Dispatcher.BeginInvoke(async () => await OrderingVerification.Run(window, root), System.Windows.Threading.DispatcherPriority.Loaded);
             if (e.Args.Contains("--category-self-test")) Dispatcher.BeginInvoke(async () => await CategoryDeletionVerification.Run(window, root), System.Windows.Threading.DispatcherPriority.Loaded);

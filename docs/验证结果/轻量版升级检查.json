@@ -1,8 +1,8 @@
 {
   "success": true,
   "helperExit": 0,
-  "oldVersion": "0.12.8.0",
-  "newVersion": "0.12.9.0",
+  "oldVersion": "0.12.9.0",
+  "newVersion": "0.12.10.0",
   "deletedCategoryRetained": true,
   "uncheckedPreferenceRetained": true,
   "collectViewRetained": true,

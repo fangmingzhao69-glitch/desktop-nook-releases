@@ -114,6 +114,6 @@ internal sealed class CollectWindow : Window
         _scroll.Content=panel;_scroll.ScrollToTop();
         _icons.Background=mode=="icons"?new SolidColorBrush(Color.FromRgb(221,242,255)):Brushes.Transparent;_details.Background=mode=="details"?new SolidColorBrush(Color.FromRgb(221,242,255)):Brushes.Transparent;UpdateDefaultButton();
         UiMotion.RefreshFeedback(_icons);UiMotion.RefreshFeedback(_details);
-        if(changed&&IsLoaded)UiMotion.Reveal(_scroll,110,0);
+        if(changed&&IsLoaded)UiMotion.Reveal(_scroll,180,0);
     }
 }

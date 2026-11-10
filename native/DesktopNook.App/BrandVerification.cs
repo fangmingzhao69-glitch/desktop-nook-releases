@@ -80,7 +80,7 @@ internal static class BrandVerification
             Toggle(tiles[0]);Toggle(tiles[1]);collect.UpdateLayout();
             if(collect.Selection.Count!=2||!Find<Button>(collect).Single(b=>b.IsDefault).IsEnabled)throw new Exception("图标多选后添加按钮未启用。");
             Toggle(tiles[0]);if(collect.Selection.Count!=1||tiles[1].IsChecked!=true)throw new Exception("取消一个选择影响了其他项目。");Toggle(tiles[0]);
-            await Task.Delay(160);
+            await Task.Delay(260);
             if(Find<CheckBox>(collect).Any())throw new Exception("添加窗口仍有可见勾选框控件。");
             foreach(var tile in tiles)if(Find<Border>(tile).Single(b=>b.Name=="Tile").Background is not SolidColorBrush background||background.Color!=Color.FromRgb(221,242,255))throw new Exception("选中项目未高亮。");
             checks.Add("Collect tiles highlight without checkbox glyphs; independent toggles retain multi-selection and deselect only the clicked item");
