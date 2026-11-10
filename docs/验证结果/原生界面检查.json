@@ -1,5 +1,5 @@
 {
-  "passed": 38,
+  "passed": 39,
   "failure": "",
   "checks": [
     "Startup option persists quoted command, can be disabled and preserves other entries",
@@ -38,6 +38,7 @@
     "Qingxia display name preserves DesktopNook update identity and ten native icon sizes",
     "Pinned icon migration uses versioned ICO, preserves pin path/target/arguments and other shortcuts, and refreshes install branding",
     "Start-menu rename migrates only matching legacy target and preserves unrelated links",
+    "Collect tiles highlight without checkbox glyphs; independent toggles retain multi-selection and deselect only the clicked item",
     "Collect icons/details switch preserves selection/category, defaults to icons and persists a chosen default through preference writes",
     "Branded collect, checkboxes, category dropdown and rename dialog work without changing collection data"
   ],

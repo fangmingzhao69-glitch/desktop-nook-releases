@@ -1,6 +1,7 @@
 using System.IO;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Controls.Primitives;
 using System.Windows.Media;
 using DesktopNook.Core;
 
@@ -26,7 +27,7 @@ internal sealed class TextDialog : Window
 internal sealed record DesktopEntry(string Path,string Name,string Source,bool Recycle);
 internal sealed class CollectWindow : Window
 {
-    private readonly List<CheckBox> _checks=[];
+    private readonly List<ToggleButton> _checks=[];
     private readonly ComboBox _categories;
     private readonly string _defaultCategory;
     private readonly ScrollViewer _scroll=new(){VerticalScrollBarVisibility=ScrollBarVisibility.Auto,HorizontalScrollBarVisibility=ScrollBarVisibility.Disabled};
@@ -43,7 +44,7 @@ internal sealed class CollectWindow : Window
         _accept.Style=(Style)Application.Current.FindResource("PrimaryButton");
         var root=new Grid{Margin=new Thickness(18,10,18,18)};
         foreach(var height in new[]{GridLength.Auto,GridLength.Auto,new GridLength(1,GridUnitType.Star),GridLength.Auto,GridLength.Auto})root.RowDefinitions.Add(new(){Height=height});
-        root.Children.Add(new TextBlock{Text="预览并勾选桌面项目，也可以直接拖入轻匣。",Foreground=Brushes.SlateGray,Margin=new Thickness(0,0,0,12)});
+        root.Children.Add(new TextBlock{Text="点击项目可多选，再次点击取消选择。",Foreground=Brushes.SlateGray,Margin=new Thickness(0,0,0,12)});
         var toolbar=new DockPanel{Margin=new Thickness(0,0,0,10)};DockPanel.SetDock(_saveDefault,Dock.Right);toolbar.Children.Add(_saveDefault);
         var views=new StackPanel{Orientation=Orientation.Horizontal};views.Children.Add(_icons);_details.Margin=new Thickness(5,0,0,0);views.Children.Add(_details);toolbar.Children.Add(views);Grid.SetRow(toolbar,1);root.Children.Add(toolbar);
         System.Windows.Automation.AutomationProperties.SetAutomationId(_icons,"CollectView-Icons");System.Windows.Automation.AutomationProperties.SetAutomationId(_details,"CollectView-Details");System.Windows.Automation.AutomationProperties.SetAutomationId(_saveDefault,"CollectView-SaveDefault");
@@ -66,7 +67,7 @@ internal sealed class CollectWindow : Window
         if(!store.State.Items.Any(i=>i.Kind=="recycle-bin")&&App.Recycle.IsVisible)entries.Add(new("","回收站","系统图标",true));
         foreach(var entry in entries.OrderBy(i=>i.Name,StringComparer.CurrentCulture))
         {
-            var check=new CheckBox{Tag=entry,VerticalContentAlignment=VerticalAlignment.Center,ToolTip=entry.Recycle?"系统回收站，不会清空内容":entry.Path};
+            var check=new ToggleButton{Tag=entry,Style=(Style)Application.Current.FindResource("CollectSelectionTile"),VerticalContentAlignment=VerticalAlignment.Center,ToolTip=entry.Recycle?"系统回收站，不会清空内容":entry.Path};
             System.Windows.Automation.AutomationProperties.SetName(check,entry.Name);
             check.Checked+=(_,_)=>UpdateSelection();check.Unchecked+=(_,_)=>UpdateSelection();_checks.Add(check);
         }
@@ -90,7 +91,7 @@ internal sealed class CollectWindow : Window
             var image=new ShellIcon{IconPath=entry.Path,IsRecycleBin=entry.Recycle,Width=mode=="icons"?40:24,Height=mode=="icons"?40:24};
             if(mode=="icons")
             {
-                var tile=new StackPanel{Width=92,HorizontalAlignment=HorizontalAlignment.Center};image.Margin=new Thickness(0,0,0,7);tile.Children.Add(image);tile.Children.Add(new TextBlock{Text=entry.Name,FontSize=12,TextAlignment=TextAlignment.Center,TextWrapping=TextWrapping.Wrap,TextTrimming=TextTrimming.CharacterEllipsis,MaxHeight=34,LineHeight=17});check.Content=tile;check.Width=134;check.Height=104;check.Margin=new Thickness(2,3,2,3);
+                var tile=new StackPanel{Width=112,HorizontalAlignment=HorizontalAlignment.Center};image.Margin=new Thickness(0,0,0,7);tile.Children.Add(image);tile.Children.Add(new TextBlock{Text=entry.Name,FontSize=12,TextAlignment=TextAlignment.Center,TextWrapping=TextWrapping.Wrap,TextTrimming=TextTrimming.CharacterEllipsis,MaxHeight=34,LineHeight=17});check.Content=tile;check.Width=134;check.Height=104;check.Margin=new Thickness(2,3,2,3);
             }
             else
             {

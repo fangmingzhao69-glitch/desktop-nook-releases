@@ -178,6 +178,20 @@
         </Setter.Value>
       </Setter>
     </Style>
+    <Style x:Key="CollectSelectionTile" TargetType="ToggleButton">
+      <Setter Property="Foreground" Value="{StaticResource Ink}"/><Setter Property="Cursor" Value="Hand"/><Setter Property="Padding" Value="7"/><Setter Property="HorizontalContentAlignment" Value="Stretch"/><Setter Property="FocusVisualStyle" Value="{x:Null}"/>
+      <Setter Property="Template"><Setter.Value><ControlTemplate TargetType="ToggleButton">
+        <Border x:Name="Tile" CornerRadius="9" Background="Transparent" BorderBrush="Transparent" BorderThickness="1" Padding="{TemplateBinding Padding}">
+          <ContentPresenter HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}" VerticalAlignment="{TemplateBinding VerticalContentAlignment}"/>
+        </Border>
+        <ControlTemplate.Triggers>
+          <Trigger Property="IsMouseOver" Value="True"><Setter TargetName="Tile" Property="Background" Value="#EBF7FF"/></Trigger>
+          <Trigger Property="IsChecked" Value="True"><Setter TargetName="Tile" Property="Background" Value="#DDF2FF"/><Setter TargetName="Tile" Property="BorderBrush" Value="#79C5ED"/><Setter Property="Foreground" Value="#075F9D"/></Trigger>
+          <Trigger Property="IsKeyboardFocused" Value="True"><Setter TargetName="Tile" Property="BorderBrush" Value="#0877BE"/></Trigger>
+          <Trigger Property="IsEnabled" Value="False"><Setter Property="Opacity" Value=".45"/></Trigger>
+        </ControlTemplate.Triggers>
+      </ControlTemplate></Setter.Value></Setter>
+    </Style>
     <Style TargetType="CheckBox">
       <Setter Property="Foreground" Value="{StaticResource Ink}"/><Setter Property="Padding" Value="6"/><Setter Property="Cursor" Value="Hand"/>
       <Setter Property="Template"><Setter.Value><ControlTemplate TargetType="CheckBox">

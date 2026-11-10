@@ -3,6 +3,7 @@ using System.IO;
 using System.Runtime.InteropServices;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Controls.Primitives;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using System.Windows.Threading;
@@ -72,15 +73,21 @@ internal static class BrandVerification
             category.IsDropDownOpen=true;await collect.Dispatcher.InvokeAsync(()=>{},DispatcherPriority.ContextIdle);
             if(category.SelectedValue as string!=App.Store.DefaultCategoryId||category.ItemContainerGenerator.ContainerFromIndex(0) is not ComboBoxItem)throw new Exception("分类下拉框未正确显示。");
             category.IsDropDownOpen=false;collect.UpdateLayout();if(!Find<TextBlock>(category).Any(t=>t.Text==App.Store.State.Categories.Single(c=>c.Id==App.Store.DefaultCategoryId).Name))throw new Exception("分类下拉框未显示可见名称。");
-            var checkbox=Find<CheckBox>(collect).First();checkbox.IsChecked=true;collect.UpdateLayout();
-            if(collect.Selection.Count!=1||!Find<Button>(collect).Single(b=>b.IsDefault).IsEnabled)throw new Exception("勾选后收纳按钮未启用。");
+            var tiles=Find<ToggleButton>(collect).Where(t=>t.Tag is DesktopEntry).Take(2).ToArray();
+            void Toggle(ToggleButton tile){var peer=new System.Windows.Automation.Peers.ToggleButtonAutomationPeer(tile);((System.Windows.Automation.Provider.IToggleProvider)peer.GetPattern(System.Windows.Automation.Peers.PatternInterface.Toggle)).Toggle();}
+            Toggle(tiles[0]);Toggle(tiles[1]);collect.UpdateLayout();
+            if(collect.Selection.Count!=2||!Find<Button>(collect).Single(b=>b.IsDefault).IsEnabled)throw new Exception("图标多选后添加按钮未启用。");
+            Toggle(tiles[0]);if(collect.Selection.Count!=1||tiles[1].IsChecked!=true)throw new Exception("取消一个选择影响了其他项目。");Toggle(tiles[0]);
+            if(Find<CheckBox>(collect).Any())throw new Exception("添加窗口仍有可见勾选框控件。");
+            foreach(var tile in tiles)if(Find<Border>(tile).Single(b=>b.Name=="Tile").Background is not SolidColorBrush background||background.Color!=Color.FromRgb(221,242,255))throw new Exception("选中项目未高亮。");
+            checks.Add("Collect tiles highlight without checkbox glyphs; independent toggles retain multi-selection and deselect only the clicked item");
             if(collect.ViewMode!="icons")throw new Exception("新用户默认视图不是图标。");
             await collect.Dispatcher.InvokeAsync(()=>{},DispatcherPriority.ContextIdle);await Task.Delay(1000);
             Save(collect,Path.Combine(root,"collect-brand-preview.png"));
-            var selected=collect.Selection.Single();var categoryBefore=collect.CategoryId;
+            var selected=collect.Selection.ToArray();var categoryBefore=collect.CategoryId;
             collect.SetView("details");collect.UpdateLayout();
             await collect.Dispatcher.InvokeAsync(()=>{},DispatcherPriority.ContextIdle);await Task.Delay(1000);
-            if(collect.Selection.Single()!=selected||collect.CategoryId!=categoryBefore)throw new Exception("切换视图丢失选择或分类。");
+            if(!collect.Selection.SequenceEqual(selected)||collect.CategoryId!=categoryBefore)throw new Exception("切换视图丢失选择或分类。");
             Save(collect,Path.Combine(root,"collect-details-preview.png"));
             Find<Button>(collect).Single(b=>System.Windows.Automation.AutomationProperties.GetAutomationId(b)=="CollectView-SaveDefault").RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
             bool closeBefore=App.Options.CloseEndsProcess;App.Options.CloseEndsProcess=!closeBefore;App.Options.CloseEndsProcess=closeBefore;
@@ -88,7 +95,7 @@ internal static class BrandVerification
             var reopened=new CollectWindow(App.Store,categoryBefore){Owner=owner};
             try{if(reopened.ViewMode!="details")throw new Exception("默认视图没有跨窗口保存。");}finally{reopened.Close();}
             collect.SetView("icons");collect.UpdateLayout();
-            if(collect.Selection.Single()!=selected)throw new Exception("切回图标后丢失勾选。");
+            if(!collect.Selection.SequenceEqual(selected))throw new Exception("切回图标后丢失选择。");
             App.Options.DefaultCollectView="icons";
             checks.Add("Collect icons/details switch preserves selection/category, defaults to icons and persists a chosen default through preference writes");
         }
