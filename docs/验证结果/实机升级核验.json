@@ -1,9 +1,17 @@
 {
-  "Version": "0.12.2.0",
-  "PublicIconEncrypted": false,
-  "Items": 56,
+  "Version": "0.12.11.0",
+  "ReleaseCommit": "0.12.11+e7d978d979a49a1767cda58c7a835b5c2ccea752",
+  "InstalledHash": "5B51DA970C49E0060E15B52BE059603CF110A25446F9C0F5CD848DA9C1C5784B",
+  "Items": 58,
   "Categories": 7,
   "StateHashUnchanged": true,
   "PreferencesHashUnchanged": true,
-  "UncategorizedStillAbsent": true
+  "CategoryPolicyHashUnchanged": true,
+  "ItemOrderHashUnchanged": true,
+  "CategoryOrdersRetained": true,
+  "MotionMode": "on",
+  "VisibleDuringClose": true,
+  "MinimizedAfterAnimation": true,
+  "SameVolumeBackupRetained": true,
+  "PackageHashesVerified": true
 }
