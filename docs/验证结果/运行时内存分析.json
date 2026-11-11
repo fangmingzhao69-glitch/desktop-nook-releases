@@ -1,0 +1,188 @@
+{
+  "version": "0.12.11",
+  "scenario": "Four fresh sandbox processes: synthetic 58 URL entries and 7 categories; on/off/off/on; keep-open-verification bypasses taskbar discovery in every trial; no live payload copied or moved",
+  "cycles": 10,
+  "cycleTimingMs": {
+    "open": 650,
+    "close": 650
+  },
+  "forcedGc": false,
+  "workingSetTrimmed": false,
+  "results": [
+    {
+      "variant": "on-1",
+      "items": 58,
+      "categories": 7,
+      "samples": [
+        {
+          "stage": "startup-minimized",
+          "workingSet": 136933376,
+          "private": 69832704,
+          "handles": 805,
+          "cpuMs": 3062.5
+        },
+        {
+          "stage": "first-open",
+          "workingSet": 205623296,
+          "private": 145711104,
+          "handles": 1136,
+          "cpuMs": 4093.75
+        },
+        {
+          "stage": "after-10-cycles-open",
+          "workingSet": 232493056,
+          "private": 257114112,
+          "handles": 1137,
+          "cpuMs": 7562.5
+        },
+        {
+          "stage": "idle-minimized-3s",
+          "workingSet": 221786112,
+          "private": 247988224,
+          "handles": 1137,
+          "cpuMs": 7687.5
+        },
+        {
+          "stage": "idle-minimized-6s",
+          "workingSet": 221736960,
+          "private": 191746048,
+          "handles": 1134,
+          "cpuMs": 7687.5
+        }
+      ]
+    },
+    {
+      "variant": "off-1",
+      "items": 58,
+      "categories": 7,
+      "samples": [
+        {
+          "stage": "startup-minimized",
+          "workingSet": 152092672,
+          "private": 82366464,
+          "handles": 816,
+          "cpuMs": 3875.0
+        },
+        {
+          "stage": "first-open",
+          "workingSet": 212107264,
+          "private": 131330048,
+          "handles": 1136,
+          "cpuMs": 4578.125
+        },
+        {
+          "stage": "after-10-cycles-open",
+          "workingSet": 214114304,
+          "private": 134828032,
+          "handles": 1136,
+          "cpuMs": 5093.75
+        },
+        {
+          "stage": "idle-minimized-3s",
+          "workingSet": 210558976,
+          "private": 133009408,
+          "handles": 1136,
+          "cpuMs": 5140.625
+        },
+        {
+          "stage": "idle-minimized-6s",
+          "workingSet": 210505728,
+          "private": 132927488,
+          "handles": 1133,
+          "cpuMs": 5140.625
+        }
+      ]
+    },
+    {
+      "variant": "off-2",
+      "items": 58,
+      "categories": 7,
+      "samples": [
+        {
+          "stage": "startup-minimized",
+          "workingSet": 151031808,
+          "private": 82440192,
+          "handles": 819,
+          "cpuMs": 4031.25
+        },
+        {
+          "stage": "first-open",
+          "workingSet": 212209664,
+          "private": 131584000,
+          "handles": 1139,
+          "cpuMs": 4765.625
+        },
+        {
+          "stage": "after-10-cycles-open",
+          "workingSet": 214241280,
+          "private": 135069696,
+          "handles": 1139,
+          "cpuMs": 5281.25
+        },
+        {
+          "stage": "idle-minimized-3s",
+          "workingSet": 210690048,
+          "private": 133251072,
+          "handles": 1139,
+          "cpuMs": 5281.25
+        },
+        {
+          "stage": "idle-minimized-6s",
+          "workingSet": 210640896,
+          "private": 133169152,
+          "handles": 1136,
+          "cpuMs": 5281.25
+        }
+      ]
+    },
+    {
+      "variant": "on-2",
+      "items": 58,
+      "categories": 7,
+      "samples": [
+        {
+          "stage": "startup-minimized",
+          "workingSet": 137187328,
+          "private": 69922816,
+          "handles": 818,
+          "cpuMs": 3109.375
+        },
+        {
+          "stage": "first-open",
+          "workingSet": 205451264,
+          "private": 144093184,
+          "handles": 1147,
+          "cpuMs": 4015.625
+        },
+        {
+          "stage": "after-10-cycles-open",
+          "workingSet": 232841216,
+          "private": 276135936,
+          "handles": 1152,
+          "cpuMs": 7312.5
+        },
+        {
+          "stage": "idle-minimized-3s",
+          "workingSet": 222134272,
+          "private": 266960896,
+          "handles": 1152,
+          "cpuMs": 7421.875
+        },
+        {
+          "stage": "idle-minimized-6s",
+          "workingSet": 222081024,
+          "private": 172974080,
+          "handles": 1149,
+          "cpuMs": 7453.125
+        }
+      ]
+    }
+  ],
+  "liveCounters": {
+    "lastCollectionHeapBytes": 6482096,
+    "timerCount": 0,
+    "note": "Counters sampled from the installed process separately; last-collection sizes are not an instantaneous live-object census",
+    "gcCommittedBytes": 18722816
+  },
+  "interpretation": "Motion-on raises transient private commit substantially; observed commit drops after minimizing. Ownership release is covered by existing motion tests, but this short run does not establish absence of native leaks."
+}
