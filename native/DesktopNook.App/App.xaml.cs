@@ -12,12 +12,15 @@ public partial class App : Application
     public static NookStore Store { get; private set; } = null!;
     public static IRecycleBin Recycle { get; private set; } = null!;
     public static bool IsSandbox { get; private set; }
+    internal static string? SandboxRoot {get;private set;}
     internal static StartupOptions Options {get;private set;}=new();
-    public static void ReloadStore() => Store = new NookStore(Store.DataDirectory,Store.DesktopRoots,Recycle);
+    public static void ReloadStore() => Store = new NookStore(Store.DataDirectory,Store.DesktopRoots,Recycle,storeAllPayloads:Store.StoreAllPayloads);
     private void OnStartup(object sender, StartupEventArgs e)
     {
         try
         {
+            var storageTest=Array.IndexOf(e.Args,"--storage-self-test");if(storageTest>=0){Shutdown(StorageVerification.Run(Path.GetFullPath(e.Args[storageTest+1])));return;}
+            var relocate=Array.IndexOf(e.Args,"--relocate-storage");if(relocate>=0){Shutdown(DataPaths.MigrateCommand(e.Args[relocate+1],e.Args[relocate+2],e.Args[relocate+3]));return;}
             var onlineTest=Array.IndexOf(e.Args,"--verify-online-update");if(onlineTest>=0){Shutdown(Task.Run(()=>OnlineUpdateVerification.Run(e.Args[onlineTest+1],e.Args[onlineTest+2],e.Args.Contains("--live"),e.Args.Contains("--live-check"))).GetAwaiter().GetResult());return;}
             var iconCheck=Array.IndexOf(e.Args,"--verify-icons");if(iconCheck>=0){Shutdown(IconVerification.Run(e.Args[iconCheck+1],e.Args.Skip(iconCheck+2)));return;}
             var inventory=Array.IndexOf(e.Args,"--collection-inventory");if(inventory>=0){Shutdown(CollectionRecovery.Run(e.Args[inventory+1],e.Args.Contains("--apply")));return;}
@@ -35,19 +38,28 @@ public partial class App : Application
             IsSandbox = sandboxIndex >= 0;
             if(IsSandbox&&e.Args.Contains("--software-rendering"))System.Windows.Media.RenderOptions.ProcessRenderMode=System.Windows.Interop.RenderMode.SoftwareOnly;
             var dataRootIndex=Array.IndexOf(e.Args,"--data-root");
-            var root = IsSandbox ? Path.GetFullPath(e.Args[sandboxIndex + 1]) : dataRootIndex>=0?Path.GetFullPath(e.Args[dataRootIndex+1]):Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "DesktopNook");
-            var signature = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(root.ToUpperInvariant())))[..20];
-            if(IsSandbox)Options=new StartupOptions(@"Software\DesktopNook\Sandbox\"+signature+@"\Run",@"Software\DesktopNook\Sandbox\"+signature+@"\Settings",Path.Combine(root,"Data","preferences.json"));
-            else Options=new StartupOptions(preferencesPath:Path.Combine(root,"preferences.json"));
-            if(e.Args.Any(a=>a.StartsWith("--maintenance="))){Shutdown(Maintenance.Run(e.Args,root,signature,IsSandbox));return;}
+            bool maintenance=e.Args.Any(a=>a.StartsWith("--maintenance="));
+            var root = IsSandbox ? Path.GetFullPath(e.Args[sandboxIndex + 1]) : DataPaths.Select(e.Args,maintenance);
+            SandboxRoot=IsSandbox?root:null;
+            var dataDirectory=IsSandbox?(dataRootIndex>=0?Path.GetFullPath(e.Args[dataRootIndex+1]):Path.Combine(root,"Data")):root;
+            bool standard=!IsSandbox&&(dataRootIndex<0||DataPaths.IsInstalledData(root)||Path.GetFullPath(e.Args[dataRootIndex+1]).Equals(DataPaths.LegacyRoot,StringComparison.OrdinalIgnoreCase));
+            var signature = DataPaths.Signature(standard?DataPaths.LegacyRoot:root);
+            if(IsSandbox)Options=new StartupOptions(@"Software\DesktopNook\Sandbox\"+signature+@"\Run",@"Software\DesktopNook\Sandbox\"+signature+@"\Settings",Path.Combine(dataDirectory,"preferences.json"));
+            else Options=new StartupOptions(preferencesPath:Path.Combine(root,"preferences.json"),fileOnly:true);
+            if(maintenance){Shutdown(Maintenance.Run(e.Args,root,signature,IsSandbox));return;}
             _mutex = new Mutex(true, "Local\\DesktopNook-" + signature, out _ownsMutex);
             _activate = new EventWaitHandle(false, EventResetMode.AutoReset, "Local\\DesktopNook-Activate-" + signature);
             if (!_ownsMutex) { if(!e.Args.Contains("--autostart"))_activate.Set(); Shutdown(); return; }
+            var desktops = IsSandbox ? new[] { Path.Combine(root, "Desktop") } : new[] { Environment.GetFolderPath(Environment.SpecialFolder.DesktopDirectory), Environment.GetFolderPath(Environment.SpecialFolder.CommonDesktopDirectory) };
+            if(IsSandbox)Directory.CreateDirectory(desktops[0]);
+            Recycle=IsSandbox?new SandboxRecycle(root):new WindowsRecycleBin();
+            bool legacyHandoff=!IsSandbox&&e.Args.Contains("--resume-update")&&root.Equals(DataPaths.LegacyRoot,StringComparison.OrdinalIgnoreCase);
+            if(!IsSandbox&&!legacyHandoff&&standard)DataPaths.Prepare(root,desktops,Recycle);
             var resumeIndex=Array.IndexOf(e.Args,"--resume-update");
             if(resumeIndex>=0)
             {
                 var plan=System.Text.Json.JsonSerializer.Deserialize<UpdatePlan>(File.ReadAllText(e.Args[resumeIndex+1]))??throw new IOException("更新确认记录为空。");
-                var directory=IsSandbox?Path.Combine(root,"Data"):root;
+                var directory=dataDirectory;
                 if(!string.Equals(Path.GetFullPath(plan.DataRoot),Path.GetFullPath(directory),StringComparison.OrdinalIgnoreCase))throw new IOException("更新后的数据目录与原目录不一致，已停止启动。");
                 if(!string.IsNullOrEmpty(plan.StateFingerprint))
                 {
@@ -57,10 +69,7 @@ public partial class App : Application
                 if(plan.CloseEndsProcess is bool closing&&Options.CloseEndsProcess!=closing)throw new IOException("更新前后关闭偏好不一致，已停止启动并保留记录。");
             }
             Options.PersistForUpdate();
-            var desktops = IsSandbox ? new[] { Path.Combine(root, "Desktop") } : new[] { Environment.GetFolderPath(Environment.SpecialFolder.DesktopDirectory), Environment.GetFolderPath(Environment.SpecialFolder.CommonDesktopDirectory) };
-            if (IsSandbox) Directory.CreateDirectory(desktops[0]);
-            Recycle = IsSandbox ? new SandboxRecycle(root) : new WindowsRecycleBin();
-            Store = new NookStore(IsSandbox ? Path.Combine(root, "Data") : root, desktops, Recycle);
+            Store = new NookStore(dataDirectory, desktops, Recycle,storeAllPayloads:!IsSandbox||File.Exists(Path.Combine(dataDirectory,"storage.json")));
             UiMotion.Configure(Options.MotionMode);
             var window = new MainWindow(); MainWindow = window;
             if(!IsSandbox)Dispatcher.BeginInvoke(()=>{try{BrandMigration.Refresh(Store.DataDirectory);}catch(Exception){window.SetStatus("入口图标刷新未完成，可稍后重新打开轻匣重试。");}},System.Windows.Threading.DispatcherPriority.ContextIdle);
@@ -70,8 +79,10 @@ public partial class App : Application
             File.WriteAllLines(Path.Combine(root,"instance.pid"),[Environment.ProcessId.ToString(),Environment.ProcessPath??""]);
             _stop=new EventWaitHandle(false,EventResetMode.AutoReset,"Local\\DesktopNook-Stop-"+signature);
             ThreadPool.RegisterWaitForSingleObject(_stop,(_,_)=>Dispatcher.BeginInvoke(()=>window.QuitForMaintenance()),null,Timeout.Infinite,false);
+            if(!e.Args.Contains("--autostart"))_activate.WaitOne(0);
             ThreadPool.RegisterWaitForSingleObject(_activate, (_, _) => Dispatcher.BeginInvoke(() => window.TogglePanel()), null, Timeout.Infinite, false);
             var readyIndex=Array.IndexOf(e.Args,"--update-ready");if(readyIndex>=0)Dispatcher.BeginInvoke(()=>WriteUpdateReady(e.Args[readyIndex+1]),System.Windows.Threading.DispatcherPriority.Loaded);
+            if(legacyHandoff)Dispatcher.BeginInvoke(async()=>await RelocateAfterHandoff(window,e.Args[Array.IndexOf(e.Args,"--resume-update")+1]),System.Windows.Threading.DispatcherPriority.ContextIdle);
             DispatcherUnhandledException += (_, args) => { args.Handled = true; window.ShowFailure(args.Exception); };
             if (e.Args.Contains("--ui-self-test")) Dispatcher.BeginInvoke(async () => await NativeVerification.Run(window, root), System.Windows.Threading.DispatcherPriority.Loaded);
             if (e.Args.Contains("--motion-visibility-self-test")) Dispatcher.BeginInvoke(async () => await MotionVisibilityVerification.Run(window, root), System.Windows.Threading.DispatcherPriority.Loaded);
@@ -81,6 +92,33 @@ public partial class App : Application
             if (e.Args.Contains("--category-self-test")) Dispatcher.BeginInvoke(async () => await CategoryDeletionVerification.Run(window, root), System.Windows.Threading.DispatcherPriority.Loaded);
         }
         catch (Exception ex) { MessageBox.Show("轻匣暂时无法打开。原文件和数据均保留。\n\n" + ex.Message, "轻匣", MessageBoxButton.OK, MessageBoxImage.Error); Shutdown(1); }
+    }
+    private static async Task RelocateAfterHandoff(MainWindow window,string plan)
+    {
+        var helper=Path.Combine(Path.GetDirectoryName(Path.GetFullPath(plan))!,"DesktopNook.Updater.exe");
+        while(!window.Dispatcher.HasShutdownStarted)
+        {
+            bool running=ProcessHelperRunning(helper);
+            if(!running&&window.TryBeginStorageMove())break;
+            await Task.Delay(250);
+        }
+        if(window.Dispatcher.HasShutdownStarted)return;
+        try
+        {
+            window.SetStatus("正在将数据迁移到安装目录，原位置保留备份…");
+            string target=DataPaths.InstallationRoot;var desktops=Store.DesktopRoots.ToArray();
+            await Task.Run(()=>DataPaths.Prepare(target,desktops,Recycle));
+            Store=new NookStore(target,desktops,Recycle,storeAllPayloads:true);
+            Options=new StartupOptions(preferencesPath:Path.Combine(target,"preferences.json"),fileOnly:true);
+            File.WriteAllLines(Path.Combine(target,"instance.pid"),[Environment.ProcessId.ToString(),Environment.ProcessPath!]);
+            window.EndStorageMove();window.SetStatus("数据已迁移到安装目录，原位置保留备份");
+        }
+        catch(Exception ex){UiDialogs.Show(window,"数据迁移未完成，原目录和副本已保留。请退出后重开重试。\n"+ex.Message,"数据迁移");Application.Current.Shutdown(1);}
+    }
+    private static bool ProcessHelperRunning(string path)
+    {
+        foreach(var process in System.Diagnostics.Process.GetProcessesByName("DesktopNook.Updater"))using(process){try{if(string.Equals(process.MainModule?.FileName,path,StringComparison.OrdinalIgnoreCase))return true;}catch{}}
+        return false;
     }
     private static void WriteUpdateReady(string path)
     {

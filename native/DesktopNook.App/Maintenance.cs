@@ -25,14 +25,15 @@ internal static class Maintenance
             if(!owned)return 2;
             if(running is not null && !running.WaitForExit(10000))return 2;
             if(command=="stop")return 0;
-            var data=sandbox?Path.Combine(root,"Data"):root;
+            var explicitRoot=Array.IndexOf(args,"--data-root");
+            var data=sandbox?(explicitRoot>=0?Path.GetFullPath(args[explicitRoot+1]):Path.Combine(root,"Data")):root;
             if(command=="status")return 0;
             if(command!="restore"&&command!="verify-restored")return 3;
             var desktops=sandbox?new[]{Path.Combine(root,"Desktop")}:new[]{Environment.GetFolderPath(Environment.SpecialFolder.DesktopDirectory),Environment.GetFolderPath(Environment.SpecialFolder.CommonDesktopDirectory)};
             IRecycleBin bin=sandbox?new SandboxRecycle(root):new WindowsRecycleBin();
-            var store=new NookStore(data,desktops,bin);var failures=new List<string>();
+            var store=new NookStore(data,desktops,bin,storeAllPayloads:!sandbox);var failures=new List<string>();
             if(command=="verify-restored")return store.State.Items.Count==0?0:6;
-            foreach(var item in store.State.Items.ToArray()){try{store.Restore(item.Id,true);}catch(Exception ex){failures.Add(item.Name+": "+ex.Message);try{store=new(data,desktops,bin);}catch{break;}}}
+            foreach(var item in store.State.Items.ToArray()){try{store.Restore(item.Id,true);}catch(Exception ex){failures.Add(item.Name+": "+ex.Message);try{store=new(data,desktops,bin,storeAllPayloads:!sandbox);}catch{break;}}}
             File.WriteAllText(Path.Combine(data,"maintenance-report.json"),JsonSerializer.Serialize(new{remaining=store.State.Items.Count,failures},new JsonSerializerOptions{WriteIndented=true}));
             return store.State.Items.Count==0?0:4;
         }

@@ -14,6 +14,7 @@ public sealed class NookStore
     public string DataDirectory { get; }
     public IReadOnlyList<string> DesktopRoots => _desktops;
     public NookState State { get; private set; } = new();
+    public bool StoreAllPayloads {get;}
     public List<string> RecoveryMessages { get; } = [];
     private string StatePath => Path.Combine(DataDirectory, "state.json");
     private string JournalPath => Path.Combine(DataDirectory, "migration.json");
@@ -60,8 +61,9 @@ public sealed class NookStore
         if(!State.Categories.Any(c=>c.Id=="uncategorized")&&!UncategorizedRemoved())WriteAtomic(CategoryPolicyPath,new CategoryPolicy{UncategorizedRemoved=true},true);
     }
 
-    public NookStore(string dataDirectory, IEnumerable<string> desktopRoots, IRecycleBin recycle, Action<string>? checkpoint = null)
+    public NookStore(string dataDirectory, IEnumerable<string> desktopRoots, IRecycleBin recycle, Action<string>? checkpoint = null,bool storeAllPayloads=false)
     {
+        StoreAllPayloads=storeAllPayloads;
         DataDirectory = Path.GetFullPath(dataDirectory);
         _desktops = desktopRoots.Where(p => !string.IsNullOrWhiteSpace(p)).Select(Path.GetFullPath).Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
         if (_desktops.Length == 0) throw new ArgumentException("找不到可用桌面目录。");
@@ -83,9 +85,9 @@ public sealed class NookStore
     private static bool Exists(string path)=>File.Exists(path)||Directory.Exists(path);
     private string LocalPayload(NookItem item)=>Path.GetFullPath(Path.Combine(Path.GetDirectoryName(Path.GetDirectoryName(item.OriginalPath))!,".DesktopNookVault",item.Id,item.FileName));
     [DllImport("kernel32.dll",CharSet=CharSet.Unicode,SetLastError=true)]private static extern bool MoveFileExW(string source,string destination,uint flags);
-    private static void MovePayload(string source,string destination,bool folder)
+    private void MovePayload(string source,string destination,bool folder)
     {
-        if(OperatingSystem.IsWindows()){if(!MoveFileExW(source,destination,8)){var error=Marshal.GetLastWin32Error();throw new IOException(new System.ComponentModel.Win32Exception(error).Message,unchecked((int)(0x80070000u|(uint)error)));}}
+        if(OperatingSystem.IsWindows()){if(!MoveFileExW(source,destination,8)){var error=Marshal.GetLastWin32Error();if(error==17&&StoreAllPayloads){VerifiedContent.MoveAcrossVolumes(source,destination,_checkpoint);return;}throw new IOException(new System.ComponentModel.Win32Exception(error).Message,unchecked((int)(0x80070000u|(uint)error)));}}
         else if(folder)Directory.Move(source,destination);else File.Move(source,destination,false);
     }
     private string ItemDirectory(NookItem item)
@@ -113,6 +115,7 @@ public sealed class NookStore
         finally {if(readOnly)File.SetAttributes(destination,attributes);}
     }
     public static void CopyPreservingStreams(string source,string destination)=>CopyDurable(source,destination);
+    internal static void CopyNamedStreams(string source,string destination)=>WindowsStreams.Copy(source,destination);
     private bool IsDesktopPath(string path) => _desktops.Any(root => string.Equals(Path.GetDirectoryName(Path.GetFullPath(path)), root.TrimEnd(Path.DirectorySeparatorChar), StringComparison.OrdinalIgnoreCase));
     private static bool IsShortcut(string path) => new[] { ".lnk", ".url" }.Contains(Path.GetExtension(path), StringComparer.OrdinalIgnoreCase);
     private void ValidateItem(NookItem item)
@@ -247,6 +250,7 @@ public sealed class NookStore
     public NookItem Collect(string path, string categoryId)
     {
         CategoryExists(categoryId); path = Path.TrimEndingDirectorySeparator(Path.GetFullPath(path));
+        if(path.Equals(DataDirectory,StringComparison.OrdinalIgnoreCase)||DataDirectory.StartsWith(path+Path.DirectorySeparatorChar,StringComparison.OrdinalIgnoreCase)||path.StartsWith(DataDirectory+Path.DirectorySeparatorChar,StringComparison.OrdinalIgnoreCase)||path.Equals(Environment.ProcessPath,StringComparison.OrdinalIgnoreCase))throw new IOException("不能收纳正在运行的轻匣程序、数据目录或其上级目录。");
         if(Directory.Exists(path)||!IsShortcut(path))return CollectMutable(path,categoryId);
         if (!IsDesktopPath(path) || !IsShortcut(path)) throw new IOException("请选择桌面上的 .lnk 或 .url 快捷方式；程序本体、文档和文件夹不会被移动。");
         if (!File.Exists(path)) throw new FileNotFoundException("桌面入口已不存在。", path);

@@ -1,5 +1,5 @@
 {
-  "passed": 44,
+  "passed": 53,
   "failed": 0,
   "checks": [
     {
@@ -176,6 +176,42 @@
     },
     {
       "name": "Order record follows membership and never resurrects moved or removed entries",
+      "passed": true
+    },
+    {
+      "name": "Relocation preserves source, orders, preferences, empty folders and streams",
+      "passed": true
+    },
+    {
+      "name": "Interrupted relocation leaves original authoritative: storage-copied",
+      "passed": true
+    },
+    {
+      "name": "Interrupted relocation leaves original authoritative: storage-verified",
+      "passed": true
+    },
+    {
+      "name": "Relocation refuses existing targets and source changes",
+      "passed": true
+    },
+    {
+      "name": "Installation storage moves mutable files and folders across real volumes",
+      "passed": true
+    },
+    {
+      "name": "Interrupted cross-volume transfer retains complete source: cross-volume-copied",
+      "passed": true
+    },
+    {
+      "name": "Interrupted cross-volume transfer retains complete source: cross-volume-published",
+      "passed": true
+    },
+    {
+      "name": "External legacy content is copied inside new data and survives backup recovery",
+      "passed": true
+    },
+    {
+      "name": "Installation data cannot collect itself or copy recursively into itself",
       "passed": true
     }
   ]

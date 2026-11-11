@@ -48,7 +48,7 @@ internal static class LocalUpdater
         // Save metadata only; never duplicate or relocate managed user files/folders during updates.
         options?.PersistForUpdate();
         var metadata=Path.Combine(dir,"metadata-backup");Directory.CreateDirectory(metadata);
-        foreach(var name in new[]{"state.json","state.json.bak","item-order.json","item-order.json.bak","migration.json","category-policy.json","category-policy.json.bak","preferences.json","preferences.json.bak"}){var file=Path.Combine(dataRoot,name);if(File.Exists(file))File.Copy(file,Path.Combine(metadata,name),false);}
+        foreach(var name in new[]{"state.json","state.json.bak","item-order.json","item-order.json.bak","migration.json","category-policy.json","category-policy.json.bak","preferences.json","preferences.json.bak","storage.json"}){var file=Path.Combine(dataRoot,name);if(File.Exists(file))File.Copy(file,Path.Combine(metadata,name),false);}
         var vault=Path.Combine(dataRoot,"vault");if(Directory.Exists(vault))foreach(var folder in Directory.EnumerateDirectories(vault)){if(Guid.TryParseExact(Path.GetFileName(folder),"N",out _)&&File.Exists(Path.Combine(folder,"entry.json"))){var dest=Path.Combine(metadata,"vault",Path.GetFileName(folder));Directory.CreateDirectory(dest);File.Copy(Path.Combine(folder,"entry.json"),Path.Combine(dest,"entry.json"),false);}}
         var plan=new UpdatePlan{Target=target,Candidate=staged,CandidateHash=Hash(staged),PreviousHash=Hash(target),Version=candidate.Version.ToString(),DataRoot=Path.GetFullPath(dataRoot),Sandbox=sandbox,Installer=candidate.Installer,ProcessId=processId??Environment.ProcessId};
         if(state is not null)plan.StateFingerprint=Fingerprint(state);
@@ -83,7 +83,7 @@ internal static class LocalUpdater
                 using(key){if(string.Equals(key?.GetValue("InstallLocation") as string,Path.GetDirectoryName(plan.Target),StringComparison.OrdinalIgnoreCase))key!.SetValue("DisplayVersion",plan.Version);}
             }
             var start=new ProcessStartInfo(plan.Target){UseShellExecute=false,WorkingDirectory=Path.GetDirectoryName(plan.Target)!};
-            if(plan.Sandbox is not null){start.ArgumentList.Add("--sandbox");start.ArgumentList.Add(plan.Sandbox);}
+            if(plan.Sandbox is not null){start.ArgumentList.Add("--sandbox");start.ArgumentList.Add(plan.Sandbox);start.ArgumentList.Add("--data-root");start.ArgumentList.Add(plan.DataRoot);}
             else{start.ArgumentList.Add("--data-root");start.ArgumentList.Add(plan.DataRoot);}
             start.ArgumentList.Add("--resume-update");start.ArgumentList.Add(Path.GetFullPath(planPath));
             start.ArgumentList.Add("--update-ready");var ready=Path.Combine(directory,"ready.json");start.ArgumentList.Add(ready);

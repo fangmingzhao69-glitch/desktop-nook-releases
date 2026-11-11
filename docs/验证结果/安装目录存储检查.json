@@ -1,0 +1,15 @@
+{
+  "passed": 9,
+  "failure": "",
+  "checks": [
+    "Preference changes persist to files without updating legacy registry settings",
+    "Original directory remains an unchanged backup",
+    "Application reads explicitly relocated data while retaining sandbox desktop identity",
+    "Relocated close preference remains unchecked",
+    "Maintenance stops the relocated instance through the same instance identity",
+    "Application startup preserves category order in relocated storage",
+    "Updater preserves a relocated data-root override",
+    "Updated process confirms the relocated root instead of reopening the old backup",
+    "Update does not write back to the original backup"
+  ]
+}

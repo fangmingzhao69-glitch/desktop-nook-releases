@@ -7,12 +7,11 @@ internal static class CollectionRecovery
 {
     public static int Run(string reportDir,bool apply=false)
     {
-        Directory.CreateDirectory(reportDir);var root=Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),"DesktopNook");
+        Directory.CreateDirectory(reportDir);var root=DataPaths.Select([],true);
         var state=JsonSerializer.Deserialize<NookState>(File.ReadAllText(Path.Combine(root,"state.json")))!;
         if(apply)
         {
-            var backup=Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),"DesktopNook.BackupBeforeCatalogRecovery-"+Guid.NewGuid().ToString("N"));Directory.CreateDirectory(backup);
-            foreach(var file in Directory.EnumerateFiles(root,"*",new EnumerationOptions{RecurseSubdirectories=true,AttributesToSkip=FileAttributes.ReparsePoint})){var target=Path.Combine(backup,Path.GetRelativePath(root,file));Directory.CreateDirectory(Path.GetDirectoryName(target)!);NookStore.CopyPreservingStreams(file,target);}
+            var backup=Path.Combine(Path.GetDirectoryName(root)!,"Backups","BeforeCatalogRecovery-"+Guid.NewGuid().ToString("N"));VerifiedContent.Copy(root,backup);
             var map=JsonSerializer.Deserialize<Dictionary<string,string>>(File.ReadAllText(Path.Combine(reportDir,"category-map.json")))!;
             var recycle=new WindowsRecycleBin();var recycleBefore=recycle.Capture();File.WriteAllText(Path.Combine(reportDir,"recycle-before.json"),JsonSerializer.Serialize(recycleBefore));
             var store=new NookStore(root,[Environment.GetFolderPath(Environment.SpecialFolder.DesktopDirectory),Environment.GetFolderPath(Environment.SpecialFolder.CommonDesktopDirectory)],recycle);

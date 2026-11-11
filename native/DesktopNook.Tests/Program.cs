@@ -189,6 +189,62 @@ Test("Order record follows membership and never resurrects moved or removed entr
     Assert(store.OrderedItems("office").Select(i=>i.Id).SequenceEqual(new[]{a.Id,c.Id,b.Id}),"new and moved-back entries append without stale rank");
     store.ArchiveItem(c.Id);store=new(data,[desktop],bin);Assert(store.OrderedItems("office").Select(i=>i.Id).SequenceEqual(new[]{a.Id,b.Id}),"removed entry stays removed");
 });
+Test("Relocation preserves source, orders, preferences, empty folders and streams",root=>{
+    var(desktop,data,bin)=Setup(root);var old=new NookStore(data,[desktop],bin);
+    var a=old.Collect(FileAt(desktop,"a.lnk"),"office");var b=old.Collect(FileAt(desktop,"b.lnk"),"office");old.ReorderItems("office",[b.Id,a.Id]);old.DeleteCategory("uncategorized");
+    var folder=Path.Combine(desktop,"folder");Directory.CreateDirectory(Path.Combine(folder,"empty"));FileAt(folder,"entry.json","user JSON");FileAt(folder,"nested.txt","edited");
+    if(OperatingSystem.IsWindows())File.WriteAllText(Path.Combine(folder,"nested.txt")+":Zone.Identifier","zone");
+    var item=old.Collect(folder,"dev");File.WriteAllText(Path.Combine(data,"preferences.json"),"{\"CloseEndsProcess\":false,\"CollectView\":\"details\",\"MotionMode\":\"off\"}");
+    var before=VerifiedContent.Snapshot(data);var target=Path.Combine(root,"Installed","Data");
+    StorageRelocation.Migrate(data,target,[desktop],bin);var next=new NookStore(target,[desktop],bin,storeAllPayloads:true);
+    Assert(VerifiedContent.Equal(before,VerifiedContent.Snapshot(data)),"old directory unchanged");
+    Assert(next.OrderedItems("office").Select(i=>i.Id).SequenceEqual(new[]{b.Id,a.Id}),"order retained");
+    Assert(File.ReadAllText(Path.Combine(target,"preferences.json"))==File.ReadAllText(Path.Combine(data,"preferences.json")),"preferences exact");
+    Assert(VerifiedContent.Equal(VerifiedContent.Snapshot(old.ManagedPath(item)),VerifiedContent.Snapshot(next.ManagedPath(next.State.Items.Single(i=>i.Id==item.Id)))) ,"payload and ADS retained");
+    Assert(!next.State.Categories.Any(c=>c.Id=="uncategorized"),"deleted category retained");
+});
+foreach(var point in new[]{"storage-copied","storage-verified"})Test("Interrupted relocation leaves original authoritative: "+point,root=>{
+    var(desktop,data,bin)=Setup(root);var old=new NookStore(data,[desktop],bin);old.Collect(FileAt(desktop),"office");var before=VerifiedContent.Snapshot(data);var target=Path.Combine(root,"Installed","Data");
+    try{StorageRelocation.Migrate(data,target,[desktop],bin,p=>{if(p==point)throw new IOException("injected");});throw new Exception("did not interrupt");}catch(IOException){}
+    Assert(!Directory.Exists(target)&&VerifiedContent.Equal(before,VerifiedContent.Snapshot(data)),"no incomplete publication or source change");
+});
+Test("Relocation refuses existing targets and source changes",root=>{
+    var(desktop,data,bin)=Setup(root);var old=new NookStore(data,[desktop],bin);old.Collect(FileAt(desktop),"office");var target=Path.Combine(root,"Installed","Data");Directory.CreateDirectory(target);FileAt(target,"keep.txt","keep");
+    try{StorageRelocation.Migrate(data,target,[desktop],bin);throw new Exception("overwrote target");}catch(IOException){}Assert(File.ReadAllText(Path.Combine(target,"keep.txt"))=="keep","foreign target preserved");
+    target=Path.Combine(root,"Other","Data");try{StorageRelocation.Migrate(data,target,[desktop],bin,p=>{if(p=="storage-verified")FileAt(data,"new-content.txt","new");});throw new Exception("accepted source change");}catch(IOException){}
+    Assert(!Directory.Exists(target)&&File.ReadAllText(Path.Combine(data,"new-content.txt"))=="new","changed source retained");
+});
+Test("Installation storage moves mutable files and folders across real volumes",root=>{
+    var(desktop,unused,bin)=Setup(root);var data=Path.Combine(Environment.CurrentDirectory,"test-results","local-storage-"+Guid.NewGuid().ToString("N"));
+    var store=new NookStore(data,[desktop],bin,storeAllPayloads:true);var folder=Path.Combine(desktop,"Folder");Directory.CreateDirectory(Path.Combine(folder,"empty"));FileAt(folder,"entry.json","payload");
+    var file=FileAt(desktop,"document.txt","before");if(OperatingSystem.IsWindows()){File.WriteAllText(file+":Zone.Identifier","zone");File.WriteAllText(folder+":Folder.Info","directory stream");}
+    var f=store.Collect(folder,"office");var d=store.Collect(file,"dev");Assert(store.State.Items.All(i=>i.PayloadPath==""&&store.ManagedPath(i).StartsWith(data,StringComparison.OrdinalIgnoreCase)),"all primary content inside data");
+    if(OperatingSystem.IsWindows())Assert(File.ReadAllText(store.ManagedPath(d)+":Zone.Identifier")=="zone","collect preserved ADS");
+    using(var stream=new FileStream(store.ManagedPath(d),FileMode.Open,FileAccess.Write)){stream.SetLength(0);stream.Write(System.Text.Encoding.UTF8.GetBytes("after"));}store.Restore(f.Id);store.Restore(d.Id);
+    Assert(File.ReadAllText(file)=="after"&&File.ReadAllText(Path.Combine(folder,"entry.json"))=="payload"&&Directory.Exists(Path.Combine(folder,"empty")),"cross volume restore preserves edits and empty folders");
+    if(OperatingSystem.IsWindows())Assert(File.ReadAllText(file+":Zone.Identifier")=="zone"&&File.ReadAllText(folder+":Folder.Info")=="directory stream","cross volume ADS retained");
+});
+foreach(var point in new[]{"cross-volume-copied","cross-volume-published"})Test("Interrupted cross-volume transfer retains complete source: "+point,root=>{
+    var(desktop,unused,bin)=Setup(root);var data=Path.Combine(Environment.CurrentDirectory,"test-results","cross-safe-"+Guid.NewGuid().ToString("N"));var source=FileAt(desktop,"doc.txt","keep me");
+    var store=new NookStore(data,[desktop],bin,p=>{if(p==point)throw new IOException("injected");},storeAllPayloads:true);
+    try{store.Collect(source,"office");throw new Exception("did not interrupt");}catch(IOException){}
+    Assert(File.ReadAllText(source)=="keep me","source preserved");store=new(data,[desktop],bin,storeAllPayloads:true);
+    Assert(point=="cross-volume-copied"?store.State.Items.Count==0:store.State.Items.Count==1,"recover only a fully published payload");
+});
+Test("External legacy content is copied inside new data and survives backup recovery",root=>{
+    var desktop=Path.Combine(Environment.CurrentDirectory,"test-results","legacy-desktop-"+Guid.NewGuid().ToString("N"));Directory.CreateDirectory(desktop);var data=Path.Combine(root,"Legacy");var bin=new SimulatedRecycleBin();var old=new NookStore(data,[desktop],bin);
+    var folder=Path.Combine(desktop,"Folder");Directory.CreateDirectory(folder);FileAt(folder,"actual.txt","content");var item=old.Collect(folder,"office");Assert(!string.IsNullOrEmpty(item.PayloadPath),"test exercises external storage");
+    var original=old.ManagedPath(item);var target=Path.Combine(root,"Installed","Data");StorageRelocation.Migrate(data,target,[desktop],bin);
+    var next=new NookStore(target,[desktop],bin,storeAllPayloads:true);Assert(next.State.Items.Single().PayloadPath==""&&Directory.Exists(original),"original retained as backup");
+    File.WriteAllText(Path.Combine(target,"state.json"),"damaged");File.WriteAllText(Path.Combine(target,"state.json.bak"),"damaged");next=new(target,[desktop],bin,storeAllPayloads:true);
+    Assert(next.State.Items.Count==1&&next.ManagedPath(next.State.Items[0]).StartsWith(target,StringComparison.OrdinalIgnoreCase),"manifest recovery never falls back to old external file");
+});
+Test("Installation data cannot collect itself or copy recursively into itself",root=>{
+    var desktop=Path.Combine(root,"Desktop");Directory.CreateDirectory(desktop);var parent=Path.Combine(desktop,"Launcher");var data=Path.Combine(parent,"Data");var store=new NookStore(data,[desktop],new SimulatedRecycleBin(),storeAllPayloads:true);var before=VerifiedContent.Snapshot(data);
+    try{store.Collect(parent,"office");throw new Exception("collected data parent");}catch(IOException){}
+    try{VerifiedContent.Copy(data,Path.Combine(data,"nested"));throw new Exception("recursive copy accepted");}catch(IOException){}
+    Assert(VerifiedContent.Equal(before,VerifiedContent.Snapshot(data))&&!Directory.Exists(Path.Combine(data,"nested")),"self operations rejected before mutation");
+});
 var failed = results.Count(r => JsonSerializer.Serialize(r).Contains("\"passed\":false"));
 var output = args.FirstOrDefault() ?? Path.Combine(runRoot,"results.json");Directory.CreateDirectory(Path.GetDirectoryName(Path.GetFullPath(output))!);
 File.WriteAllText(output,JsonSerializer.Serialize(new{passed=results.Count-failed,failed,runRoot,checks=results},new JsonSerializerOptions{WriteIndented=true}));

@@ -2,6 +2,18 @@ using System.Runtime.InteropServices;
 namespace DesktopNook.Core;
 internal static class WindowsStreams
 {
+    internal static IEnumerable<string> Names(string file)
+    {
+        if(!OperatingSystem.IsWindows())yield break;
+        var handle=FindFirstStreamW(file,0,out var data,0);
+        if(handle==(IntPtr)(-1)){var error=Marshal.GetLastWin32Error();if(error is 38 or 1 or 50 or 87)yield break;throw new IOException("无法枚举附加流。",new System.ComponentModel.Win32Exception(error));}
+        try
+        {
+            do{if(data.Name!="::$DATA"){if(!data.Name.StartsWith(':')||!data.Name.EndsWith(":$DATA",StringComparison.Ordinal)||data.Name.Contains('\\')||data.Name.Contains('/'))throw new IOException("附加流名称无效。");yield return data.Name;}}while(FindNextStreamW(handle,out data));
+            var last=Marshal.GetLastWin32Error();if(last!=38)throw new IOException("附加流枚举未完成。",new System.ComponentModel.Win32Exception(last));
+        }
+        finally{FindClose(handle);}
+    }
     [StructLayout(LayoutKind.Sequential,CharSet=CharSet.Unicode)]private struct StreamData{public long Size;[MarshalAs(UnmanagedType.ByValTStr,SizeConst=296)]public string Name;}
     [DllImport("kernel32.dll",CharSet=CharSet.Unicode,SetLastError=true)]private static extern IntPtr FindFirstStreamW(string file,int level,out StreamData data,int flags);
     [DllImport("kernel32.dll",CharSet=CharSet.Unicode,SetLastError=true)]private static extern bool FindNextStreamW(IntPtr handle,out StreamData data);

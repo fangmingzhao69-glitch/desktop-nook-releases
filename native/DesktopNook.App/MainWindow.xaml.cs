@@ -80,6 +80,9 @@ public partial class MainWindow : Window
     private void OnMinimizeButton(object sender,RoutedEventArgs e)=>BeginHidePanel();
     public void Quit() { _idleRelease.Stop();FinishPanelMotion();_shutter.ReleaseBuffer();UiMotion.CancelAll();_allowExit=true; Application.Current.Shutdown(); }
     internal void QuitForMaintenance(){if(!_dragging&&_interactions==0)Quit();}
+    private bool _storageMoving;
+    internal bool TryBeginStorageMove(){if(_dragging||_interactions>0||_menus>0||_onlineBusy)return false;_storageMoving=true;_interactions++;IsEnabled=false;return true;}
+    internal void EndStorageMove(){_storageMoving=false;_interactions--;IsEnabled=true;Render();}
     public void SetStatus(string message) { _shutter.InvalidateSnapshot();Status.Text=message;Status.ToolTip=message; }
     public void Render()
     {
@@ -109,6 +112,7 @@ public partial class MainWindow : Window
     private static SolidColorBrush Brush(string color) => new((Color)ColorConverter.ConvertFromString(color));
     private bool Run(Action action,string? message=null)
     {
+        if(_storageMoving)return false;
         try { FinishPanelMotion();action();Render();if(message is not null)SetStatus(message);return true; }
         catch(Exception ex) { ShowFailure(ex);return false; }
     }
@@ -121,6 +125,7 @@ public partial class MainWindow : Window
     }
     private void OnCollect(object sender,RoutedEventArgs e)
     {
+        if(_storageMoving)return;
         FinishPanelMotion();
         _interactions++;
         try
@@ -208,7 +213,7 @@ public partial class MainWindow : Window
             var picker=new Microsoft.Win32.OpenFileDialog{Title="选择轻匣新版本",Filter="轻匣程序或安装包 (*.exe)|*.exe",CheckFileExists=true};if(picker.ShowDialog(this)!=true)return;
             var source=picker.FileName;var target=Environment.ProcessPath!;var candidate=await Task.Run(()=>LocalUpdater.Inspect(source));
             if(UiDialogs.ShowUpdate(this,"当前版本："+CurrentVersionLabel+"\n更新到：v"+candidate.Version.ToString(3)+"\n\n程序会在原位置更新，保留分类、收纳内容和设置，完成后自动打开。","更新轻匣",MessageBoxButton.OKCancel)!=MessageBoxResult.OK)return;
-            SetStatus("正在准备更新…");var staged=await Task.Run(()=>LocalUpdater.Stage(source,target,Store.DataDirectory,App.IsSandbox?Path.GetDirectoryName(Store.DataDirectory):null,options:App.Options,state:Store.State));
+            SetStatus("正在准备更新…");var staged=await Task.Run(()=>LocalUpdater.Stage(source,target,Store.DataDirectory,App.IsSandbox?App.SandboxRoot:null,options:App.Options,state:Store.State));
             var helper=new ProcessStartInfo(staged.Helper){UseShellExecute=false,CreateNoWindow=true};helper.ArgumentList.Add("--apply-update");helper.ArgumentList.Add(staged.Plan);Process.Start(helper);Quit();
         }
         catch(Exception ex){ShowFailure(ex);}
@@ -234,7 +239,7 @@ public partial class MainWindow : Window
             var download=new UpdateDownloadWindow(this,_latestRelease,Store.DataDirectory);
             if(download.ShowDialog()!=true||download.DownloadedFile is null)return;
             SetStatus("正在准备更新…");
-            var staged=await Task.Run(()=>LocalUpdater.Stage(download.DownloadedFile,Environment.ProcessPath!,Store.DataDirectory,App.IsSandbox?Path.GetDirectoryName(Store.DataDirectory):null,options:App.Options,state:Store.State));
+            var staged=await Task.Run(()=>LocalUpdater.Stage(download.DownloadedFile,Environment.ProcessPath!,Store.DataDirectory,App.IsSandbox?App.SandboxRoot:null,options:App.Options,state:Store.State));
             using(var plan=System.Text.Json.JsonDocument.Parse(File.ReadAllText(staged.Plan)))
                 if(!plan.RootElement.GetProperty("CandidateHash").GetString()!.Equals(_latestRelease.Sha256,StringComparison.OrdinalIgnoreCase))throw new IOException("更新文件校验失败，请重新下载。");
             var helper=new ProcessStartInfo(staged.Helper){UseShellExecute=false,CreateNoWindow=true};helper.ArgumentList.Add("--apply-update");helper.ArgumentList.Add(staged.Plan);

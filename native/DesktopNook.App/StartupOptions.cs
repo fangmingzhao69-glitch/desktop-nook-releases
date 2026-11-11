@@ -4,7 +4,7 @@ using System.Text.Json;
 using System.Text.Json.Serialization;
 
 namespace DesktopNook.App;
-internal sealed class StartupOptions(string runKey = @"Software\Microsoft\Windows\CurrentVersion\Run",string settingsKey = @"Software\DesktopNook\Settings",string? preferencesPath=null)
+internal sealed class StartupOptions(string runKey = @"Software\Microsoft\Windows\CurrentVersion\Run",string settingsKey = @"Software\DesktopNook\Settings",string? preferencesPath=null,bool fileOnly=false)
 {
     private sealed class Preferences {public bool? CloseEndsProcess {get;set;} public WindowSizePreference? WindowSize {get;set;} [JsonIgnore(Condition=JsonIgnoreCondition.WhenWritingNull)]public string? CollectView {get;set;} [JsonIgnore(Condition=JsonIgnoreCondition.WhenWritingNull)]public string? MotionMode {get;set;}}
     private Preferences? ReadPreferences()
@@ -28,30 +28,30 @@ internal sealed class StartupOptions(string runKey = @"Software\Microsoft\Window
         }
         finally{if(File.Exists(temp))File.Delete(temp);}
     }
-    private string? SavedCollectView {get{var saved=ReadPreferences()?.CollectView;if(saved is "icons" or "details")return saved;using var key=Registry.CurrentUser.OpenSubKey(settingsKey);return key?.GetValue("CollectView") as string;}}
-    private string? SavedMotionMode {get{var saved=ReadPreferences()?.MotionMode;if(saved is "system" or "on" or "off")return saved;using var key=Registry.CurrentUser.OpenSubKey(settingsKey);return key?.GetValue("MotionMode") as string;}}
+    private string? SavedCollectView {get{var saved=ReadPreferences()?.CollectView;if(saved is "icons" or "details")return saved;if(fileOnly&&ReadPreferences() is not null)return null;using var key=Registry.CurrentUser.OpenSubKey(settingsKey);return key?.GetValue("CollectView") as string;}}
+    private string? SavedMotionMode {get{var saved=ReadPreferences()?.MotionMode;if(saved is "system" or "on" or "off")return saved;if(fileOnly&&ReadPreferences() is not null)return null;using var key=Registry.CurrentUser.OpenSubKey(settingsKey);return key?.GetValue("MotionMode") as string;}}
     private Preferences Snapshot()=>new(){CloseEndsProcess=CloseEndsProcess,WindowSize=ReadWindowSize(),CollectView=SavedCollectView,MotionMode=SavedMotionMode};
     internal string MotionMode
     {
         get=>SavedMotionMode is "on" or "off"?SavedMotionMode:"system";
-        set{if(value is not ("system" or "on" or "off"))throw new ArgumentException("无效动画设置。");var preferences=Snapshot();preferences.MotionMode=value;SavePreferences(preferences);using var key=Registry.CurrentUser.CreateSubKey(settingsKey,true);key.SetValue("MotionMode",value);key.Flush();}
+        set{if(value is not ("system" or "on" or "off"))throw new ArgumentException("无效动画设置。");var preferences=Snapshot();preferences.MotionMode=value;SavePreferences(preferences);if(fileOnly)return;using var key=Registry.CurrentUser.CreateSubKey(settingsKey,true);key.SetValue("MotionMode",value);key.Flush();}
     }
     internal string DefaultCollectView
     {
         get=>SavedCollectView=="details"?"details":"icons";
-        set{if(value is not ("icons" or "details"))throw new ArgumentException("无效的添加视图。");var preferences=Snapshot();preferences.CollectView=value;SavePreferences(preferences);using var key=Registry.CurrentUser.CreateSubKey(settingsKey,true);key.SetValue("CollectView",value);key.Flush();}
+        set{if(value is not ("icons" or "details"))throw new ArgumentException("无效的添加视图。");var preferences=Snapshot();preferences.CollectView=value;SavePreferences(preferences);if(fileOnly)return;using var key=Registry.CurrentUser.CreateSubKey(settingsKey,true);key.SetValue("CollectView",value);key.Flush();}
     }
     internal void PersistForUpdate()=>SavePreferences(Snapshot());
     private const string ValueName="DesktopNook";
     internal WindowSizePreference ReadWindowSize()
     {
-        if(ReadPreferences()?.WindowSize is WindowSizePreference saved)return saved.Validated();
+        if(ReadPreferences()?.WindowSize is WindowSizePreference saved)return saved.Validated();if(fileOnly&&ReadPreferences() is not null)return new();
         try{using var key=Registry.CurrentUser.OpenSubKey(settingsKey);return (System.Text.Json.JsonSerializer.Deserialize<WindowSizePreference>(key?.GetValue("WindowSize") as string??"{}")??new()).Validated();}catch{return new();}
     }
-    internal void WriteWindowSize(WindowSizePreference value){var preferences=Snapshot();preferences.WindowSize=value.Validated();SavePreferences(preferences);using var key=Registry.CurrentUser.CreateSubKey(settingsKey,true);key.SetValue("WindowSize",System.Text.Json.JsonSerializer.Serialize(value.Validated()),RegistryValueKind.String);key.Flush();}
+    internal void WriteWindowSize(WindowSizePreference value){var preferences=Snapshot();preferences.WindowSize=value.Validated();SavePreferences(preferences);if(fileOnly)return;using var key=Registry.CurrentUser.CreateSubKey(settingsKey,true);key.SetValue("WindowSize",System.Text.Json.JsonSerializer.Serialize(value.Validated()),RegistryValueKind.String);key.Flush();}
     public bool Enabled {get{using var key=Registry.CurrentUser.OpenSubKey(runKey);return key?.GetValue(ValueName) is string value&&!string.IsNullOrWhiteSpace(value);}}
     public string? Command {get{using var key=Registry.CurrentUser.OpenSubKey(runKey);return key?.GetValue(ValueName) as string;}}
-    public bool CloseEndsProcess {get{if(ReadPreferences()?.CloseEndsProcess is bool saved)return saved;using var key=Registry.CurrentUser.OpenSubKey(settingsKey);return key?.GetValue("CloseEndsProcess") is not int value || value!=0;}set{var preferences=Snapshot();preferences.CloseEndsProcess=value;SavePreferences(preferences);using var key=Registry.CurrentUser.CreateSubKey(settingsKey,true);key.SetValue("CloseEndsProcess",value?1:0,RegistryValueKind.DWord);key.Flush();}}
+    public bool CloseEndsProcess {get{if(ReadPreferences()?.CloseEndsProcess is bool saved)return saved;if(fileOnly&&ReadPreferences() is not null)return true;using var key=Registry.CurrentUser.OpenSubKey(settingsKey);return key?.GetValue("CloseEndsProcess") is not int value || value!=0;}set{var preferences=Snapshot();preferences.CloseEndsProcess=value;SavePreferences(preferences);if(fileOnly)return;using var key=Registry.CurrentUser.CreateSubKey(settingsKey,true);key.SetValue("CloseEndsProcess",value?1:0,RegistryValueKind.DWord);key.Flush();}}
     public void SetEnabled(bool enabled,string? executable=null)
     {
         using var key=Registry.CurrentUser.CreateSubKey(runKey,true);
