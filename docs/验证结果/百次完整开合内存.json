@@ -1,0 +1,56 @@
+{
+  "variant": "on-100",
+  "cycles": 100,
+  "items": 58,
+  "categories": 7,
+  "samples": [
+    {
+      "stage": "startup-minimized",
+      "privateWorkingSet": 49741824,
+      "workingSet": 136921088,
+      "private": 75800576,
+      "handles": 668,
+      "cpuMs": 2000.0
+    },
+    {
+      "stage": "first-open",
+      "privateWorkingSet": 94212096,
+      "workingSet": 219996160,
+      "private": 136560640,
+      "handles": 1168,
+      "cpuMs": 3734.375
+    },
+    {
+      "stage": "after-100-cycles-open",
+      "privateWorkingSet": 98115584,
+      "workingSet": 228769792,
+      "private": 218488832,
+      "handles": 1157,
+      "cpuMs": 27843.75
+    },
+    {
+      "stage": "idle-minimized-3s",
+      "privateWorkingSet": 96333824,
+      "workingSet": 225206272,
+      "private": 216702976,
+      "handles": 1157,
+      "cpuMs": 27953.125
+    },
+    {
+      "stage": "idle-minimized-6s",
+      "privateWorkingSet": 94560256,
+      "workingSet": 223567872,
+      "private": 182181888,
+      "handles": 1150,
+      "cpuMs": 28078.125
+    },
+    {
+      "stage": "idle-minimized-15s",
+      "privateWorkingSet": 88223744,
+      "workingSet": 217231360,
+      "private": 121434112,
+      "handles": 1147,
+      "cpuMs": 28078.125
+    }
+  ]
+}

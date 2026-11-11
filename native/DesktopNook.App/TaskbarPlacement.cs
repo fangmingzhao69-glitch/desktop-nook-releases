@@ -24,6 +24,9 @@ internal static class TaskbarPlacement
     [DllImport("user32.dll",EntryPoint="SetWindowLongPtrW")]private static extern IntPtr SetWindowLongPtr(IntPtr h,int index,IntPtr value);
     public static void EnableToggle(Window window){var h=new WindowInteropHelper(window).Handle;SetWindowLongPtr(h,-16,(IntPtr)(GetWindowLongPtr(h,-16).ToInt64()|0x20000));SetWindowPos(h,IntPtr.Zero,0,0,0,0,0x37);}
     private static readonly object Gate=new();private static Task<TaskbarAnchor?>? _pending;
+    private static long _freshUntil;
+    private static int _generation;
+    internal static void Invalidate(){lock(Gate){_generation++;_pending=null;_freshUntil=0;Cached=null;}}
     public static TaskbarAnchor? Cached { get; private set; }
     public static bool PointerOverButton(){GetCursorPos(out var p);return Cached?.Button.Contains(new System.Windows.Point(p.X,p.Y))==true;}
     private static List<IntPtr> Trays()
@@ -46,11 +49,15 @@ internal static class TaskbarPlacement
     }
     public static async Task<TaskbarAnchor?> FindAsync()
     {
-        Task<TaskbarAnchor?> task;
-        lock(Gate){if(_pending is null || _pending.IsCompleted)_pending=Task.Run(Find);task=_pending;}
+        Task<TaskbarAnchor?> task;int generation;
+        lock(Gate)
+        {
+            if(Cached is not null&&Environment.TickCount64<_freshUntil)return Cached;
+            if(_pending is null || _pending.IsCompleted)_pending=Task.Run(Find);task=_pending;generation=_generation;
+        }
         // UI Automation runs outside the WPF thread and must never block opening the panel.
         if(await Task.WhenAny(task,Task.Delay(700))!=task)return null;
-        var result=await task;if(result is not null)Cached=result;return result;
+        var result=await task;lock(Gate){if(generation!=_generation)return null;if(result is not null){Cached=result;_freshUntil=Environment.TickCount64+500;}return result;}
     }
     private static TaskbarAnchor? Find()
     {
@@ -60,10 +67,13 @@ internal static class TaskbarPlacement
             foreach(var tray in Trays())
             {
                 var root=AutomationElement.FromHandle(tray);
-                var elements=root.FindAll(TreeScope.Descendants,System.Windows.Automation.Condition.TrueCondition);
+                var cache=new CacheRequest{TreeScope=TreeScope.Element,AutomationElementMode=AutomationElementMode.None};
+                foreach(var property in new[]{AutomationElement.AutomationIdProperty,AutomationElement.NameProperty,AutomationElement.ControlTypeProperty,AutomationElement.BoundingRectangleProperty,AutomationElement.IsOffscreenProperty})cache.Add(property);
+                using var scope=cache.Activate();
+                var elements=root.FindAll(TreeScope.Descendants,new OrCondition(new PropertyCondition(AutomationElement.ControlTypeProperty,ControlType.Button),new PropertyCondition(AutomationElement.ControlTypeProperty,ControlType.ListItem)));
                 foreach(AutomationElement element in elements)
                 {
-                    var info=element.Current;
+                    var info=element.Cached;
                     if(!info.AutomationId.Contains("DesktopNook.DesktopNook",StringComparison.OrdinalIgnoreCase) && !info.Name.Contains("轻匣",StringComparison.OrdinalIgnoreCase) && !info.Name.Contains("桌面小筑",StringComparison.OrdinalIgnoreCase))continue;
                     if(info.ControlType!=ControlType.Button && info.ControlType!=ControlType.ListItem)continue;
                     var bounds=info.BoundingRectangle;if(bounds.IsEmpty || bounds.Width<5 || bounds.Height<5 || info.IsOffscreen)continue;

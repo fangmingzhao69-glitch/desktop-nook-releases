@@ -1,0 +1,298 @@
+{
+  "baselineVersion": "0.12.11",
+  "candidateVersion": "0.12.12",
+  "scenario": "Fresh processes, 58 synthetic URL icons, 7 categories, motion on, 10 full cycles, sample 15 seconds after final minimize; taskbar discovery bypassed equally via keep-open-verification",
+  "metric": "PROCESS_MEMORY_COUNTERS_EX2.PrivateWorkingSetSize",
+  "baseline": [
+    {
+      "variant": "on-1",
+      "cycles": 10,
+      "items": 58,
+      "categories": 7,
+      "samples": [
+        {
+          "stage": "startup-minimized",
+          "privateWorkingSet": 53764096,
+          "workingSet": 151433216,
+          "private": 82702336,
+          "handles": 805,
+          "cpuMs": 3531.25
+        },
+        {
+          "stage": "first-open",
+          "privateWorkingSet": 94912512,
+          "workingSet": 220590080,
+          "private": 157011968,
+          "handles": 1139,
+          "cpuMs": 4578.125
+        },
+        {
+          "stage": "after-10-cycles-open",
+          "privateWorkingSet": 108560384,
+          "workingSet": 237318144,
+          "private": 258990080,
+          "handles": 1144,
+          "cpuMs": 8328.125
+        },
+        {
+          "stage": "idle-minimized-3s",
+          "privateWorkingSet": 99590144,
+          "workingSet": 226570240,
+          "private": 222294016,
+          "handles": 1144,
+          "cpuMs": 8453.125
+        },
+        {
+          "stage": "idle-minimized-6s",
+          "privateWorkingSet": 99528704,
+          "workingSet": 226512896,
+          "private": 222212096,
+          "handles": 1141,
+          "cpuMs": 8468.75
+        },
+        {
+          "stage": "idle-minimized-15s",
+          "privateWorkingSet": 99459072,
+          "workingSet": 226467840,
+          "private": 222089216,
+          "handles": 1136,
+          "cpuMs": 8500.0
+        }
+      ]
+    },
+    {
+      "variant": "on-2",
+      "cycles": 10,
+      "items": 58,
+      "categories": 7,
+      "samples": [
+        {
+          "stage": "startup-minimized",
+          "privateWorkingSet": 53645312,
+          "workingSet": 151347200,
+          "private": 83124224,
+          "handles": 825,
+          "cpuMs": 3859.375
+        },
+        {
+          "stage": "first-open",
+          "privateWorkingSet": 94507008,
+          "workingSet": 220381184,
+          "private": 154660864,
+          "handles": 1163,
+          "cpuMs": 4890.625
+        },
+        {
+          "stage": "after-10-cycles-open",
+          "privateWorkingSet": 114692096,
+          "workingSet": 260608000,
+          "private": 259428352,
+          "handles": 1299,
+          "cpuMs": 8390.625
+        },
+        {
+          "stage": "idle-minimized-3s",
+          "privateWorkingSet": 116531200,
+          "workingSet": 260698112,
+          "private": 305446912,
+          "handles": 1299,
+          "cpuMs": 8515.625
+        },
+        {
+          "stage": "idle-minimized-6s",
+          "privateWorkingSet": 116473856,
+          "workingSet": 260509696,
+          "private": 273068032,
+          "handles": 1296,
+          "cpuMs": 8515.625
+        },
+        {
+          "stage": "idle-minimized-15s",
+          "privateWorkingSet": 116203520,
+          "workingSet": 260243456,
+          "private": 273014784,
+          "handles": 1294,
+          "cpuMs": 8515.625
+        }
+      ]
+    },
+    {
+      "variant": "on-3",
+      "cycles": 10,
+      "items": 58,
+      "categories": 7,
+      "samples": [
+        {
+          "stage": "startup-minimized",
+          "privateWorkingSet": 53592064,
+          "workingSet": 150986752,
+          "private": 82780160,
+          "handles": 817,
+          "cpuMs": 4390.625
+        },
+        {
+          "stage": "first-open",
+          "privateWorkingSet": 95232000,
+          "workingSet": 220758016,
+          "private": 157425664,
+          "handles": 1151,
+          "cpuMs": 5515.625
+        },
+        {
+          "stage": "after-10-cycles-open",
+          "privateWorkingSet": 109867008,
+          "workingSet": 239140864,
+          "private": 265596928,
+          "handles": 1158,
+          "cpuMs": 9343.75
+        },
+        {
+          "stage": "idle-minimized-3s",
+          "privateWorkingSet": 100925440,
+          "workingSet": 228425728,
+          "private": 256593920,
+          "handles": 1158,
+          "cpuMs": 9500.0
+        },
+        {
+          "stage": "idle-minimized-6s",
+          "privateWorkingSet": 100864000,
+          "workingSet": 228368384,
+          "private": 172949504,
+          "handles": 1155,
+          "cpuMs": 9500.0
+        },
+        {
+          "stage": "idle-minimized-15s",
+          "privateWorkingSet": 100794368,
+          "workingSet": 228315136,
+          "private": 172822528,
+          "handles": 1152,
+          "cpuMs": 9515.625
+        }
+      ]
+    }
+  ],
+  "candidate": [
+    {
+      "variant": "on-2",
+      "cycles": 10,
+      "items": 58,
+      "categories": 7,
+      "samples": [
+        {
+          "stage": "startup-minimized",
+          "privateWorkingSet": 49201152,
+          "workingSet": 136396800,
+          "private": 75952128,
+          "handles": 672,
+          "cpuMs": 1953.125
+        },
+        {
+          "stage": "first-open",
+          "privateWorkingSet": 94199808,
+          "workingSet": 217260032,
+          "private": 141402112,
+          "handles": 1127,
+          "cpuMs": 3781.25
+        },
+        {
+          "stage": "after-10-cycles-open",
+          "privateWorkingSet": 95363072,
+          "workingSet": 223932416,
+          "private": 212885504,
+          "handles": 1152,
+          "cpuMs": 7515.625
+        },
+        {
+          "stage": "idle-minimized-3s",
+          "privateWorkingSet": 93634560,
+          "workingSet": 220426240,
+          "private": 200937472,
+          "handles": 1152,
+          "cpuMs": 7656.25
+        },
+        {
+          "stage": "idle-minimized-6s",
+          "privateWorkingSet": 90304512,
+          "workingSet": 217337856,
+          "private": 196513792,
+          "handles": 1143,
+          "cpuMs": 7734.375
+        },
+        {
+          "stage": "idle-minimized-15s",
+          "privateWorkingSet": 82898944,
+          "workingSet": 209948672,
+          "private": 116625408,
+          "handles": 1140,
+          "cpuMs": 7734.375
+        }
+      ]
+    },
+    {
+      "variant": "on-2",
+      "cycles": 10,
+      "items": 58,
+      "categories": 7,
+      "samples": [
+        {
+          "stage": "startup-minimized",
+          "privateWorkingSet": 50155520,
+          "workingSet": 137248768,
+          "private": 76058624,
+          "handles": 670,
+          "cpuMs": 2218.75
+        },
+        {
+          "stage": "first-open",
+          "privateWorkingSet": 93769728,
+          "workingSet": 217112576,
+          "private": 140148736,
+          "handles": 1152,
+          "cpuMs": 4093.75
+        },
+        {
+          "stage": "after-10-cycles-open",
+          "privateWorkingSet": 97853440,
+          "workingSet": 225394688,
+          "private": 221540352,
+          "handles": 1151,
+          "cpuMs": 7421.875
+        },
+        {
+          "stage": "idle-minimized-3s",
+          "privateWorkingSet": 99708928,
+          "workingSet": 225619968,
+          "private": 201814016,
+          "handles": 1151,
+          "cpuMs": 7531.25
+        },
+        {
+          "stage": "idle-minimized-6s",
+          "privateWorkingSet": 101699584,
+          "workingSet": 228675584,
+          "private": 215265280,
+          "handles": 1153,
+          "cpuMs": 7984.375
+        },
+        {
+          "stage": "idle-minimized-15s",
+          "privateWorkingSet": 96489472,
+          "workingSet": 223678464,
+          "private": 177659904,
+          "handles": 1138,
+          "cpuMs": 8093.75
+        }
+      ]
+    }
+  ],
+  "privateWorkingSetMeanMiB": {
+    "baseline": 100.59895833333333,
+    "candidate": 85.5390625,
+    "reductionPercent": 14.970230390887906
+  },
+  "target20PercentConsistentlyMet": false,
+  "forcedGc": false,
+  "workingSetTrimmed": false
+}

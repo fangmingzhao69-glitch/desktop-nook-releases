@@ -26,6 +26,7 @@ internal sealed record WindowSizePreference
 
 public partial class MainWindow
 {
+    internal const double ContentScale=1.12;
     private WindowSizePreference _sizePreference=new();
     private bool _resizing;
     private Point _resizePointer;
@@ -69,6 +70,7 @@ public partial class MainWindow
     }
     internal void SelectWindowSize(double? preset=null,bool? locked=null,bool reset=false)
     {
+        _shutter.InvalidateSnapshot();
         _sizePreference=reset?new():preset is double zoom?new(){Zoom=zoom}:_sizePreference with
         {Free=true,Locked=locked??_sizePreference.Locked,Width=ActualWidth>0?ActualWidth:Width,Height=ActualHeight>0?ActualHeight:Height};
         _sizePreference=_sizePreference.Validated();
@@ -93,8 +95,8 @@ public partial class MainWindow
         if(Surface is null||ResizeHandles is null)return;
         // Every mode changes the viewport, never the icon/text scale. Aspect lock
         // constrains the window shape only; available space controls row/column count.
-        Surface.Width=Math.Max(1,(ActualWidth>0?ActualWidth:Width)/1.12);
-        Surface.Height=Math.Max(1,(ActualHeight>0?ActualHeight:Height)/1.12);
+        Surface.Width=Math.Max(1,(ActualWidth>0?ActualWidth:Width)/ContentScale);
+        Surface.Height=Math.Max(1,(ActualHeight>0?ActualHeight:Height)/ContentScale);
         IconColumns=Math.Clamp((int)Math.Floor((Surface.Width-56)/(584d/6)),3,30);
         foreach(var panel in FindVisualChildren<UniformGrid>(Icons))panel.Columns=IconColumns;
         ResizeHandles.Visibility=_sizePreference.Free?Visibility.Visible:Visibility.Collapsed;

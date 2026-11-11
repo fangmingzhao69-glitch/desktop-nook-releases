@@ -1,18 +1,18 @@
 {
   "cyclesPerMode": 100,
   "on": {
-    "elapsedMs": 1795,
-    "cpuMs": 1968.75,
-    "privateBefore": 296644608,
-    "privateAfter": 298815488,
+    "elapsedMs": 1327,
+    "cpuMs": 625,
+    "privateBefore": 269922304,
+    "privateAfter": 275841024,
     "idleSampleMs": 500,
     "idleCpuMs": 0
   },
   "off": {
-    "elapsedMs": 5602,
-    "cpuMs": 3203.125,
-    "privateBefore": 298684416,
-    "privateAfter": 194830336,
+    "elapsedMs": 5354,
+    "cpuMs": 2421.875,
+    "privateBefore": 269291520,
+    "privateAfter": 262053888,
     "idleSampleMs": 500,
     "idleCpuMs": 0
   },

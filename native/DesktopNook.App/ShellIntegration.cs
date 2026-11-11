@@ -39,6 +39,10 @@ internal static class ShellIntegration
         private readonly LinkedList<string> _recent=new();
         internal long Bytes {get;private set;}
         internal int Count {get{lock(_gate)return _images.Count;}}
+        internal void Trim(long bytes=2L*1024*1024,int count=64)
+        {
+            lock(_gate)while(Bytes>bytes||_images.Count>count){var first=_recent.First!;Bytes-=_images[first.Value].Bytes;_images.Remove(first.Value);_recent.RemoveFirst();}
+        }
         internal bool TryGetValue(string key,out ImageSource image)
         {
             lock(_gate){if(_images.TryGetValue(key,out var entry)){_recent.Remove(entry.Node);_recent.AddLast(entry.Node);image=entry.Image;return true;}image=null!;return false;}
@@ -55,12 +59,21 @@ internal static class ShellIntegration
         }
     }
     private static readonly IconCache Icons=new();
+    private static readonly object IconGate=new();
+    private static int _iconGeneration;
+    internal static int IconGeneration=>System.Threading.Volatile.Read(ref _iconGeneration);
+    internal static long CachedIconBytes=>Icons.Bytes;
+    internal static int CachedIconCount=>Icons.Count;
+    internal static void TrimIdleIcons()
+    {
+        lock(IconGate){_iconGeneration++;Icons.Trim();Loading.Clear();while(IconJobs.TryTake(out _)){} }
+    }
     private static readonly System.Collections.Concurrent.ConcurrentDictionary<string,bool> Loading=new();
-    public static event Action<string,int,ImageSource>? IconReady;
+    public static event Action<string,int,ImageSource,int>? IconReady;
     internal static IntPtr VerificationDesktopHandle { get; set; }
     public static void SetAppId(string id) => Marshal.ThrowExceptionForHR(SetCurrentProcessExplicitAppUserModelID(id));
     public static ImageSource AppIcon { get; } = new BitmapImage(new Uri("pack://application:,,,/Assets/AppIcon.png"));
-    private static readonly System.Collections.Concurrent.BlockingCollection<(string Path,string Key,int Pixels)> IconJobs=new();
+    private static readonly System.Collections.Concurrent.BlockingCollection<(string Path,string Key,int Pixels,int Generation)> IconJobs=new();
     static ShellIntegration()
     {
         AppIcon.Freeze();
@@ -68,11 +81,16 @@ internal static class ShellIntegration
         {
             foreach(var job in IconJobs.GetConsumingEnumerable())
             {
+                lock(IconGate)if(job.Generation!=_iconGeneration)continue;
                 ImageSource image;
                 try{image=SharpIcons.Load(job.Path,job.Pixels)??AppIcon;}
                 catch {image=AppIcon;}
-                Icons.Add(job.Key,image);Loading.TryRemove(job.Key,out _);
-                IconReady?.Invoke(job.Path,job.Pixels,image);
+                lock(IconGate)
+                {
+                    if(job.Generation!=_iconGeneration)continue;
+                    Icons.Add(job.Key,image);Loading.TryRemove(job.Key,out _);
+                    IconReady?.Invoke(job.Path,job.Pixels,image,job.Generation);
+                }
             }
         }){IsBackground=true,Name="DesktopNook shell icons"};
         worker.SetApartmentState(ApartmentState.STA);worker.Start();
@@ -82,8 +100,11 @@ internal static class ShellIntegration
         pixels=Math.Clamp(pixels,16,1024);
         string resolved=recycle?"::"+WindowsRecycleBin.RecycleId:path;
         string key=resolved+"|"+pixels;
-        if(Icons.TryGetValue(key,out var cached))return cached;
-        if(Loading.TryAdd(key,true))IconJobs.Add((resolved,key,pixels));
+        lock(IconGate)
+        {
+            if(Icons.TryGetValue(key,out var cached))return cached;
+            if(Loading.TryAdd(key,true))IconJobs.Add((resolved,key,pixels,_iconGeneration));
+        }
         return AppIcon;
     }
     public static void Launch(NookStore store,NookItem item)

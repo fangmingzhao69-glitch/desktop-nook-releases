@@ -39,9 +39,15 @@ public partial class MainWindow : Window
         Closed+=(_,_)=>_updateTimer.Stop();
         Render();
     }
-    private void OnLoaded(object sender,RoutedEventArgs e) { TaskbarPlacement.EnableToggle(this);Place();if(WindowState==WindowState.Normal)OpenPanelMotion(); if(Store.RecoveryMessages.Count>0) SetStatus(Store.RecoveryMessages.Last());if(!App.IsSandbox){_updateTimer.Start();_=CheckOnlineUpdateAsync(false);} }
+    private bool _loadedOnce;
+    private void OnLoaded(object sender,RoutedEventArgs e)
+    {
+        if(_loadedOnce){if(WindowState==WindowState.Normal){Place();int revision=_hideRevision;Dispatcher.BeginInvoke(()=>{if(WindowState==WindowState.Normal&&revision==_hideRevision)OpenPanelMotion();},System.Windows.Threading.DispatcherPriority.Loaded);if(!App.IsSandbox&&DateTime.UtcNow-_lastUpdateCheck>TimeSpan.FromMinutes(15))_=CheckOnlineUpdateAsync(false);}return;}
+        _loadedOnce=true;TaskbarPlacement.EnableToggle(this);Place();if(WindowState==WindowState.Normal)OpenPanelMotion();if(Store.RecoveryMessages.Count>0)SetStatus(Store.RecoveryMessages.Last());if(!App.IsSandbox){_updateTimer.Start();_=CheckOnlineUpdateAsync(false);}
+    }
     internal void SetAvailableRelease(OnlineRelease? release)
     {
+        _shutter.InvalidateSnapshot();
         _latestRelease=release;
         UpdateAvailableButton.Content=release is null?"":$"发现 v{release.Version.ToString(3)} · 更新";
         UpdateAvailableButton.Visibility=release is null?Visibility.Collapsed:Visibility.Visible;
@@ -56,13 +62,13 @@ public partial class MainWindow : Window
         var anchor=await TaskbarPlacement.FindAsync();
         if(anchor is not null && version==_placementVersion && !_resizing && !KeepOpenForVerification && WindowState==WindowState.Normal){if(TaskbarPlacement.WouldMove(this,anchor,PreferredWindowSize))UiMotion.StopReveal(Surface);TaskbarPlacement.Apply(this,anchor,PreferredWindowSize);}
     }
-    public void ShowPanel() { bool reverse=_hidePending;WindowState=WindowState.Normal;Show();Place();if(reverse)OpenPanelMotion();Activate(); }
+    public void ShowPanel() { EnsurePanelContent();bool reverse=_hidePending;WindowState=WindowState.Normal;Show();Place();if(reverse)OpenPanelMotion();Activate(); }
     public void TogglePanel(){if(_hidePending)ShowPanel();else if(WindowState==WindowState.Normal&&IsVisible)BeginHidePanel();else ShowPanel();}
-    private void OnStateChanged(object? sender,EventArgs e) { if(WindowState==WindowState.Normal){Place();if(IsLoaded)OpenPanelMotion();}else {FinishPanelMotion();UiMotion.CancelAll();} }
+    private void OnStateChanged(object? sender,EventArgs e) { if(WindowState!=WindowState.Minimized){Place();if(IsLoaded||ContentParked)OpenPanelMotion();}else {FinishPanelMotion();UiMotion.CancelAll();ScheduleIdleRelease();} }
     private void OnDeactivated(object? sender,EventArgs e)
     {
         if(HoldVisibleForMotionProbe||TaskbarPlacement.PointerOverButton())return;
-        Dispatcher.BeginInvoke(()=>{if(!KeepOpenForVerification&&!IsActive&&_interactions==0&&!_dragging&&_menus==0&&WindowState!=WindowState.Minimized)BeginHidePanel();},System.Windows.Threading.DispatcherPriority.Background);
+        Dispatcher.BeginInvoke(()=>{if(!HoldVisibleForMotionProbe&&!KeepOpenForVerification&&!IsActive&&_interactions==0&&!_dragging&&_menus==0&&WindowState!=WindowState.Minimized)BeginHidePanel();},System.Windows.Threading.DispatcherPriority.Background);
     }
     private void OnClosing(object? sender,CancelEventArgs e)
     {
@@ -72,11 +78,12 @@ public partial class MainWindow : Window
     }
     private void OnCloseButton(object sender,RoutedEventArgs e)=>Close();
     private void OnMinimizeButton(object sender,RoutedEventArgs e)=>BeginHidePanel();
-    public void Quit() { FinishPanelMotion();UiMotion.CancelAll();_allowExit=true; Application.Current.Shutdown(); }
+    public void Quit() { _idleRelease.Stop();FinishPanelMotion();_shutter.ReleaseBuffer();UiMotion.CancelAll();_allowExit=true; Application.Current.Shutdown(); }
     internal void QuitForMaintenance(){if(!_dragging&&_interactions==0)Quit();}
-    public void SetStatus(string message) { Status.Text=message;Status.ToolTip=message; }
+    public void SetStatus(string message) { _shutter.InvalidateSnapshot();Status.Text=message;Status.ToolTip=message; }
     public void Render()
     {
+        _shutter.InvalidateSnapshot();
         if(_activeCategory is not null && !Store.State.Categories.Any(c=>c.Id==_activeCategory)) _activeCategory=null;
         Dispatcher.BeginInvoke(UpdateSizingLayout,System.Windows.Threading.DispatcherPriority.Loaded);
         Tabs.Children.Clear(); AddTab("全部",null);

@@ -41,11 +41,20 @@ internal static class MotionVerification
             await Settle();owner.BeginHidePanel();
             Check(owner.WindowState==WindowState.Normal&&owner.PanelMotion.Active&&owner.PanelMotion.Closing,"Close keeps the native window visible while shutters play");
             Check(owner.PanelMotion.LastStartOrder.SequenceEqual(new[]{0,1,2,3,4}),"Closing shutters start from top to bottom");
-            await Task.Delay(150);Check(owner.PanelMotion.Angles.Any(a=>a>1&&a<83),"Closing produces actual intermediate 3D rotations");
+            await Task.Delay(150);Check(owner.PanelMotion.Angles.Any(a=>a>1&&a<83),"Closing produces intermediate shutter angles through matching 2D projection");
             await Settle();Check(owner.WindowState==WindowState.Minimized&&!owner.PanelMotion.Active&&owner.PanelMotion.SnapshotBytes==0,"Completed close minimizes and releases snapshot and clocks");
             owner.ShowPanel();Check(owner.PanelMotion.Active&&owner.PanelMotion.LastStartOrder.SequenceEqual(new[]{4,3,2,1,0}),"Opening shutters start from bottom to top");
             Check(owner.PanelMotion.SnapshotBytes<=8*1024*1024+16384&&owner.PanelMotion.Failure is null,"Five strips share one bounded snapshot without graphics errors");
-            await Settle();Check(!owner.PanelMotion.Active&&owner.PanelMotion.SnapshotBytes==0,"Completed opening releases all shutter resources");
+            await Settle();Check(!owner.PanelMotion.Active&&owner.PanelMotion.SnapshotBytes==0,"Completed opening releases active shutter resources");
+            int allocations=owner.PanelMotion.BufferAllocations;
+            owner.BeginHidePanel();await Settle();owner.ShowPanel();await Settle();
+            Check(owner.PanelMotion.BufferAllocations==allocations&&owner.PanelMotion.BufferedBytes is >0 and <=8*1024*1024,"Repeated opening/closing reuses one bounded snapshot buffer");
+            owner.BeginHidePanel();await Settle();owner.ReleaseIdleResources();
+            Check(owner.PanelMotion.BufferedBytes==0&&ShellIntegration.CachedIconBytes<=2*1024*1024&&ShellIntegration.CachedIconCount<=64,"Idle release drops screenshot and trims the warm icon cache");
+            var icons=VisualIcons(owner).ToArray();
+            Check(icons.Length>0&&icons.All(i=>i.Source is null),"Minimized panel pauses icon controls and clears their image references");
+            await Task.Delay(100);Check(icons.All(i=>i.Source is null),"Late asynchronous icon delivery cannot repopulate paused controls");
+            owner.ShowPanel();await Settle();Check(VisualIcons(owner).Any(i=>i.Source is not null),"Restoring a trimmed panel resumes icon delivery without losing items");
             for(int n=0;n<4;n++){owner.TogglePanel();await Task.Delay(70);owner.TogglePanel();}
             await Settle();Check(owner.WindowState==WindowState.Normal&&UiMotion.ActiveClocks==0&&!owner.PanelMotion.Active,"Rapid reversed panel toggles obey the last request without delayed minimization");
             owner.BeginHidePanel();await Task.Delay(60);UiMotion.Configure("off");Check(owner.WindowState==WindowState.Minimized&&!owner.PanelMotion.Active,"Turning motion off during close commits hiding immediately");
@@ -78,5 +87,9 @@ internal static class MotionVerification
             Check(LocalUpdater.Hash(Path.Combine(App.Store.DataDirectory,"state.json"))==hash,"Motion and preference stress do not change collection/index ordering");
         }
         finally{host.Close();App.Options.CloseEndsProcess=closing;App.Options.DefaultCollectView=view;App.Options.MotionMode=mode;UiMotion.Configure(mode);File.WriteAllText(Path.Combine(root,"motion-verification.json"),JsonSerializer.Serialize(new{passed,activeClocks=UiMotion.ActiveClocks}));}
+    }
+    private static IEnumerable<ShellIcon> VisualIcons(DependencyObject root)
+    {
+        for(int n=0;n<VisualTreeHelper.GetChildrenCount(root);n++){var child=VisualTreeHelper.GetChild(root,n);if(child is ShellIcon icon)yield return icon;foreach(var nested in VisualIcons(child))yield return nested;}
     }
 }

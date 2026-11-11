@@ -1,0 +1,344 @@
+{
+  "failure": "",
+  "forcedGc": false,
+  "rows": [
+    {
+      "stage": "before",
+      "parked": false,
+      "captures": 1,
+      "allocations": 1,
+      "buffered": 1795728,
+      "activeClocks": 0,
+      "cacheBytes": 122880,
+      "cacheCount": 30,
+      "privateBytes": 137502720,
+      "workingSet": 225275904,
+      "managedBytes": 14356016,
+      "invalidations": {}
+    },
+    {
+      "stage": "cycle-0",
+      "parked": false,
+      "captures": 2,
+      "allocations": 1,
+      "buffered": 1795728,
+      "activeClocks": 0,
+      "cacheBytes": 122880,
+      "cacheCount": 30,
+      "privateBytes": 204763136,
+      "workingSet": 232390656,
+      "managedBytes": 4111408,
+      "invalidations": {}
+    },
+    {
+      "stage": "cycle-1",
+      "parked": false,
+      "captures": 2,
+      "allocations": 1,
+      "buffered": 1795728,
+      "activeClocks": 0,
+      "cacheBytes": 122880,
+      "cacheCount": 30,
+      "privateBytes": 217698304,
+      "workingSet": 236195840,
+      "managedBytes": 5575144,
+      "invalidations": {}
+    },
+    {
+      "stage": "cycle-2",
+      "parked": false,
+      "captures": 2,
+      "allocations": 1,
+      "buffered": 1795728,
+      "activeClocks": 0,
+      "cacheBytes": 122880,
+      "cacheCount": 30,
+      "privateBytes": 218423296,
+      "workingSet": 236400640,
+      "managedBytes": 7039016,
+      "invalidations": {}
+    },
+    {
+      "stage": "cycle-3",
+      "parked": false,
+      "captures": 2,
+      "allocations": 1,
+      "buffered": 1795728,
+      "activeClocks": 0,
+      "cacheBytes": 122880,
+      "cacheCount": 30,
+      "privateBytes": 221179904,
+      "workingSet": 236728320,
+      "managedBytes": 8510480,
+      "invalidations": {}
+    },
+    {
+      "stage": "cycle-4",
+      "parked": false,
+      "captures": 2,
+      "allocations": 1,
+      "buffered": 1795728,
+      "activeClocks": 0,
+      "cacheBytes": 122880,
+      "cacheCount": 30,
+      "privateBytes": 222314496,
+      "workingSet": 236740608,
+      "managedBytes": 9916784,
+      "invalidations": {}
+    },
+    {
+      "stage": "cycle-5",
+      "parked": false,
+      "captures": 2,
+      "allocations": 1,
+      "buffered": 1795728,
+      "activeClocks": 0,
+      "cacheBytes": 122880,
+      "cacheCount": 30,
+      "privateBytes": 224149504,
+      "workingSet": 236691456,
+      "managedBytes": 11347760,
+      "invalidations": {}
+    },
+    {
+      "stage": "cycle-6",
+      "parked": false,
+      "captures": 2,
+      "allocations": 1,
+      "buffered": 1795728,
+      "activeClocks": 0,
+      "cacheBytes": 122880,
+      "cacheCount": 30,
+      "privateBytes": 219983872,
+      "workingSet": 232976384,
+      "managedBytes": 12811608,
+      "invalidations": {}
+    },
+    {
+      "stage": "cycle-7",
+      "parked": false,
+      "captures": 2,
+      "allocations": 1,
+      "buffered": 1795728,
+      "activeClocks": 0,
+      "cacheBytes": 122880,
+      "cacheCount": 30,
+      "privateBytes": 220114944,
+      "workingSet": 233095168,
+      "managedBytes": 14291928,
+      "invalidations": {}
+    },
+    {
+      "stage": "cycle-8",
+      "parked": false,
+      "captures": 2,
+      "allocations": 1,
+      "buffered": 1795728,
+      "activeClocks": 0,
+      "cacheBytes": 122880,
+      "cacheCount": 30,
+      "privateBytes": 220114944,
+      "workingSet": 233168896,
+      "managedBytes": 15673560,
+      "invalidations": {}
+    },
+    {
+      "stage": "cycle-9",
+      "parked": false,
+      "captures": 2,
+      "allocations": 1,
+      "buffered": 1795728,
+      "activeClocks": 0,
+      "cacheBytes": 122880,
+      "cacheCount": 30,
+      "privateBytes": 223125504,
+      "workingSet": 234397696,
+      "managedBytes": 4316856,
+      "invalidations": {}
+    },
+    {
+      "stage": "idle-3s",
+      "parked": false,
+      "captures": 3,
+      "allocations": 1,
+      "buffered": 1795728,
+      "activeClocks": 0,
+      "cacheBytes": 172032,
+      "cacheCount": 42,
+      "privateBytes": 197476352,
+      "workingSet": 233095168,
+      "managedBytes": 7702360,
+      "invalidations": {
+        "InitializePanelMotion": 1,
+        "OnPropertyChanged": 24
+      }
+    },
+    {
+      "stage": "idle-6s",
+      "parked": true,
+      "captures": 3,
+      "allocations": 1,
+      "buffered": 0,
+      "activeClocks": 0,
+      "cacheBytes": 172032,
+      "cacheCount": 42,
+      "privateBytes": 192192512,
+      "workingSet": 228982784,
+      "managedBytes": 7825720,
+      "invalidations": {
+        "InitializePanelMotion": 1,
+        "OnPropertyChanged": 24
+      }
+    },
+    {
+      "stage": "idle-15s",
+      "parked": true,
+      "captures": 3,
+      "allocations": 1,
+      "buffered": 0,
+      "activeClocks": 0,
+      "cacheBytes": 172032,
+      "cacheCount": 42,
+      "privateBytes": 118702080,
+      "workingSet": 219652096,
+      "managedBytes": 7833944,
+      "invalidations": {
+        "InitializePanelMotion": 1,
+        "OnPropertyChanged": 24
+      }
+    },
+    {
+      "stage": "wake-timing",
+      "showCallMs": 58.0315,
+      "firstShutterRenderingCallbackMs": 73.9824,
+      "maskedFrames": 3,
+      "flash": false
+    },
+    {
+      "stage": "restored",
+      "parked": false,
+      "captures": 4,
+      "allocations": 2,
+      "buffered": 1795728,
+      "activeClocks": 0,
+      "cacheBytes": 237568,
+      "cacheCount": 58,
+      "privateBytes": 180539392,
+      "workingSet": 242544640,
+      "managedBytes": 9601976,
+      "invalidations": {
+        "InitializePanelMotion": 3,
+        "OnPropertyChanged": 40,
+        "EnsurePanelContent": 1
+      }
+    },
+    {
+      "stage": "repeat-idle-0",
+      "parked": true,
+      "captures": 5,
+      "allocations": 2,
+      "buffered": 0,
+      "activeClocks": 0,
+      "cacheBytes": 237568,
+      "cacheCount": 58,
+      "privateBytes": 164380672,
+      "workingSet": 237887488,
+      "managedBytes": 10498392,
+      "invalidations": {
+        "InitializePanelMotion": 3,
+        "OnPropertyChanged": 40,
+        "EnsurePanelContent": 1
+      }
+    },
+    {
+      "stage": "repeat-wake-0",
+      "parked": false,
+      "captures": 6,
+      "allocations": 3,
+      "buffered": 1795728,
+      "activeClocks": 0,
+      "cacheBytes": 237568,
+      "cacheCount": 58,
+      "privateBytes": 235139072,
+      "workingSet": 252170240,
+      "managedBytes": 12291168,
+      "invalidations": {
+        "InitializePanelMotion": 3,
+        "OnPropertyChanged": 56,
+        "EnsurePanelContent": 2
+      }
+    },
+    {
+      "stage": "repeat-idle-1",
+      "parked": true,
+      "captures": 6,
+      "allocations": 3,
+      "buffered": 0,
+      "activeClocks": 0,
+      "cacheBytes": 237568,
+      "cacheCount": 58,
+      "privateBytes": 155136000,
+      "workingSet": 237879296,
+      "managedBytes": 13080608,
+      "invalidations": {
+        "InitializePanelMotion": 3,
+        "OnPropertyChanged": 56,
+        "EnsurePanelContent": 2
+      }
+    },
+    {
+      "stage": "repeat-wake-1",
+      "parked": false,
+      "captures": 7,
+      "allocations": 4,
+      "buffered": 1795728,
+      "activeClocks": 0,
+      "cacheBytes": 237568,
+      "cacheCount": 58,
+      "privateBytes": 219451392,
+      "workingSet": 243449856,
+      "managedBytes": 4656520,
+      "invalidations": {
+        "InitializePanelMotion": 3,
+        "OnPropertyChanged": 56,
+        "EnsurePanelContent": 3
+      }
+    },
+    {
+      "stage": "repeat-idle-2",
+      "parked": true,
+      "captures": 7,
+      "allocations": 4,
+      "buffered": 0,
+      "activeClocks": 0,
+      "cacheBytes": 237568,
+      "cacheCount": 58,
+      "privateBytes": 153661440,
+      "workingSet": 233406464,
+      "managedBytes": 5463776,
+      "invalidations": {
+        "InitializePanelMotion": 3,
+        "OnPropertyChanged": 56,
+        "EnsurePanelContent": 3
+      }
+    },
+    {
+      "stage": "repeat-wake-2",
+      "parked": false,
+      "captures": 8,
+      "allocations": 5,
+      "buffered": 1795728,
+      "activeClocks": 0,
+      "cacheBytes": 237568,
+      "cacheCount": 58,
+      "privateBytes": 180690944,
+      "workingSet": 240287744,
+      "managedBytes": 4886776,
+      "invalidations": {
+        "InitializePanelMotion": 3,
+        "OnPropertyChanged": 56,
+        "EnsurePanelContent": 4
+      }
+    }
+  ]
+}
