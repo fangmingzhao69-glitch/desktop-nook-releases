@@ -1,0 +1,17 @@
+{
+  "Method": "RecycleBin",
+  "RemovedPaths": [
+    "C:\\Users\\23584\\AppData\\Local\\DesktopNook",
+    "C:\\Users\\23584\\.DesktopNookVault"
+  ],
+  "VerifiedEntries": 13654,
+  "CurrentDataRoot": "E:\\yingyon\\DesktopNook\\Data",
+  "Items": 58,
+  "Categories": 7,
+  "OldPathsAbsent": true,
+  "RestartVerified": true,
+  "OldDirectoriesRecreated": false,
+  "RecycleBinEmptied": false,
+  "OtherUpgradeBackupsUntouched": true,
+  "PermanentDeletionAutoReviewRejected": true
+}
