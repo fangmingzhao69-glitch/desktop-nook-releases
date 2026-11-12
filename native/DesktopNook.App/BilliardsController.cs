@@ -49,7 +49,7 @@ internal sealed class BilliardsController : IDisposable
     {
         if(Running){if(!quietTest)Activate();return;}
         Stop();
-        if(icons.Count is <1 or >45||!BilliardsRules.IsKnown(settings.Rule))throw new IOException("没有可用图标，或台球规则无效。");
+        if(icons.Count is <1 or >45||!BilliardsRules.IsKnown(settings.Rule)||settings.Players is not (1 or 2))throw new IOException("没有可用图标，或台球规则无效。");
         string name="DesktopNook.Billiards."+Guid.NewGuid().ToString("N"),nonce=Guid.NewGuid().ToString("N")+Guid.NewGuid().ToString("N");
         var pipe=new NamedPipeServerStream(name,PipeDirection.InOut,1,PipeTransmissionMode.Byte,PipeOptions.Asynchronous|PipeOptions.CurrentUserOnly);
         using var parent=Process.GetCurrentProcess();
@@ -65,7 +65,7 @@ internal sealed class BilliardsController : IDisposable
             var reader=new StreamReader(pipe,System.Text.Encoding.UTF8,false,4096,true);session.Writer=new StreamWriter(pipe,new System.Text.UTF8Encoding(false),4096,true){AutoFlush=true};
             var hello=await GameWire.Read(reader,timeout.Token);
             if(hello?.Kind!="Hello"||hello.Nonce!=nonce||hello.Pid!=process.Id||hello.StartTicks!=session.StartTicks)throw new IOException("游戏会话认证失败。");
-            await Send(session,new(){Kind="Start",Icons=icons,Rule=settings.Rule,Count=settings.Count,Guide=settings.Guide,Left=work.Left,Top=work.Top,Width=work.Width,Height=work.Height,TestMode=test,QuietTest=test&&quietTest},timeout.Token);
+            await Send(session,new(){Kind="Start",Icons=icons,Rule=settings.Rule,Count=settings.Count,Guide=settings.Guide,Sound=settings.Sound,Players=settings.Players,Left=work.Left,Top=work.Top,Width=work.Width,Height=work.Height,TestMode=test,QuietTest=test&&quietTest},timeout.Token);
             session.ReadTask=Task.Run(()=>ReadLoop(session,reader));
             await session.Ready.Task.WaitAsync(timeout.Token);
             if(!ReferenceEquals(_session,session))throw new OperationCanceledException();
@@ -84,10 +84,10 @@ internal sealed class BilliardsController : IDisposable
                 switch(msg.Kind)
                 {
                     case "Ready":session.Ready.TrySetResult();break;
-                    case "SettingsChanged":session.Settings.Guide=msg.Guide;_storage.SaveSettings(session.Settings);break;
+                    case "SettingsChanged":session.Settings.Guide=msg.Guide;session.Settings.Sound=msg.Sound;_storage.SaveSettings(session.Settings);break;
                     case "RoundFinished":
-                        if(msg.Round>0&&msg.Rule==session.Settings.Rule&&msg.Count==session.Settings.Count&&msg.Shots is >0 and <=100000&&double.IsFinite(msg.Milliseconds)&&msg.Milliseconds is >0 and <=604800000&&session.Recorded.Add(msg.Round))
-                            _storage.SaveScore(new(DateTime.UtcNow,session.Settings.Source,msg.Count,msg.Shots,msg.Milliseconds){Rule=session.Settings.Rule});
+                        if(msg.Round>0&&msg.Rule==session.Settings.Rule&&msg.Players==session.Settings.Players&&msg.Count==session.Settings.Count&&msg.Shots is >0 and <=100000&&msg.Score1 is >=0 and <=1000000&&msg.Score2 is >=0 and <=1000000&&msg.Winner is null or 0 or 1&&double.IsFinite(msg.Milliseconds)&&msg.Milliseconds is >0 and <=604800000&&session.Recorded.Add(msg.Round))
+                            _storage.SaveScore(new(DateTime.UtcNow,session.Settings.Source,msg.Count,msg.Shots,msg.Milliseconds){Rule=session.Settings.Rule,Players=msg.Players,Winner=msg.Winner,Score1=msg.Score1,Score2=msg.Score2});
                         break;
                     case "Closed":return;
                     case "Probe":if(session.Probes.TryRemove(msg.Request,out var probe))probe.TrySetResult(msg);break;

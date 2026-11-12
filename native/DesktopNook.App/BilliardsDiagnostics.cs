@@ -15,21 +15,37 @@ internal static class GameMemory
 }
 internal sealed partial class BilliardsWindow
 {
+    private static bool LegacyFooter(System.Windows.DependencyObject node)
+    {
+        if(node is System.Windows.Controls.Button button&&Equals(button.Content,"第三方许可"))return true;
+        if(node is System.Windows.Controls.TextBlock text&&(text.Text.StartsWith("窗口尺寸已变化")||text.Text.StartsWith("显示缩放已变化")))return true;
+        for(int n=0;n<VisualTreeHelper.GetChildrenCount(node);n++)if(LegacyFooter(VisualTreeHelper.GetChild(node,n)))return true;return false;
+    }
     [StructLayout(LayoutKind.Sequential)]private struct Memory{public uint Size,Faults;public UIntPtr PeakWorking,Working,PeakPaged,Paged,PeakNonPaged,NonPaged,Pagefile,PeakPagefile,Private,PrivateWorking;public ulong Shared;}
     [DllImport("psapi.dll")]private static extern bool GetProcessMemoryInfo(IntPtr process,ref Memory memory,uint size);
     internal GameMessage Test(string action)
     {
         switch(action)
         {
-            case "shoot":Scene.Pause(false);Scene.Round.Shoot(new(1200,450),.65);Scene.Wake();break;
+            case "begin":_begin.RaiseEvent(new RoutedEventArgs(System.Windows.Controls.Button.ClickEvent));break;
+            case "rules":ShowRules();break;
+            case "sound":_soundCheck.IsChecked=!_soundEnabled;break;
+            case "audio-test":Scene.Audio.Enabled=true;Scene.Audio.Play(new(BallSoundKind.Cue,.2));break;
+            case "audio-stop":Scene.Audio.Stop();break;
+            case "shoot":if(RulesVisible)BeginGame();Scene.Pause(false);Scene.Round.Shoot(new(1200,450),.65);Scene.Wake();break;
             case "pause":Scene.Pause(true);break;
-            case "resume":Scene.Pause(false);break;
+            case "resume":if(RulesVisible)BeginGame();Scene.Pause(false);break;
             case "finish":
+                if(RulesVisible)BeginGame();
                 Scene.Pause(false);if(Scene.Round.CanShoot)Scene.Round.Shoot(new(1200,450),.2);
                 foreach(var ball in Scene.Round.Balls.Where(b=>b.Id!=0)){ball.Sunk=true;ball.ExitAge=.1;}
                 Scene.Round.Advance(.05);Scene.Round.Advance(.05);Scene.Wake();break;
             case "duplicate-score":Scene.Completed?.Invoke();break;
-            case "restart":Scene.Restart();break;
+            case "pocket":
+                if(RulesVisible)BeginGame();Scene.Pause(false);if(Scene.Round.CanShoot)Scene.Round.Shoot(new(1200,450),.2);Scene.Round.Advance(.05);Scene.Round.Advance(.05);foreach(var b in Scene.Round.Balls)b.Velocity=new();Scene.Round.Balls[1].Position=Scene.Round.Pockets[0];Scene.Round.Advance(.02);Scene.Wake();break;
+            case "duel-finish":
+                if(RulesVisible)BeginGame();Scene.Pause(false);Scene.Round.Shoot(new(1200,450),.2);Scene.Round.Advance(.05);Scene.Round.Advance(.05);foreach(var b in Scene.Round.Balls)b.Velocity=new();Scene.Round.Balls[1].Position=Scene.Round.White.Position+new Vec(34,0);Scene.Round.White.Velocity=new(120,0);Scene.Round.Advance(.005);foreach(var b in Scene.Round.Balls)b.Velocity=new();Scene.Round.Balls[9].Position=Scene.Round.Pockets[0];Scene.Round.Advance(.02);Scene.Wake();break;
+            case "restart":RestartRound();break;
             case "guide":SetGuide(!Scene.Guide);break;
             case "invalid-message":_=Notify(new(){Kind="InvalidProtocol"});break;
             case "metrics-reset":Scene.ResetMetrics();break;
@@ -43,6 +59,7 @@ internal sealed partial class BilliardsWindow
             UpdateLayout();var surface=(FrameworkElement)Content;var dpi=VisualTreeHelper.GetDpi(this);var image=new RenderTargetBitmap((int)Math.Ceiling(surface.ActualWidth*dpi.DpiScaleX),(int)Math.Ceiling(surface.ActualHeight*dpi.DpiScaleY),96*dpi.DpiScaleX,96*dpi.DpiScaleY,PixelFormats.Pbgra32);image.Render(surface);
             var png=new PngBitmapEncoder();png.Frames.Add(BitmapFrame.Create(image));using var stream=new MemoryStream();png.Save(stream);result.Image=Convert.ToBase64String(stream.ToArray());
         }
-        result.DisplayState=WindowState.ToString();var mouse=System.Windows.Input.Mouse.GetPosition(Scene);result.InputTrace=Scene.InputTrace+$"; mouse=({mouse.X:F1},{mouse.Y:F1}) hit={InputHitTest(System.Windows.Input.Mouse.GetPosition(this))?.GetType().Name} over={System.Windows.Input.Mouse.DirectlyOver?.GetType().Name} enabled={Scene.IsEnabled} active={IsActive} button={System.Windows.Input.Mouse.LeftButton}";result.HasFooter=((System.Windows.Controls.DockPanel)Content).Children.Count>2;result.FrameP95=Scene.FrameP95;result.FrameMean=Scene.FrameMean;result.FrameCount=Scene.FrameCount;return result;
+        result.Players=Scene.Round.Match.Players;result.Winner=Scene.Round.Match.Winner;result.Score1=Scene.Round.Match.Scores[0];result.Score2=Scene.Round.Match.Scores[1];result.CurrentPlayer=Scene.Round.Match.CurrentPlayer;result.Sound=_soundEnabled;result.TrayCount=Scene.Round.PocketOrder.Count;result.RulesVisible=RulesVisible;result.AudioSubmitted=Scene.Audio.Submitted;result.AudioPending=Scene.Audio.Pending;result.AudioUnavailable=Scene.Audio.Unavailable;
+        result.DisplayState=WindowState.ToString();var mouse=System.Windows.Input.Mouse.GetPosition(Scene);result.InputTrace=Scene.InputTrace+$"; mouse=({mouse.X:F1},{mouse.Y:F1}) hit={InputHitTest(System.Windows.Input.Mouse.GetPosition(this))?.GetType().Name} over={System.Windows.Input.Mouse.DirectlyOver?.GetType().Name} enabled={Scene.IsEnabled} active={IsActive} button={System.Windows.Input.Mouse.LeftButton}";result.HasFooter=LegacyFooter((System.Windows.DependencyObject)Content);result.FrameP95=Scene.FrameP95;result.FrameMean=Scene.FrameMean;result.FrameCount=Scene.FrameCount;return result;
     }
 }

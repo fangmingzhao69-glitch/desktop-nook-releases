@@ -37,5 +37,5 @@ internal static class BilliardsBallDrawing
 }
 internal static class BilliardsPlacement
 {
-    internal static Rect Initial(Rect screen)=>new(screen.Left+screen.Width/4,screen.Top+screen.Height/4,screen.Width/2,screen.Height/2);
+    internal static Rect Initial(Rect screen){double scale=Math.Sqrt(.4),width=screen.Width*scale,height=screen.Height*scale;return new(screen.Left+(screen.Width-width)/2,screen.Top+(screen.Height-height)/2,width,height);}
 }

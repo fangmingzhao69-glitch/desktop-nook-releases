@@ -24,7 +24,7 @@ internal static class BilliardsHost
             async Task Send(GameMessage m){m.Nonce=nonce;await writes.WaitAsync(cancel.Token);try{await writer.WriteLineAsync(JsonSerializer.Serialize(m));}finally{writes.Release();}}
             using(var self=Process.GetCurrentProcess())await Send(new(){Kind="Hello",Pid=self.Id,StartTicks=self.StartTime.ToUniversalTime().Ticks});
             var start=await GameWire.Read(reader,cancel.Token);
-            if(start?.Kind!="Start"||start.Nonce!=nonce||start.Icons.Count is <1 or >45||!BilliardsRules.Matches(start.Rule,start.Count)||start.Icons.Any(i=>string.IsNullOrWhiteSpace(i.Name)||i.Name.Length>4096||i.Path.Length>32768))throw new IOException("台球配置无效。");
+            if(start?.Kind!="Start"||start.Nonce!=nonce||start.Players is not (1 or 2)||start.Icons.Count is <1 or >45||!BilliardsRules.Matches(start.Rule,start.Count)||start.Icons.Any(i=>string.IsNullOrWhiteSpace(i.Name)||i.Name.Length>4096||i.Path.Length>32768))throw new IOException("台球配置无效。");
             ShellIntegration.SetAppId("DesktopNook.IconBilliards");
             window=new BilliardsWindow(start,Send);Application.Current.MainWindow=window;
             var closed=new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);window.Closed+=(_,_)=>closed.TrySetResult();

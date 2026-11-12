@@ -1,5 +1,5 @@
 {
-  "passed": 19,
+  "passed": 36,
   "failed": 0,
   "checks": [
     {
@@ -76,6 +76,74 @@
     },
     {
       "name": "High-speed play remains bounded and finite",
+      "passed": true
+    },
+    {
+      "name": "Pocket tray records targets in order and excludes the white",
+      "passed": true
+    },
+    {
+      "name": "Cue sound occurs at actual strike and preserves shot strength",
+      "passed": true
+    },
+    {
+      "name": "Generated hit audio grows with force and stays bounded",
+      "passed": true
+    },
+    {
+      "name": "Eight ball assigns groups and retains a legal pot turn",
+      "passed": true
+    },
+    {
+      "name": "Early black and scratching on black lose eight ball",
+      "passed": true
+    },
+    {
+      "name": "Eight ball requires the group cleared before the winning stroke",
+      "passed": true
+    },
+    {
+      "name": "No-pot legal cushion switches and a dry contact-free stroke fouls",
+      "passed": true
+    },
+    {
+      "name": "Nine ball combinations win only after the lowest first contact",
+      "passed": true
+    },
+    {
+      "name": "Fifteen ball credits ball values and requires 61 points",
+      "passed": true
+    },
+    {
+      "name": "Fifteen ball foul respots without awarding points",
+      "passed": true
+    },
+    {
+      "name": "Snooker alternates reds and colours with colour respot",
+      "passed": true
+    },
+    {
+      "name": "Snooker foul awards the opponent four to seven and switches",
+      "passed": true
+    },
+    {
+      "name": "Snooker clears colours in order after the final red-colour pair",
+      "passed": true
+    },
+    {
+      "name": "Physics settles a dual foul into manual free-ball placement",
+      "passed": true
+    },
+    {
+      "name": "Match restart restores both players and clears progress",
+      "passed": true
+    },
+    {
+      "name": "Snooker final colour foul uses the ball-on penalty",
+      "passed": true
+    },
+    {
+      "name": "Illegal nine is safely respotted and removed from the tray",
       "passed": true
     }
   ]
