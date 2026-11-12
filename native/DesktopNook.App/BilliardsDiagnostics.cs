@@ -31,6 +31,7 @@ internal sealed partial class BilliardsWindow
             case "rules":ShowRules();break;
             case "sound":_soundCheck.IsChecked=!_soundEnabled;break;
             case "audio-test":Scene.Audio.Enabled=true;Scene.Audio.Play(new(BallSoundKind.Cue,.2));break;
+            case "audio-burst":Scene.Audio.Enabled=true;for(int n=0;n<4;n++)Scene.Audio.Play(new(BallSoundKind.Cue,.12));break;
             case "audio-stop":Scene.Audio.Stop();break;
             case "shoot":if(RulesVisible)BeginGame();Scene.Pause(false);Scene.Round.Shoot(new(1200,450),.65);Scene.Wake();break;
             case "pause":Scene.Pause(true);break;
@@ -59,6 +60,8 @@ internal sealed partial class BilliardsWindow
             UpdateLayout();var surface=(FrameworkElement)Content;var dpi=VisualTreeHelper.GetDpi(this);var image=new RenderTargetBitmap((int)Math.Ceiling(surface.ActualWidth*dpi.DpiScaleX),(int)Math.Ceiling(surface.ActualHeight*dpi.DpiScaleY),96*dpi.DpiScaleX,96*dpi.DpiScaleY,PixelFormats.Pbgra32);image.Render(surface);
             var png=new PngBitmapEncoder();png.Frames.Add(BitmapFrame.Create(image));using var stream=new MemoryStream();png.Save(stream);result.Image=Convert.ToBase64String(stream.ToArray());
         }
+        var left=_leftTray.TranslatePoint(new Point(),this);var right=_rightTray.TranslatePoint(new Point(),this);var table=Scene.TranslatePoint(new Point(),this);
+        result.SideTrays=left.X+_leftTray.ActualWidth<=table.X+1&&right.X>=table.X+Scene.ActualWidth-1&&_leftTray.ActualHeight>Scene.ActualHeight*.9;result.IconFraction=BilliardsBallDrawing.IconFraction;
         result.Players=Scene.Round.Match.Players;result.Winner=Scene.Round.Match.Winner;result.Score1=Scene.Round.Match.Scores[0];result.Score2=Scene.Round.Match.Scores[1];result.CurrentPlayer=Scene.Round.Match.CurrentPlayer;result.Sound=_soundEnabled;result.TrayCount=Scene.Round.PocketOrder.Count;result.RulesVisible=RulesVisible;result.AudioSubmitted=Scene.Audio.Submitted;result.AudioPending=Scene.Audio.Pending;result.AudioUnavailable=Scene.Audio.Unavailable;
         result.DisplayState=WindowState.ToString();var mouse=System.Windows.Input.Mouse.GetPosition(Scene);result.InputTrace=Scene.InputTrace+$"; mouse=({mouse.X:F1},{mouse.Y:F1}) hit={InputHitTest(System.Windows.Input.Mouse.GetPosition(this))?.GetType().Name} over={System.Windows.Input.Mouse.DirectlyOver?.GetType().Name} enabled={Scene.IsEnabled} active={IsActive} button={System.Windows.Input.Mouse.LeftButton}";result.HasFooter=LegacyFooter((System.Windows.DependencyObject)Content);result.FrameP95=Scene.FrameP95;result.FrameMean=Scene.FrameMean;result.FrameCount=Scene.FrameCount;return result;
     }

@@ -36,6 +36,8 @@ internal sealed class GameMessage
     public int AudioSubmitted {get;set;}
     public int AudioPending {get;set;}
     public bool AudioUnavailable {get;set;}
+    public bool SideTrays {get;set;}
+    public double IconFraction {get;set;}
     public int Round {get;set;}
     public int Shots {get;set;}
     public double Milliseconds {get;set;}

@@ -7,5 +7,6 @@
 *.md text eol=lf
 *.png binary
 *.ico binary
+*.pcm binary
 # The Unicode NSIS script is UTF-16; preserve its bytes.
 *.nsi binary

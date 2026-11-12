@@ -1,0 +1,28 @@
+Recorded billiards audio (CC0 1.0 Universal)
+
+1. "billiard ball clack" by Za-Games
+   https://freesound.org/people/Za-Games/sounds/539854/
+   https://cdn.freesound.org/previews/539/539854_12029332-hq.mp3
+   Description: sound of solid billiard balls being struck together.
+   Original listing: 44.1 kHz, 16-bit mono, 0.239 s. Public HQ preview used.
+
+2. "BILLIARD pool shots- CsG.wav" by csaszi
+   https://freesound.org/people/csaszi/sounds/350918/
+   https://cdn.freesound.org/previews/350/350918_1147184-hq.mp3
+   Original listing: 48 kHz, 24-bit mono, 15.166 s. Public HQ preview used.
+
+Both author pages designate the recordings Creative Commons 0.
+License: https://creativecommons.org/publicdomain/zero/1.0/
+CC0 allows copying, adapting and redistributing, including commercial use.
+Source and author credits are retained here for provenance.
+
+Preparation: selected isolated recorded impacts, removed DC, resampled to
+44.1 kHz / mono / signed PCM16, faded only the cut edges, matched clip RMS
+to 0.05 with a 0.90 peak ceiling, and trimmed silent lead-ins.
+Cushion and pocket feedback are low-pass adaptations of pool-shot recordings;
+they are not represented as separately recorded cushion/pocket sounds.
+No synthesized tones are mixed into the samples. Runtime scales the amplitude
+and selects soft/hard takes without changing playback speed or pitch.
+Exact cut times and output SHA-256 values: Games.Core/Audio/manifest.json.
+Reproduction: native/scripts/Import-BilliardsAudio.py (development only).
+The recordings are packaged with the executable; no runtime download is used.

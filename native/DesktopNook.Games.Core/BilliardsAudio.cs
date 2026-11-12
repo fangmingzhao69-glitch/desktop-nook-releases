@@ -4,19 +4,27 @@ public enum BallSoundKind { Cue,Collision,Cushion,Pocket }
 public readonly record struct BallSound(BallSoundKind Kind,double Strength);
 public static class BilliardsAudio
 {
-    public const int SampleRate=22050;
-    public static short[] Samples(BallSound sound)
+    public const int SampleRate=44100;
+    private static readonly Dictionary<string,short[]> Bank=[];
+    private static readonly object Gate=new();
+    private static short[] Recording(string name)
+    {
+        lock(Gate)
+        {
+            if(Bank.TryGetValue(name,out var saved))return saved;
+            using var input=typeof(BilliardsAudio).Assembly.GetManifestResourceStream("DesktopNook.Audio."+name+".pcm")??throw new InvalidDataException("台球录音资源缺失。");
+            if(input.Length is <2 or >44100||input.Length%2!=0)throw new InvalidDataException("台球录音资源格式无效。");
+            using var reader=new BinaryReader(input);var pcm=new short[input.Length/2];for(int n=0;n<pcm.Length;n++)pcm[n]=reader.ReadInt16();Bank[name]=pcm;return pcm;
+        }
+    }
+    public static short[] Samples(BallSound sound,int variant=0)
     {
         double power=double.IsFinite(sound.Strength)?Math.Clamp(sound.Strength,0,1):0;
-        double duration=sound.Kind==BallSoundKind.Pocket?.095:.035+power*.04;
-        var samples=new short[(int)(duration*SampleRate)];uint noise=0x312b647;
-        double pitch=sound.Kind switch{BallSoundKind.Cue=>1100,BallSoundKind.Collision=>2300,BallSoundKind.Cushion=>550,_=>240};
+        string name=sound.Kind switch{BallSoundKind.Cue=>power<.48?"cue-soft":"cue-hard",BallSoundKind.Collision=>variant%2==0?"collision-a":"collision-b",BallSoundKind.Cushion=>"cushion",_=>"pocket"};
+        var recording=Recording(name);var samples=new short[recording.Length];double gain=.12+.78*Math.Pow(power,.75);
         for(int n=0;n<samples.Length;n++)
         {
-            noise=unchecked(noise*1664525+1013904223);double t=n/(double)SampleRate,random=(noise>>8)/8388607.5-1;
-            double body=Math.Sin(2*Math.PI*pitch*t)*Math.Exp(-t/(duration*.18)),click=random*Math.Exp(-t/.0035);
-            double envelope=Math.Min(1,n/6d)*(1-n/(double)samples.Length);double value=(body*.7+click*.3)*(.06+power*.65)*envelope;
-            samples[n]=(short)(Math.Clamp(value,-.95,.95)*short.MaxValue);
+            samples[n]=(short)Math.Clamp((int)Math.Round(recording[n]*gain),short.MinValue,short.MaxValue);
         }
         return samples;
     }

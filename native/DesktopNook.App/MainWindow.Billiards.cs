@@ -12,7 +12,7 @@ public partial class MainWindow
         if(_games?.Running==true)menu.Items.Add(Menu("退出台球",()=>_games.Stop()));
         menu.Items.Add(new Separator());menu.Items.Add(Menu("开源许可…",()=>
         {
-            _interactions++;try{using var stream=typeof(MainWindow).Assembly.GetManifestResourceStream("DesktopNook.BilliardsLicense");using var reader=new System.IO.StreamReader(stream!);UiDialogs.Show(this,"Desktop Icon Billiards · LXG\n\n"+reader.ReadToEnd(),"开源许可");}finally{_interactions--;}
+            _interactions++;try{using var stream=typeof(MainWindow).Assembly.GetManifestResourceStream("DesktopNook.BilliardsLicense");using var reader=new System.IO.StreamReader(stream!);using var audio=typeof(MainWindow).Assembly.GetManifestResourceStream("DesktopNook.BilliardsAudioLicense");using var audioReader=new System.IO.StreamReader(audio!);UiDialogs.Show(this,"Desktop Icon Billiards · LXG\n\n"+reader.ReadToEnd()+"\n\n"+audioReader.ReadToEnd(),"开源许可");}finally{_interactions--;}
         }));
         return menu;
     }

@@ -6,6 +6,7 @@ using DesktopNook.Games.Core;
 namespace DesktopNook.App;
 internal static class BilliardsBallDrawing
 {
+    internal const double IconFraction=.70;
     private static Brush Brush(string color){var brush=new SolidColorBrush((Color)ColorConverter.ConvertFromString(color));brush.Freeze();return brush;}
     private static readonly Brush Ivory=Brush("#FFFDF6"),Ink=Brush("#152536");
     private static readonly Pen Rim=new(Brush("#95E9F8F4"),.8);
@@ -21,12 +22,12 @@ internal static class BilliardsBallDrawing
             dc.DrawEllipse(Shine,null,new(0,0),r,r);
             if(icon is not null)
             {
-                double badge=r*.48;var center=new Point(-r*.08,-r*.08);dc.DrawEllipse(Ivory,null,center,badge+1,badge+1);
+                double badge=r*IconFraction;var center=new Point(-r*.03,-r*.04);dc.DrawEllipse(Ivory,null,center,badge+.6,badge+.6);
                 dc.PushClip(new EllipseGeometry(center,badge,badge));dc.DrawImage(icon,new(center.X-badge,center.Y-badge,badge*2,badge*2));dc.Pop();
             }
             if(ball.Style.Number>0)
             {
-                double size=r*.3;var center=new Point(r*.48,r*.49);dc.DrawEllipse(Ivory,null,center,size,size);
+                double size=r*.27;var center=new Point(r*.60,r*.60);dc.DrawEllipse(Ivory,null,center,size,size);
                 var text=new FormattedText(ball.Style.Number.ToString(CultureInfo.InvariantCulture),CultureInfo.InvariantCulture,FlowDirection.LeftToRight,new Typeface("Segoe UI"),r*.46,Ink,dpi){TextAlignment=TextAlignment.Center};
                 dc.DrawText(text,new(center.X,center.Y-text.Height/2));
             }

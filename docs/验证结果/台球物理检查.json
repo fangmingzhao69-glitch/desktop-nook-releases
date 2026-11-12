@@ -1,5 +1,5 @@
 {
-  "passed": 36,
+  "passed": 37,
   "failed": 0,
   "checks": [
     {
@@ -87,7 +87,7 @@
       "passed": true
     },
     {
-      "name": "Generated hit audio grows with force and stays bounded",
+      "name": "Recorded hit audio grows with force and stays bounded",
       "passed": true
     },
     {
@@ -144,6 +144,10 @@
     },
     {
       "name": "Illegal nine is safely respotted and removed from the tray",
+      "passed": true
+    },
+    {
+      "name": "Recorded audio preserves waveform timing and supplies all effect kinds",
       "passed": true
     }
   ]
