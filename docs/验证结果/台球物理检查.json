@@ -1,9 +1,29 @@
 {
-  "passed": 14,
+  "passed": 19,
   "failed": 0,
   "checks": [
     {
       "name": "Ball count bounds and independent clone identities",
+      "passed": true
+    },
+    {
+      "name": "Four rule presets have fixed counts and a separate cue ball",
+      "passed": true
+    },
+    {
+      "name": "Eight ball rack has central black and opposite corner groups",
+      "passed": true
+    },
+    {
+      "name": "Nine ball rack is a diamond with one leading and nine central",
+      "passed": true
+    },
+    {
+      "name": "Snooker has fifteen reds and six correctly coloured spotted balls",
+      "passed": true
+    },
+    {
+      "name": "Fifteen ball rack numbers and restart preserve rule",
       "passed": true
     },
     {

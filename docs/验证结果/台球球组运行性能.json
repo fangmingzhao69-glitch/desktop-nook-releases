@@ -1,0 +1,33 @@
+{
+  "failure": "",
+  "samples": [
+    {
+      "phase": "first-shot",
+      "PrivateWorkingSet": 76754944,
+      "Commit": 125833216,
+      "FrameP95": 32.85480000000007,
+      "FrameMean": 17.639945132743367,
+      "FrameCount": 113
+    },
+    {
+      "phase": "three-rounds-warm",
+      "PrivateWorkingSet": 83361792,
+      "Commit": 133500928,
+      "FrameP95": 31.79160000000047,
+      "FrameMean": 16.649863999999997,
+      "FrameCount": 600,
+      "approximateFps": 60.06055064473801,
+      "parentPrivateWorkingSet": 62918656,
+      "totalPrivateWorkingSet": 146280448
+    },
+    {
+      "phase": "minimized-2s",
+      "PrivateWorkingSet": 83410944,
+      "Commit": 133730304,
+      "cpuMs": 140.625,
+      "FrameSubscribed": false,
+      "Paused": true
+    }
+  ],
+  "forcedGc": false
+}

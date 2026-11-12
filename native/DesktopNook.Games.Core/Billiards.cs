@@ -14,6 +14,7 @@ public readonly record struct Vec(double X,double Y)
 public enum RoundPhase { Ready,Charging,Stroke,Rolling,WhitePlacement,Finished }
 public sealed class Ball
 {
+    public BallStyle Style {get;set;}
     public int Id {get;init;}
     public int Source {get;init;}=-1;
     public Vec Position {get;set;}
@@ -44,17 +45,46 @@ public sealed class BilliardsRound
     public int Shots {get;private set;}
     public double Elapsed {get;private set;}
     public int Total=>_balls.Count-1;
+    public string RuleId {get;private set;}=BilliardsRules.Eight;
     public int Pocketed=>_balls.Count(b=>b.Id!=0&&b.Sunk);
     public bool NeedsFrames=>!Paused&&(Phase is RoundPhase.Rolling or RoundPhase.Stroke or RoundPhase.Charging||_balls.Any(b=>b.Sunk&&b.ExitAge<.62));
     public bool CanShoot=>!Paused&&Phase==RoundPhase.Ready;
     private Vec _aim=new(1,0);
     private double _power,_stroke;
     public BilliardsRound(int sourceCount,int count){Reset(sourceCount,count);}
+    public BilliardsRound(int sourceCount,string rule){Reset(sourceCount,rule);}
+    public void Reset(int sourceCount,string rule)
+    {
+        var profile=BilliardsRules.Get(rule);Reset(sourceCount,profile.Count);RuleId=profile.Id;
+        foreach(var b in _balls.Skip(1))b.Style=BilliardsRules.Style(RuleId,b.Id-1);
+        if(RuleId==BilliardsRules.Eight)
+        {
+            (_balls[5].Position,_balls[8].Position)=(_balls[8].Position,_balls[5].Position);
+            // The rear corners contain one solid and one stripe.
+            (_balls[11].Position,_balls[7].Position)=(_balls[7].Position,_balls[11].Position);
+        }
+        else if(RuleId==BilliardsRules.Nine)
+        {
+            int index=1;foreach(int column in Enumerable.Range(0,5))
+            {
+                int rows=column<3?column+1:5-column;
+                for(int row=0;row<rows;row++)_balls[index++].Position=new(1100+column*33.5,450+(row-(rows-1)*.5)*39);
+            }
+            (_balls[5].Position,_balls[9].Position)=(_balls[9].Position,_balls[5].Position);
+        }
+        else if(RuleId==BilliardsRules.Snooker)
+        {
+            White.Position=new(280,520);
+            Vec[] spots=[new(400,600),new(400,300),new(400,450),new(800,450),new(1050,450),new(1430,450)];
+            for(int n=0;n<6;n++)_balls[16+n].Position=spots[n];
+        }
+    }
     public void Reset(int sourceCount,int count)
     {
-        if(sourceCount is <1 or >4096||count is <15 or >45)throw new ArgumentOutOfRangeException(nameof(count));
+        if(sourceCount is <1 or >4096||count is <9 or >45)throw new ArgumentOutOfRangeException(nameof(count));
+        RuleId=BilliardsRules.Eight;
         foreach(var bucket in _buckets)bucket.Clear();_grid.Clear();_balls.Clear();_balls.Add(new(){Id=0,Position=new(420,450),Radius=18});int n=0;
-        for(int column=0;n<count;column++)for(int row=0;row<=column&&n<count;row++,n++)_balls.Add(new(){Id=n+1,Source=n%sourceCount,Position=new(1100+column*33.5,450+(row-column*.5)*39),Radius=19});
+        for(int column=0;n<count;column++)for(int row=0;row<=column&&n<count;row++,n++)_balls.Add(new(){Id=n+1,Source=n%sourceCount,Position=new(1100+column*33.5,450+(row-column*.5)*39),Radius=19,Style=BilliardsRules.Style(null,n)});
         Phase=RoundPhase.Ready;Paused=false;Started=false;Shots=0;Elapsed=0;_stroke=0;RoundNumber++;
     }
     public void SetPaused(bool value){Paused=value;if(value&&Phase==RoundPhase.Charging)Phase=RoundPhase.Ready;}

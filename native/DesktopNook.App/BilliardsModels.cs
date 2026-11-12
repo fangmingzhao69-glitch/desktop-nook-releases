@@ -2,13 +2,15 @@ using System.IO;
 using System.Runtime.InteropServices;
 using System.Text.Json;
 using DesktopNook.Core;
+using DesktopNook.Games.Core;
 
 namespace DesktopNook.App;
 internal sealed record GameIcon(string Id,string Name,string Path,bool Recycle=false);
 internal sealed class GameSettings
 {
     public string Source {get;set;}="current";
-    public int Count {get;set;}=15;
+    public string Rule {get;set;}=BilliardsRules.Eight;
+    public int Count=>BilliardsRules.Get(Rule).Count;
     public bool Guide {get;set;}=true;
 }
 internal sealed class GameMessage
@@ -19,6 +21,7 @@ internal sealed class GameMessage
     public long StartTicks {get;set;}
     public List<GameIcon> Icons {get;set;}=[];
     public int Count {get;set;}
+    public string Rule {get;set;}=BilliardsRules.Eight;
     public bool Guide {get;set;}
     public int Round {get;set;}
     public int Shots {get;set;}
@@ -28,6 +31,8 @@ internal sealed class GameMessage
     public double Width {get;set;}
     public double Height {get;set;}
     public bool TestMode {get;set;}
+    public bool QuietTest {get;set;}
+    public string DisplayState {get;set;}="";
     public string Action {get;set;}="";
     public int Request {get;set;}
     public bool Paused {get;set;}
@@ -42,9 +47,12 @@ internal sealed class GameMessage
     public double FrameP95 {get;set;}
     public double FrameMean {get;set;}
     public int FrameCount {get;set;}
+    public bool HasFooter {get;set;}
+    public string InputTrace {get;set;}="";
 }
 internal sealed record GameScore(DateTime CompletedUtc,string Source,int Count,int Shots,double Milliseconds)
 {
+    public string Rule {get;init;}="legacy";
     public double AverageSeconds=>Milliseconds/1000/Count;
 }
 internal sealed class GameStorage(string dataRoot)
@@ -53,15 +61,16 @@ internal sealed class GameStorage(string dataRoot)
     {
         public List<GameScore> Recent {get;set;}=[];
         public GameScore? Best {get;set;}
+        public Dictionary<string,GameScore> BestByRule {get;set;}=[];
     }
     private readonly object _gate=new();
     internal string Root=>Path.Combine(dataRoot,"Games","IconBilliards");
     internal GameSettings LoadSettings()
     {
-        try{var settings=JsonSerializer.Deserialize<GameSettings>(File.ReadAllText(Path.Combine(Root,"settings.json")))??new();settings.Count=Math.Clamp(settings.Count,15,45);if(settings.Source is not ("current" or "all" or "desktop"))settings.Source="current";return settings;}catch(Exception ex)when(ex is IOException or JsonException){return new();}
+        try{var settings=JsonSerializer.Deserialize<GameSettings>(File.ReadAllText(Path.Combine(Root,"settings.json")))??new();settings.Rule=BilliardsRules.Get(settings.Rule).Id;if(settings.Source is not ("current" or "all" or "desktop"))settings.Source="current";return settings;}catch(Exception ex)when(ex is IOException or JsonException){return new();}
     }
     internal void SaveSettings(GameSettings value){lock(_gate){Directory.CreateDirectory(Root);StorageRelocation.WriteJson(Path.Combine(Root,"settings.json"),value);}}
-    private static bool Valid(GameScore? score)=>score is {Count:>=15 and <=45,Shots:>0}&&double.IsFinite(score.Milliseconds)&&score.Milliseconds>0;
+    private static bool Valid(GameScore? score)=>score is {Count:>=9 and <=45,Shots:>0}&&double.IsFinite(score.Milliseconds)&&score.Milliseconds>0;
     private History LoadHistory()
     {
         try
@@ -75,10 +84,11 @@ internal sealed class GameStorage(string dataRoot)
     }
     internal List<GameScore> Scores(){lock(_gate)return LoadHistory().Recent;}
     internal GameScore? Best {get{lock(_gate)return LoadHistory().Best;}}
+    internal GameScore? BestForRule(string rule){lock(_gate){var history=LoadHistory();var saved=history.BestByRule.GetValueOrDefault(rule);return history.Recent.Concat(Valid(saved)?[saved!]:[]).Where(s=>s.Rule==rule).OrderBy(s=>s.AverageSeconds).FirstOrDefault();}}
     internal void SaveScore(GameScore value)
     {
         if(!Valid(value))throw new IOException("成绩无效。");
-        lock(_gate){var history=LoadHistory();history.Recent.Add(value);history.Recent=history.Recent.TakeLast(100).ToList();if(history.Best is null||value.AverageSeconds<history.Best.AverageSeconds)history.Best=value;Directory.CreateDirectory(Root);StorageRelocation.WriteJson(Path.Combine(Root,"scores.json"),history);}
+        lock(_gate){var history=LoadHistory();history.Recent.Add(value);history.Recent=history.Recent.TakeLast(100).ToList();if(history.Best is null||value.AverageSeconds<history.Best.AverageSeconds)history.Best=value;var best=history.BestByRule.GetValueOrDefault(value.Rule);if(!Valid(best)||value.AverageSeconds<best!.AverageSeconds)history.BestByRule[value.Rule]=value;Directory.CreateDirectory(Root);StorageRelocation.WriteJson(Path.Combine(Root,"scores.json"),history);}
     }
 }
 internal static class GameIconCatalog

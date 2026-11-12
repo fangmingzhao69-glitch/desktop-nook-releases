@@ -10,6 +10,10 @@ public partial class MainWindow
         var menu=new MenuItem{Header="桌面玩法"};
         menu.Items.Add(Menu(_games?.Running==true?"继续图标台球":"图标台球…",()=>_=StartBilliardsAsync()));
         if(_games?.Running==true)menu.Items.Add(Menu("退出台球",()=>_games.Stop()));
+        menu.Items.Add(new Separator());menu.Items.Add(Menu("开源许可…",()=>
+        {
+            _interactions++;try{using var stream=typeof(MainWindow).Assembly.GetManifestResourceStream("DesktopNook.BilliardsLicense");using var reader=new System.IO.StreamReader(stream!);UiDialogs.Show(this,"Desktop Icon Billiards · LXG\n\n"+reader.ReadToEnd(),"开源许可");}finally{_interactions--;}
+        }));
         return menu;
     }
     internal async Task StartBilliardsAsync()
@@ -23,7 +27,7 @@ public partial class MainWindow
         try
         {
             SetStatus("正在准备图标台球…");_games??=new(Store.DataDirectory);
-            await _games.Launch(setup.Selection,setup.Settings,TaskbarPlacement.WorkArea(this));
+            await _games.Launch(setup.Selection,setup.Settings,TaskbarPlacement.ScreenArea(this));
             SetStatus("图标台球已打开");BeginHidePanel();
         }
         catch(Exception ex){if(!_allowExit){ShowPanel();SetStatus("台球未启动："+ex.Message);}}

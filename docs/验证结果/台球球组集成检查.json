@@ -1,0 +1,75 @@
+{
+  "inputMode": "ipc-simulation",
+  "passed": 34,
+  "failure": "",
+  "checks": [
+    "Collected and desktop catalogues remain independent read-only sources",
+    "Setup defaults to the current category and can cancel without changing data",
+    "Empty icon sources disable the start button",
+    "History retains 100 recent rounds and preserves an older all-time best",
+    "Rule-specific best scores survive 100 newer rounds without mixing different rules",
+    "Legacy free-count settings retain source and guide and default to fixed eight-ball",
+    "Nine-ball preset persists with its fixed count",
+    "Quarter-screen placement uses both dimensions and centres on offset monitors",
+    "Ball drawing clips icon and surface to a circular silhouette",
+    "Same executable starts a separate authenticated game process",
+    "Repeated start activates the existing game instead of duplicating it",
+    "Sparse sources clone only game bodies; a resting table has no rendering subscription",
+    "Game initially occupies one quarter of the screen and is centred",
+    "Game has neither a bottom license button nor a window-size hint footer",
+    "Authenticated IPC shot starts simulation and rendering",
+    "Pause detaches frames and excludes paused time",
+    "Resume restores the round",
+    "Guide changes travel through IPC and persist only in game settings",
+    "Completed round is recorded by the parent process",
+    "Repeated round completion cannot duplicate a score",
+    "Restart clears round state",
+    "Minimizing the game pauses physics and rendering",
+    "Close ends the child and its IPC session",
+    "\u4E2D\u516B uses its fixed count in a compact game window",
+    "\u65AF\u8BFA\u514B uses its fixed count in a compact game window",
+    "\u4E5D\u7403\u8FFD\u5206 uses its fixed count in a compact game window",
+    "\u5341\u4E94\u7403\u8FFD\u5206 uses its fixed count in a compact game window",
+    "30 repeated starts and stops leave no game process",
+    "Storage maintenance closes the game before acquiring data access",
+    "Normal maintenance exit closes both launcher and game within three seconds",
+    "Abnormal parent exit closes the orphan game within three seconds",
+    "Invalid protocol disconnects and closes the game instead of leaving a stuck session",
+    "Abnormal game exit does not stop the launcher",
+    "Game, restart and abnormal exit leave collection metadata, order and payloads unchanged"
+  ],
+  "samples": [
+    {
+      "phase": "initial",
+      "PrivateWorkingSet": 64815104,
+      "Commit": 116658176,
+      "CpuMs": 3578.125
+    },
+    {
+      "phase": "shot",
+      "Shots": 1,
+      "Paused": false,
+      "FrameSubscribed": true,
+      "InputTrace": "; mouse=(-488.0,-345.0) hit= over= enabled=True active=True button=Released"
+    },
+    {
+      "phase": "21-icons-quarter-screen",
+      "PrivateWorkingSet": 74293248,
+      "Commit": 129007616,
+      "CpuMs": 6390.625,
+      "FrameP95": 30.09270000000015
+    },
+    {
+      "phase": "parent-after-exit-15s",
+      "beforePrivateWorkingSet": 102014976,
+      "afterPrivateWorkingSet": 77844480,
+      "forcedGc": false
+    },
+    {
+      "phase": "parent-after-exit-60s",
+      "beforePrivateWorkingSet": 102014976,
+      "afterPrivateWorkingSet": 77742080,
+      "forcedGc": false
+    }
+  ]
+}

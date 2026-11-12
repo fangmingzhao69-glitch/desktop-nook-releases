@@ -101,6 +101,12 @@ internal static class TaskbarPlacement
         if(GetMonitorInfo(MonitorFromRect(ref rect,2),ref info)){double scale=GetDpiForWindow(new WindowInteropHelper(window).Handle)/96d;return new Rect(info.Work.Left/scale,info.Work.Top/scale,(info.Work.Right-info.Work.Left)/scale,(info.Work.Bottom-info.Work.Top)/scale);}
         return SystemParameters.WorkArea;
     }
+    internal static Rect ScreenArea(Window window)
+    {
+        GetWindowRect(new WindowInteropHelper(window).Handle,out var rect);var info=new MonitorInfo{Size=(uint)Marshal.SizeOf<MonitorInfo>()};
+        if(GetMonitorInfo(MonitorFromRect(ref rect,2),ref info)){double scale=GetDpiForWindow(new WindowInteropHelper(window).Handle)/96d;return new Rect(info.Monitor.Left/scale,info.Monitor.Top/scale,(info.Monitor.Right-info.Monitor.Left)/scale,(info.Monitor.Bottom-info.Monitor.Top)/scale);}
+        return new Rect(0,0,SystemParameters.PrimaryScreenWidth,SystemParameters.PrimaryScreenHeight);
+    }
     internal static bool WouldMove(Window window,TaskbarAnchor anchor,Size preferred)
     {
         if(!GetWindowRect(new WindowInteropHelper(window).Handle,out var current))return true;
