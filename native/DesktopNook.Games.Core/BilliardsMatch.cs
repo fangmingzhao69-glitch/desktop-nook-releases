@@ -1,7 +1,7 @@
 namespace DesktopNook.Games.Core;
 
 public sealed record ShotResult(IReadOnlyList<int> Respot,bool FreeBall,bool Finished,string Message);
-public sealed class BilliardsMatch(string rule,int players)
+public sealed partial class BilliardsMatch(string rule,int players)
 {
     public int Players {get;}=players is 1 or 2?players:throw new ArgumentOutOfRangeException(nameof(players));
     public int CurrentPlayer {get;private set;}

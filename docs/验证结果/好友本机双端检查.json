@@ -1,0 +1,44 @@
+{
+  "passed": 18,
+  "failure": "",
+  "scope": "two isolated game processes; loopback TCP/TLS; no external network claim",
+  "checks": [
+    "Actual setup selector produces a two-player host launch without writing network credentials",
+    "Actual invitation dialog validates pasted invitation and returns the selected room",
+    "Host runs in its own game process and exposes an ephemeral invitation",
+    "Two independent game processes join through actual TCP/TLS",
+    "Each player receives its seat and opening instructions",
+    "One ready player cannot start the shared game",
+    "Both ready starts the single authoritative round",
+    "Guest cannot shoot during the host turn",
+    "Both processes agree on settled ball positions, tray and turn",
+    "Transport loss restores the reserved guest seat without replaying the shot",
+    "Shared pause requires and receives both votes",
+    "Globally paused network views stop their rendering subscriptions",
+    "Consensual restart resets both players and reopens the rules",
+    "Authoritative network victory is recorded once on each side with separate local seats",
+    "Network records never replace solo best scores",
+    "Owner maintenance closes both game processes even while rules are open",
+    "Network game never changes collection metadata, sorting or collected content",
+    "Only the completed second round is recorded; the interrupted first round is omitted"
+  ],
+  "samples": [
+    {
+      "phase": "connected-opening-rules",
+      "hostPrivateWorkingSet": 50020352,
+      "guestPrivateWorkingSet": 35041280,
+      "totalPrivateWorkingSet": 85061632
+    },
+    {
+      "phase": "paused-warm-3s",
+      "hostPrivateWorkingSet": 72404992,
+      "guestPrivateWorkingSet": 83869696,
+      "totalPrivateWorkingSet": 156274688,
+      "hostCpuMs": 62.5,
+      "guestCpuMs": 31.25,
+      "hostFrameSubscribed": false,
+      "guestFrameSubscribed": false
+    }
+  ],
+  "forcedGc": false
+}

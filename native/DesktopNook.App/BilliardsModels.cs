@@ -6,6 +6,12 @@ using DesktopNook.Games.Core;
 
 namespace DesktopNook.App;
 internal sealed record GameIcon(string Id,string Name,string Path,bool Recycle=false);
+internal sealed class FriendLaunch
+{
+    public string Role {get;set;}="";
+    public string Invitation {get;set;}="";
+    public bool LoopbackOnly {get;set;}
+}
 internal sealed class GameSettings
 {
     public string Source {get;set;}="current";
@@ -17,6 +23,14 @@ internal sealed class GameSettings
 }
 internal sealed class GameMessage
 {
+    public FriendLaunch? Online {get;set;}
+    public string Connection {get;set;}="local";
+    public int LocalSeat {get;set;}
+    public string Invitation {get;set;}="";
+    public bool NetworkConnected {get;set;}
+    public bool NetworkStarted {get;set;}
+    public long NetworkSequence {get;set;}
+    public string NetworkHash {get;set;}="";
     public string Kind {get;set;}="";
     public string Nonce {get;set;}="";
     public int Pid {get;set;}
@@ -72,6 +86,8 @@ internal sealed record GameScore(DateTime CompletedUtc,string Source,int Count,i
     public int? Winner {get;init;}
     public int Score1 {get;init;}
     public int Score2 {get;init;}
+    public string Connection {get;init;}="local";
+    public int LocalSeat {get;init;}
     public double AverageSeconds=>Milliseconds/1000/Count;
 }
 internal sealed class GameStorage(string dataRoot)

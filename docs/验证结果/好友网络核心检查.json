@@ -1,0 +1,78 @@
+{
+  "passed": 18,
+  "failed": 0,
+  "checks": [
+    {
+      "name": "Invitation roundtrip, version, expiry and address validation",
+      "passed": true
+    },
+    {
+      "name": "View snapshot roundtrip preserves scores and excludes icon paths",
+      "passed": true
+    },
+    {
+      "name": "Actual IPv4 TCP TLS join and seat reservation",
+      "passed": true
+    },
+    {
+      "name": "Wrong certificate fingerprint cannot authenticate",
+      "passed": true
+    },
+    {
+      "name": "Wrong bearer secret cannot occupy the room",
+      "passed": true
+    },
+    {
+      "name": "Both ready before a shot; wrong player and duplicates rejected",
+      "passed": true
+    },
+    {
+      "name": "Non-finite and out-of-range shots rejected without state changes",
+      "passed": true
+    },
+    {
+      "name": "Host physics determines both views and free-ball turn",
+      "passed": true
+    },
+    {
+      "name": "Pause and restart require both seats",
+      "passed": true
+    },
+    {
+      "name": "Socket loss resumes the reserved seat and never replays a shot",
+      "passed": true
+    },
+    {
+      "name": "LAN discovery reveals no bearer secret and requires host approval",
+      "passed": true
+    },
+    {
+      "name": "Rejected discovered join does not reserve a seat",
+      "passed": true
+    },
+    {
+      "name": "IPv6 loopback uses the same invitation and TLS protocol",
+      "passed": true
+    },
+    {
+      "name": "All four rule presets negotiate their fixed ball counts",
+      "passed": true
+    },
+    {
+      "name": "Closing the host notifies the guest and releases its port",
+      "passed": true
+    },
+    {
+      "name": "Oversized framed message rejected before allocation",
+      "passed": true
+    },
+    {
+      "name": "Reconnect grace timeout ends rather than inventing a winner",
+      "passed": true
+    },
+    {
+      "name": "Obsolete board revision cannot place a free ball",
+      "passed": true
+    }
+  ]
+}

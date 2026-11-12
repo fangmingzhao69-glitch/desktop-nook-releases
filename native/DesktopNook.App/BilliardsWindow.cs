@@ -6,6 +6,7 @@ using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Threading;
 using DesktopNook.Games.Core;
+using DesktopNook.Games.Network;
 
 namespace DesktopNook.App;
 internal sealed class BilliardsSurface : FrameworkElement,IDisposable
@@ -24,6 +25,12 @@ internal sealed class BilliardsSurface : FrameworkElement,IDisposable
     private int _reported;
     internal bool MeasureFrames;
     internal string InputTrace="";
+    internal GamePeer? Peer;
+    internal bool LocalBlocked;
+    private bool _remoteCharge,_awaiting;
+    internal Action<string>? NetworkNotice;
+    private bool Charging=>Peer is null?Round.Phase==RoundPhase.Charging:_remoteCharge;
+    private bool CanAim=>Peer is null?!Round.Paused&&Round.Phase is RoundPhase.Ready or RoundPhase.Charging:Peer.CanAct&&!LocalBlocked&&!_awaiting&&Round.Phase==RoundPhase.Ready;
     private readonly List<double> _frameTimes=[];
     private double _lastFrame;
     private double _nextFrame;
@@ -48,13 +55,19 @@ internal sealed class BilliardsSurface : FrameworkElement,IDisposable
         MouseLeftButtonDown+=(_,e)=>
         {
             Focus();_pointer=World(e.GetPosition(this));Sync();
+            if(Peer is not null)
+            {
+                if(!Peer.CanAct||LocalBlocked||_awaiting)return;
+                if(Round.Phase==RoundPhase.WhitePlacement){_=SendOnline("Place",_pointer,0);return;}
+                if(CanAim&&Inside(_pointer)){_remoteCharge=true;_chargeStart=_clock.Elapsed.TotalSeconds;CaptureMouse();Wake();e.Handled=true;}return;
+            }
             if(MeasureFrames)InputTrace=$"down ({_pointer.X:F1},{_pointer.Y:F1}) {Round.Phase} paused={Round.Paused}";
             if(Round.Phase==RoundPhase.WhitePlacement){Round.PlaceWhite(_pointer);InvalidateVisual();Changed?.Invoke();return;}
             if(_pointer.X<BilliardsRound.Left||_pointer.X>BilliardsRound.Right||_pointer.Y<BilliardsRound.Top||_pointer.Y>BilliardsRound.Bottom)return;
             if(Round.BeginCharge()){_chargeStart=_clock.Elapsed.TotalSeconds;CaptureMouse();Wake();e.Handled=true;}
         };
-        MouseLeftButtonUp+=(_,e)=>{Sync();if(MeasureFrames)InputTrace+=$"; up ({World(e.GetPosition(this)).X:F1},{World(e.GetPosition(this)).Y:F1}) {Round.Phase}";if(Round.Phase==RoundPhase.Charging){var target=World(e.GetPosition(this));if(target.X>=BilliardsRound.Left&&target.X<=BilliardsRound.Right&&target.Y>=BilliardsRound.Top&&target.Y<=BilliardsRound.Bottom)Round.Shoot(target,Charge);else Round.CancelCharge();}ReleaseMouseCapture();Wake();Changed?.Invoke();};
-        LostMouseCapture+=(_,_)=>{if(MeasureFrames)InputTrace+=$"; capture-lost {Round.Phase}";Round.CancelCharge();InvalidateVisual();};
+        MouseLeftButtonUp+=(_,e)=>{Sync();var target=World(e.GetPosition(this));if(Peer is not null){bool send=_remoteCharge&&Inside(target);_remoteCharge=false;ReleaseMouseCapture();if(send)_=SendOnline("Shot",target,Charge);return;}if(MeasureFrames)InputTrace+=$"; up ({target.X:F1},{target.Y:F1}) {Round.Phase}";if(Round.Phase==RoundPhase.Charging){if(Inside(target))Round.Shoot(target,Charge);else Round.CancelCharge();}ReleaseMouseCapture();Wake();Changed?.Invoke();};
+        LostMouseCapture+=(_,_)=>{_remoteCharge=false;if(MeasureFrames)InputTrace+=$"; capture-lost {Round.Phase}";Round.CancelCharge();InvalidateVisual();};
     }
     private static string Key(GameIcon icon)=>icon.Recycle?"::recycle":icon.Path;
     private void IconReady(string key,ImageSource image)
@@ -65,7 +78,14 @@ internal sealed class BilliardsSurface : FrameworkElement,IDisposable
     private (double Scale,double X,double Y) Projection(){double s=Math.Max(.01,Math.Min(ActualWidth/1600,ActualHeight/900));return(s,(ActualWidth-1600*s)/2,(ActualHeight-900*s)/2);}
     private Vec World(Point p){var(s,x,y)=Projection();return new((p.X-x)/s,(p.Y-y)/s);}
     internal double Charge=>Math.Clamp((_clock.Elapsed.TotalSeconds-_chargeStart)/.9,0,1);
-    internal void Sync(){double now=_clock.Elapsed.TotalSeconds;Round.Advance(now-_last);_last=now;}
+    private static bool Inside(Vec p)=>p.X>=BilliardsRound.Left&&p.X<=BilliardsRound.Right&&p.Y>=BilliardsRound.Top&&p.Y<=BilliardsRound.Bottom;
+    internal async Task SendOnline(string kind,Vec target,double power)
+    {
+        if(Peer is null||_awaiting)return;_awaiting=true;
+        try{var ack=await Peer.Command(kind,target.X,target.Y,power);if(!ack.Accept)NetworkNotice?.Invoke(ack.Message);}finally{_awaiting=false;if(!_disposed)RefreshNetwork();}
+    }
+    internal void Sync(){double now=_clock.Elapsed.TotalSeconds;if(Peer is null)Round.Advance(now-_last);else if(Peer.ViewForRender() is { } view)Round.ApplyView(view);_last=now;}
+    internal void RefreshNetwork(){if(_disposed)return;Sync();if(Peer?.CanAct!=true){_remoteCharge=false;ReleaseMouseCapture();}if(!LocalBlocked&&(Peer?.Animating==true||_remoteCharge))Wake();else StopFrames();if(!LocalBlocked)InvalidateVisual();Changed?.Invoke();ReportComplete();}
     internal void Wake(){_last=_clock.Elapsed.TotalSeconds;if(!_frames&&!_disposed){_lastFrame=0;_nextFrame=0;_frames=true;CompositionTarget.Rendering+=Frame;}InvalidateVisual();}
     private void Frame(object? sender,EventArgs e)
     {
@@ -73,12 +93,13 @@ internal sealed class BilliardsSurface : FrameworkElement,IDisposable
         _nextFrame=_nextFrame<=0||tick-_nextFrame>50?tick+1000d/60:_nextFrame+1000d/60;
         if(MeasureFrames){double now=_clock.Elapsed.TotalMilliseconds;if(_lastFrame>0){if(_frameTimes.Count>=600)_frameTimes.RemoveAt(0);_frameTimes.Add(now-_lastFrame);}_lastFrame=now;}
         Sync();InvalidateVisual();Changed?.Invoke();
-        if(Round.Phase==RoundPhase.Finished&&_reported!=Round.RoundNumber){_reported=Round.RoundNumber;Completed?.Invoke();}
-        if(!Round.NeedsFrames)StopFrames();
+        ReportComplete();
+        if(Peer is null?!Round.NeedsFrames:LocalBlocked||!(Peer.Animating||_remoteCharge))StopFrames();
     }
     private void StopFrames(){if(_frames){CompositionTarget.Rendering-=Frame;_frames=false;}}
+    private void ReportComplete(){if(Round.Phase==RoundPhase.Finished&&_reported!=Round.RoundNumber){_reported=Round.RoundNumber;Completed?.Invoke();}}
     internal bool HasFrameSubscription=>_frames;
-    internal void Pause(bool paused){Sync();Round.SetPaused(paused);if(paused){Audio.Stop();ReleaseMouseCapture();StopFrames();}else if(Round.NeedsFrames)Wake();_last=_clock.Elapsed.TotalSeconds;InvalidateVisual();Changed?.Invoke();}
+    internal void Pause(bool paused){Sync();if(Peer is null)Round.SetPaused(paused);else LocalBlocked=paused;if(paused){_remoteCharge=false;Audio.Stop();ReleaseMouseCapture();StopFrames();}else if(Peer is null?Round.NeedsFrames:Peer.Animating)Wake();_last=_clock.Elapsed.TotalSeconds;InvalidateVisual();Changed?.Invoke();}
     internal void Restart(){Audio.Stop();StopFrames();Round.Reset(_icons.Count,Round.RuleId,Round.Match.Players);_last=_clock.Elapsed.TotalSeconds;InvalidateVisual();Changed?.Invoke();}
     internal void RefreshDpi(){_ballArt.Clear();InvalidateVisual();}
     internal DrawingGroup BallArt(Ball ball)
@@ -97,7 +118,7 @@ internal sealed class BilliardsSurface : FrameworkElement,IDisposable
         dc.DrawRoundedRectangle(Rail,_rim,new(35,35,1530,830),48,48);dc.DrawRoundedRectangle(Cloth,null,new(76,76,1448,748),30,30);
         for(int n=1;n<8;n++){double xx=80+n*180;dc.DrawEllipse(Trim,null,new(xx,53),3,3);dc.DrawEllipse(Trim,null,new(xx,847),3,3);}
         foreach(var pocket in Round.Pockets){dc.DrawEllipse(Shade,null,Point(pocket),39,39);dc.DrawEllipse(Hole,HoleRim,Point(pocket),33,33);}
-        if(Guide&&!Round.Paused&&Round.Phase is RoundPhase.Ready or RoundPhase.Charging)
+        if(Guide&&CanAim&&Round.Phase is RoundPhase.Ready or RoundPhase.Charging)
         {
             var preview=Round.Preview(_pointer);dc.DrawLine(_guide,Point(Round.White.Position),Point(preview.Contact));
             if(preview.ObjectDirection is Vec od)dc.DrawLine(_object,Point(preview.Contact),Point(preview.Contact+od*130));
@@ -117,18 +138,18 @@ internal sealed class BilliardsSurface : FrameworkElement,IDisposable
             if(ball.Impact>.02)dc.DrawEllipse(null,new Pen(Trim,ball.Impact*10),Point(pos),radius+5,radius+5);
             if(rotate)dc.Pop();dc.Pop();
         }
-        if(Round.Phase==RoundPhase.Charging)
+        if(Charging)
         {
             Vec d=(_pointer-Round.White.Position).Unit,p=Round.White.Position-d*(35+Charge*45);dc.DrawLine(Cue,Point(p),Point(p-d*110));
             dc.DrawRoundedRectangle(Hole,null,new(590,855,420,25),10,10);dc.DrawRoundedRectangle(Trim,null,new(594,859,412*Charge,17),7,7);Text(dc,$"力度 {Charge*100:0}%",new(800,858),12,Brushes.White,true);
         }
-        if(Round.Phase==RoundPhase.WhitePlacement)Text(dc,"点击台面空处摆放白球",new(800,440),25,Brushes.White,true);
+        if(Round.Phase==RoundPhase.WhitePlacement)Text(dc,Peer is null||Peer.CanAct?"点击台面空处摆放白球":$"等待玩家 {Round.Match.CurrentPlayer+1} 摆放白球",new(800,440),25,Brushes.White,true);
         if(Round.Paused||Round.Phase==RoundPhase.Finished)
         {
             dc.DrawRoundedRectangle(Overlay,_rim,new(420,300,760,260),25,25);
             string result=Round.Match.Players==1?"清台完成":Round.Match.Winner is int winner?$"玩家 {winner+1} 获胜":"双方平局";
-            Text(dc,Round.Phase==RoundPhase.Finished?result:"已暂停",new(800,345),38,Brushes.White,true);
-            Text(dc,Round.Phase==RoundPhase.Finished?(Round.Match.Players==2?$"比分 {Round.Match.Scores[0]} : {Round.Match.Scores[1]}  ·  {Round.Shots} 杆":$"{(int)Round.Elapsed/60:00}:{(int)Round.Elapsed%60:00}  ·  {Round.Shots} 杆  ·  平均 {Round.Elapsed/Round.Total:0.00} 秒 / 图标"):"点击上方“继续”或按空格",new(800,420),20,Ink,true);
+            Text(dc,Round.Phase==RoundPhase.Finished?result:Peer is not null?"好友房间":"已暂停",new(800,345),38,Brushes.White,true);
+            Text(dc,Round.Phase==RoundPhase.Finished?(Round.Match.Players==2?$"比分 {Round.Match.Scores[0]} : {Round.Match.Scores[1]}  ·  {Round.Shots} 杆":$"{(int)Round.Elapsed/60:00}:{(int)Round.Elapsed%60:00}  ·  {Round.Shots} 杆  ·  平均 {Round.Elapsed/Round.Total:0.00} 秒 / 图标"):Peer?.Status??"点击上方“继续”或按空格",new(800,420),20,Ink,true);
         }
         double dpi=VisualTreeHelper.GetDpi(this).PixelsPerDip;if(_brand is null||_brand.PixelsPerDip!=dpi)_brand=new FormattedText("轻匣 · 图标台球",CultureInfo.CurrentCulture,FlowDirection.LeftToRight,TextFace,13,Trim,dpi);
         dc.DrawText(_brand,new(800-_brand.Width/2,882));dc.Pop();
@@ -154,7 +175,7 @@ internal sealed partial class BilliardsWindow : Window
     private bool _ready;
     internal BilliardsWindow(GameMessage start,Func<GameMessage,Task> send)
     {
-        _send=send;Title="轻匣 · 图标台球";Icon=new System.Windows.Media.Imaging.BitmapImage(new Uri("pack://application:,,,/Assets/AppIcon.ico"));
+        _send=send;_onlineRequested=start.Online is not null;Title="轻匣 · 图标台球";Icon=new System.Windows.Media.Imaging.BitmapImage(new Uri("pack://application:,,,/Assets/AppIcon.ico"));
         WindowStyle=WindowStyle.SingleBorderWindow;ResizeMode=ResizeMode.CanResize;Background=new SolidColorBrush(Color.FromRgb(10,38,54));
         var fallback=SystemParameters.WorkArea;var screen=double.IsFinite(start.Width)&&double.IsFinite(start.Height)&&double.IsFinite(start.Left)&&double.IsFinite(start.Top)&&start.Width>0&&start.Height>0?new Rect(start.Left,start.Top,start.Width,start.Height):fallback;
         var bounds=BilliardsPlacement.Initial(screen);Width=bounds.Width;Height=bounds.Height;MinWidth=Math.Min(560,Width);MinHeight=Math.Min(320,Height);Left=bounds.Left;Top=bounds.Top;WindowStartupLocation=WindowStartupLocation.Manual;
@@ -164,30 +185,30 @@ internal sealed partial class BilliardsWindow : Window
         var guide=new CheckBox{Content="辅助线",IsChecked=start.Guide,Foreground=Brushes.White,VerticalAlignment=VerticalAlignment.Center,Margin=new Thickness(0,0,15,0)};
         guide.Checked+=(_,_)=>SetGuide(true);guide.Unchecked+=(_,_)=>SetGuide(false);actions.Children.Add(guide);_soundCheck.IsChecked=start.Sound;_soundCheck.ToolTip="力度越大，击球声越强；可随时关闭";_soundCheck.Checked+=(_,_)=>SetSound(true);_soundCheck.Unchecked+=(_,_)=>SetSound(false);actions.Children.Add(_soundCheck);actions.Children.Add(_pause);
         var instructions=new Button{Content="规则",Margin=new Thickness(8,0,0,0)};instructions.Click+=(_,_)=>ShowRules();actions.Children.Add(instructions);
-        var restart=new Button{Content="重新开始",Margin=new Thickness(8,0,8,0)};restart.Click+=(_,_)=>{Scene.Pause(true);if(UiDialogs.Show(this,"结束当前对局并重新摆球？","重新开始",MessageBoxButton.OKCancel)==MessageBoxResult.OK)RestartRound();UpdateHud();};actions.Children.Add(restart);
-        var close=new Button{Content="退出游戏"};close.Click+=(_,_)=>Close();actions.Children.Add(close);top.Children.Add(actions);top.Children.Add(_stats);DockPanel.SetDock(top,Dock.Top);root.Children.Add(top);DockPanel.SetDock(_turn,Dock.Top);root.Children.Add(_turn);
+        var restart=new Button{Content="重新开始",Margin=new Thickness(8,0,8,0)};restart.Click+=(_,_)=>{if(_onlineRequested){if(UiDialogs.Show(this,"向好友请求重新开始？双方同意后重置本局。","重开请求",MessageBoxButton.OKCancel)==MessageBoxResult.OK)_=OnlineCommand("Restart");return;}Scene.Pause(true);if(UiDialogs.Show(this,"结束当前对局并重新摆球？","重新开始",MessageBoxButton.OKCancel)==MessageBoxResult.OK)RestartRound();UpdateHud();};actions.Children.Add(restart);
+        var close=new Button{Content="退出游戏"};close.Click+=(_,_)=>Close();actions.Children.Add(close);top.Children.Add(actions);top.Children.Add(_stats);DockPanel.SetDock(top,Dock.Top);root.Children.Add(top);if(_onlineRequested){var bar=NetworkBar();DockPanel.SetDock(bar,Dock.Top);root.Children.Add(bar);}DockPanel.SetDock(_turn,Dock.Top);root.Children.Add(_turn);
         _leftTray=new(Scene,0){Width=110};_rightTray=new(Scene,1){Width=110};var arena=new DockPanel{Margin=new Thickness(2,0,2,6)};DockPanel.SetDock(_leftTray,Dock.Left);DockPanel.SetDock(_rightTray,Dock.Right);arena.Children.Add(_leftTray);arena.Children.Add(_rightTray);arena.Children.Add(Scene);root.Children.Add(arena);
-        var card=new StackPanel{Margin=new Thickness(24)};card.Children.Add(new TextBlock{Text=BilliardsRules.Get(start.Rule).Name+" · "+(start.Players==2?"双人对战规则":"练习说明"),FontSize=20,FontWeight=FontWeights.SemiBold,Foreground=Brushes.White,Margin=new Thickness(0,0,0,14)});
-        var explanation=new ScrollViewer{MaxHeight=Math.Max(120,Math.Min(420,Height*.52)),VerticalScrollBarVisibility=ScrollBarVisibility.Auto,Content=new TextBlock{Text=BilliardsRules.Instructions(start.Rule,start.Players),TextWrapping=TextWrapping.Wrap,Foreground=Brushes.LightCyan,FontSize=13,LineHeight=22}};card.Children.Add(explanation);_begin.Content=start.Players==2?"开始对战":"开始练习";_begin.Style=(Style)Application.Current.FindResource("PrimaryButton");_begin.IsDefault=true;_begin.Click+=(_,_)=>BeginGame();var ruleActions=new StackPanel{Orientation=Orientation.Horizontal,HorizontalAlignment=HorizontalAlignment.Right,Margin=new Thickness(0,18,0,0)};var ruleExit=new Button{Content="退出游戏",Foreground=Brushes.LightCyan,Margin=new Thickness(0,0,12,0),Padding=new Thickness(12,8,12,8)};ruleExit.Click+=(_,_)=>Close();ruleActions.Children.Add(ruleExit);ruleActions.Children.Add(_begin);card.Children.Add(ruleActions);
+        var card=new StackPanel{Margin=new Thickness(24)};card.Children.Add(new TextBlock{Text=BilliardsRules.Get(start.Rule).Name+" · "+(_onlineRequested?"好友联机规则":start.Players==2?"双人对战规则":"练习说明"),FontSize=20,FontWeight=FontWeights.SemiBold,Foreground=Brushes.White,Margin=new Thickness(0,0,0,14)});
+        var explanation=new ScrollViewer{MaxHeight=Math.Max(120,Math.Min(420,Height*.52)),VerticalScrollBarVisibility=ScrollBarVisibility.Auto,Content=new TextBlock{Text=OnlineInstructions(start),TextWrapping=TextWrapping.Wrap,Foreground=Brushes.LightCyan,FontSize=13,LineHeight=22}};card.Children.Add(explanation);_begin.Content=_onlineRequested?"准备对战":start.Players==2?"开始对战":"开始练习";_begin.IsEnabled=!_onlineRequested;_begin.Style=(Style)Application.Current.FindResource("PrimaryButton");_begin.IsDefault=true;_begin.Click+=(_,_)=>BeginGame();var ruleActions=new StackPanel{Orientation=Orientation.Horizontal,HorizontalAlignment=HorizontalAlignment.Right,Margin=new Thickness(0,18,0,0)};var ruleExit=new Button{Content="退出游戏",Foreground=Brushes.LightCyan,Margin=new Thickness(0,0,12,0),Padding=new Thickness(12,8,12,8)};ruleExit.Click+=(_,_)=>Close();ruleActions.Children.Add(ruleExit);ruleActions.Children.Add(_begin);card.Children.Add(ruleActions);
         _rules=new Border{Background=new SolidColorBrush(Color.FromArgb(244,12,45,60)),BorderBrush=Brushes.CadetBlue,BorderThickness=new Thickness(1),CornerRadius=new CornerRadius(15),HorizontalAlignment=HorizontalAlignment.Center,VerticalAlignment=VerticalAlignment.Center,Width=Math.Max(280,Math.Min(640,Width-60)),Child=card};KeyboardNavigation.SetTabNavigation(_rules,KeyboardNavigationMode.Cycle);var layers=new Grid();layers.Children.Add(root);var veil=new Border{Background=new SolidColorBrush(Color.FromArgb(175,3,18,28)),Child=_rules};layers.Children.Add(veil);_rules.Tag=veil;Content=layers;
         foreach(var button in actions.Children.OfType<Button>()){button.Background=new SolidColorBrush(Color.FromRgb(220,241,250));button.Foreground=new SolidColorBrush(Color.FromRgb(21,63,85));button.FontSize=11;button.Padding=new Thickness(8,5,8,5);}
-        _pause.Click+=(_,_)=>{if(!RulesVisible)Scene.Pause(!Scene.Round.Paused);};Scene.Changed=UpdateHud;Scene.Completed=()=>{var match=Scene.Round.Match;_=Notify(new(){Kind="RoundFinished",Rule=Scene.Round.RuleId,Players=match.Players,Winner=match.Winner,Score1=match.Scores[0],Score2=match.Scores[1],Round=Scene.Round.RoundNumber,Count=Scene.Round.Total,Shots=Scene.Round.Shots,Milliseconds=Scene.Round.Elapsed*1000});UpdateHud();};
+        _pause.Click+=(_,_)=>{if(!RulesVisible){if(_onlineRequested)_=OnlinePause();else Scene.Pause(!Scene.Round.Paused);}};Scene.Changed=UpdateHud;Scene.Completed=()=>{var match=Scene.Round.Match;_=Notify(new(){Kind="RoundFinished",Connection=_onlineRequested?"online":"local",LocalSeat=_peer?.Seat??0,Rule=Scene.Round.RuleId,Players=match.Players,Winner=match.Winner,Score1=match.Scores[0],Score2=match.Scores[1],Round=Scene.Round.RoundNumber,Count=Scene.Round.Total,Shots=Scene.Round.Shots,Milliseconds=Scene.Round.Elapsed*1000});UpdateHud();};
         _hud.Tick+=(_,_)=>{Scene.Sync();UpdateHud();};Loaded+=(_,_)=>{_ready=true;UpdateHud();if(!start.QuietTest)_begin.Focus();};
         Deactivated+=(_,_)=>{if(_ready)Scene.Pause(true);};StateChanged+=(_,_)=>{if(WindowState==WindowState.Minimized)Scene.Pause(true);};
         SizeChanged+=(_,_)=>{bool compact=ActualWidth<900;Grid.SetRow(actions,compact?1:0);Grid.SetColumn(actions,compact?0:1);Grid.SetColumnSpan(actions,compact?2:1);Grid.SetColumnSpan(_stats,compact?2:1);actions.Margin=compact?new Thickness(0,6,0,0):new Thickness(0);_leftTray.Width=_rightTray.Width=ActualWidth<800?80:110;if(_ready){_rules.Width=Math.Max(200,Math.Min(640,ActualWidth-60));explanation.MaxHeight=Math.Max(80,Math.Min(420,ActualHeight*.52));Scene.Pause(true);}};
-        PreviewKeyDown+=(_,e)=>{if(e.Key==Key.Escape){e.Handled=true;Close();}else if(e.Key==Key.Space&&!RulesVisible&&e.OriginalSource is not CheckBox&&WindowState!=WindowState.Minimized){e.Handled=true;Scene.Pause(!Scene.Round.Paused);}};
-        Closed+=(_,_)=>{_hud.Stop();Scene.Dispose();};
+        PreviewKeyDown+=(_,e)=>{if(e.Key==Key.Escape){e.Handled=true;Close();}else if(e.Key==Key.Space&&!RulesVisible&&e.OriginalSource is not CheckBox&&WindowState!=WindowState.Minimized){e.Handled=true;if(_onlineRequested)_=OnlinePause();else Scene.Pause(!Scene.Round.Paused);}};
+        Closed+=(_,_)=>{_hud.Stop();CloseNetwork();Scene.Dispose();};ConfigureNetwork(start);
     }
     private void SetGuide(bool value){Scene.Guide=value;Scene.InvalidateVisual();_=Notify(new(){Kind="SettingsChanged",Guide=value,Sound=_soundEnabled});}
     private void SetSound(bool value){_soundEnabled=value;Scene.Audio.Enabled=value;if(!value)Scene.Audio.Stop();_=Notify(new(){Kind="SettingsChanged",Guide=Scene.Guide,Sound=value});}
     internal void ShowRules(){_resumeAfterRules=!Scene.Round.Paused;Scene.Pause(true);_rules.Visibility=Visibility.Visible;((Border)_rules.Tag).Visibility=Visibility.Visible;_begin.Content=_intro?(Scene.Round.Match.Players==2?"开始对战":"开始练习"):"返回游戏";_begin.Focus();}
-    internal void BeginGame(){_rules.Visibility=Visibility.Collapsed;((Border)_rules.Tag).Visibility=Visibility.Collapsed;if(_intro||_resumeAfterRules)Scene.Pause(false);_intro=false;Scene.Focus();UpdateHud();}
+    internal void BeginGame(){bool first=_intro;_rules.Visibility=Visibility.Collapsed;((Border)_rules.Tag).Visibility=Visibility.Collapsed;if(_intro||_resumeAfterRules||_onlineRequested)Scene.Pause(false);_intro=false;if(first&&_onlineRequested)_=OnlineCommand("Ready");Scene.Focus();UpdateHud();}
     internal void RestartRound(){Scene.Restart();_intro=true;ShowRules();}
     private async Task Notify(GameMessage value){try{await _send(value);}catch{Close();}}
     private void UpdateHud()
     {
         var round=Scene.Round;string text=$"{BilliardsRules.Get(round.RuleId).Name}  {(int)round.Elapsed/60:00}:{(int)round.Elapsed%60:00}  {round.Pocketed}/{round.Total}  {round.Shots} 杆";if(_stats.Text!=text)_stats.Text=text;
-        _pause.Content=round.Paused?"继续":"暂停";
+        _pause.Content=_onlineRequested?(_peer?.Latest is {Started:true,Connected:true}&&round.Paused?"同意继续":"请求暂停"):round.Paused?"继续":"暂停";
         var match=round.Match;_turn.Text=match.Players==2?$"玩家 1：{match.Scores[0]}    玩家 2：{match.Scores[1]}    ·    当前玩家 {match.CurrentPlayer+1}    ·    目标：{match.Target}    ·    {match.LastMessage}":"单人练习";_leftTray.Refresh();_rightTray.Refresh();if(Scene.Audio.Unavailable)_soundCheck.ToolTip="当前音频设备不可用；游戏可继续，重新打开游戏可重试。";
         if(round.Started&&!round.Paused&&round.Phase!=RoundPhase.Finished)_hud.Start();else _hud.Stop();
     }

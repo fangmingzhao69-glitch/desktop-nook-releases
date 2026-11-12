@@ -27,6 +27,14 @@ internal sealed partial class BilliardsWindow
     {
         switch(action)
         {
+            case "net-shoot":if(RulesVisible)BeginGame();_=Scene.SendOnline("Shot",new(420,100),.18);break;
+            case "net-place":_=Scene.SendOnline("Place",new(420,450),0);break;
+            case "net-disconnect":_peer?.DropConnectionForVerification();break;
+            case "net-pause":_=OnlineCommand("Pause");break;
+            case "net-resume":_=OnlineCommand("Resume");break;
+            case "net-restart":_=OnlineCommand("Restart");break;
+            case "net-finish":
+                _room?.MutateForVerification(round=>{round.Shoot(new(1200,450),.2);round.Advance(.05);round.Advance(.05);foreach(var ball in round.Balls)ball.Velocity=new();round.Balls[1].Position=round.White.Position+new Vec(34,0);round.White.Velocity=new(120,0);round.Advance(.005);foreach(var ball in round.Balls)ball.Velocity=new();round.Balls[9].Position=round.Pockets[0];round.Advance(.02);});break;
             case "begin":_begin.RaiseEvent(new RoutedEventArgs(System.Windows.Controls.Button.ClickEvent));break;
             case "rules":ShowRules();break;
             case "sound":_soundCheck.IsChecked=!_soundEnabled;break;
@@ -63,6 +71,8 @@ internal sealed partial class BilliardsWindow
         var left=_leftTray.TranslatePoint(new Point(),this);var right=_rightTray.TranslatePoint(new Point(),this);var table=Scene.TranslatePoint(new Point(),this);
         result.SideTrays=left.X+_leftTray.ActualWidth<=table.X+1&&right.X>=table.X+Scene.ActualWidth-1&&_leftTray.ActualHeight>Scene.ActualHeight*.9;result.IconFraction=BilliardsBallDrawing.IconFraction;
         result.Players=Scene.Round.Match.Players;result.Winner=Scene.Round.Match.Winner;result.Score1=Scene.Round.Match.Scores[0];result.Score2=Scene.Round.Match.Scores[1];result.CurrentPlayer=Scene.Round.Match.CurrentPlayer;result.Sound=_soundEnabled;result.TrayCount=Scene.Round.PocketOrder.Count;result.RulesVisible=RulesVisible;result.AudioSubmitted=Scene.Audio.Submitted;result.AudioPending=Scene.Audio.Pending;result.AudioUnavailable=Scene.Audio.Unavailable;
+        result.Invitation=_invitation;result.LocalSeat=_peer?.Seat??0;result.Connection=_onlineRequested?"online":"local";result.NetworkConnected=_peer?.Latest?.Connected==true&&_peer.Connected;result.NetworkStarted=_peer?.Latest?.Started==true;result.NetworkSequence=_peer?.Latest?.Sequence??0;
+        if(_peer?.Latest is { } state){var stable=new{state.Round.Round,state.Round.Shots,state.Round.Phase,state.Round.Match,state.Round.PocketOrder,Balls=state.Round.Balls.Select(b=>new{b.Id,b.X,b.Y,b.Sunk,b.PottedBy})};result.NetworkHash=Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(System.Text.Json.JsonSerializer.SerializeToUtf8Bytes(stable)));}
         result.DisplayState=WindowState.ToString();var mouse=System.Windows.Input.Mouse.GetPosition(Scene);result.InputTrace=Scene.InputTrace+$"; mouse=({mouse.X:F1},{mouse.Y:F1}) hit={InputHitTest(System.Windows.Input.Mouse.GetPosition(this))?.GetType().Name} over={System.Windows.Input.Mouse.DirectlyOver?.GetType().Name} enabled={Scene.IsEnabled} active={IsActive} button={System.Windows.Input.Mouse.LeftButton}";result.HasFooter=LegacyFooter((System.Windows.DependencyObject)Content);result.FrameP95=Scene.FrameP95;result.FrameMean=Scene.FrameMean;result.FrameCount=Scene.FrameCount;return result;
     }
 }

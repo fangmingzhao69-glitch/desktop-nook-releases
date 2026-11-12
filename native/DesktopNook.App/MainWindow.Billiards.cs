@@ -27,7 +27,7 @@ public partial class MainWindow
         try
         {
             SetStatus("正在准备图标台球…");_games??=new(Store.DataDirectory);
-            await _games.Launch(setup.Selection,setup.Settings,TaskbarPlacement.ScreenArea(this));
+            await _games.Launch(setup.Selection,setup.Settings,TaskbarPlacement.ScreenArea(this),online:setup.Online);
             SetStatus("图标台球已打开");BeginHidePanel();
         }
         catch(Exception ex){if(!_allowExit){ShowPanel();SetStatus("台球未启动："+ex.Message);}}

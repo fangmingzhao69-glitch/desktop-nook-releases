@@ -25,6 +25,7 @@ internal static class BilliardsHost
             using(var self=Process.GetCurrentProcess())await Send(new(){Kind="Hello",Pid=self.Id,StartTicks=self.StartTime.ToUniversalTime().Ticks});
             var start=await GameWire.Read(reader,cancel.Token);
             if(start?.Kind!="Start"||start.Nonce!=nonce||start.Players is not (1 or 2)||start.Icons.Count is <1 or >45||!BilliardsRules.Matches(start.Rule,start.Count)||start.Icons.Any(i=>string.IsNullOrWhiteSpace(i.Name)||i.Name.Length>4096||i.Path.Length>32768))throw new IOException("台球配置无效。");
+            if(start.Online is { } online){if(start.Players!=2||online.Role is not ("host" or "join"))throw new IOException("好友配置无效。");if(!start.TestMode)online.LoopbackOnly=false;}
             ShellIntegration.SetAppId("DesktopNook.IconBilliards");
             window=new BilliardsWindow(start,Send);Application.Current.MainWindow=window;
             var closed=new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);window.Closed+=(_,_)=>closed.TrySetResult();
@@ -32,13 +33,13 @@ internal static class BilliardsHost
             async Task Receive()
             {
                 try{while(!cancel.IsCancellationRequested){var message=await GameWire.Read(reader,cancel.Token);if(message is null||message.Nonce!=nonce)break;if(message.Kind=="Close")break;if(message.Kind=="Activate")await window.Dispatcher.InvokeAsync(()=>{window.WindowState=WindowState.Normal;window.Activate();});if(start.TestMode&&message.Kind=="Test"){var response=await window.Dispatcher.InvokeAsync(()=>window.Test(message.Action));response.Kind="Probe";response.Request=message.Request;await Send(response);}}}
-                catch(Exception){}finally{if(!cancel.IsCancellationRequested)await window.Dispatcher.InvokeAsync(()=>window.Close());}
+                catch(Exception){}finally{if(!cancel.IsCancellationRequested)await window.Dispatcher.InvokeAsync(()=>window.CloseFromOwner());}
             }
-            async Task WatchParent(){try{await parent.WaitForExitAsync(cancel.Token);await window.Dispatcher.InvokeAsync(()=>window.Close());}catch(OperationCanceledException){} }
+            async Task WatchParent(){try{await parent.WaitForExitAsync(cancel.Token);await window.Dispatcher.InvokeAsync(()=>window.CloseFromOwner());}catch(OperationCanceledException){} }
             _=Receive();_=WatchParent();await closed.Task;
             try{await Send(new(){Kind="Closed"});}catch{}
         }
-        catch(Exception){window?.Close();}
+        catch(Exception){window?.CloseFromOwner();}
         finally{cancel.Cancel();Application.Current.Shutdown();}
     }
 }

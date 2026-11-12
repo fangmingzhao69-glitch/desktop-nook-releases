@@ -30,7 +30,7 @@ public sealed class Ball
 }
 public readonly record struct AimPreview(Vec Contact,Vec? ObjectDirection,Vec? WhiteDirection,int? BallId);
 
-public sealed class BilliardsRound
+public sealed partial class BilliardsRound
 {
     public const double Width=1600,Height=900,Left=80,Top=80,Right=1520,Bottom=820,PocketRadius=33;
     private readonly List<Ball> _balls=[];
