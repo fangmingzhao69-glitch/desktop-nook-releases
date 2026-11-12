@@ -1,0 +1,80 @@
+{
+  "success": true,
+  "version": "0.14.0+11a77f13eb6b331c27e44c755362fd7cb655e046",
+  "backup": "E:\\yingyon\\DesktopNook.UpgradeBackup-0.13.1-20261112-231928",
+  "itemsBefore": 58,
+  "itemsAfter": 58,
+  "categoriesBefore": 7,
+  "categoriesAfter": 7,
+  "primaryMetadataHashUnchanged": true,
+  "metadataBefore": {
+    "state.json": "71A32E4CBFFF013C7EBC31614185D78D11FD3520B401CAF964D8DC53CCF5974E",
+    "preferences.json": "3DDC141FC37D29A1D0B1DDD1AB315879F9F67B0749741A0A0DA3599381C46F79",
+    "category-policy.json": "6CE9BD02C384FBD23D772EFCA1B87418047B190724D3A4ED64D66F0A455F0A37",
+    "preferences.json.bak": "3DDC141FC37D29A1D0B1DDD1AB315879F9F67B0749741A0A0DA3599381C46F79",
+    "state.json.bak": "28D3E74679F3D321364C8762E7BD37C089984A0C510E569F2E0092987F60C3E8",
+    "storage.json": "66EF5D088D2AD347803B2ADAFBB03913B3A8A3516C0C915D65F7E879294B4289",
+    "item-order.json": "C33303247850D2B1067F6A175207BAAD65D4EDB74841A017CE8311799C99A9A1",
+    "item-order.json.bak": "C33303247850D2B1067F6A175207BAAD65D4EDB74841A017CE8311799C99A9A1"
+  },
+  "metadataAfter": {
+    "state.json": "71A32E4CBFFF013C7EBC31614185D78D11FD3520B401CAF964D8DC53CCF5974E",
+    "preferences.json": "3DDC141FC37D29A1D0B1DDD1AB315879F9F67B0749741A0A0DA3599381C46F79",
+    "category-policy.json": "6CE9BD02C384FBD23D772EFCA1B87418047B190724D3A4ED64D66F0A455F0A37",
+    "preferences.json.bak": "3DDC141FC37D29A1D0B1DDD1AB315879F9F67B0749741A0A0DA3599381C46F79",
+    "state.json.bak": "28D3E74679F3D321364C8762E7BD37C089984A0C510E569F2E0092987F60C3E8",
+    "storage.json": "66EF5D088D2AD347803B2ADAFBB03913B3A8A3516C0C915D65F7E879294B4289",
+    "item-order.json": "C33303247850D2B1067F6A175207BAAD65D4EDB74841A017CE8311799C99A9A1",
+    "item-order.json.bak": "C33303247850D2B1067F6A175207BAAD65D4EDB74841A017CE8311799C99A9A1"
+  },
+  "vaultBefore": {
+    "Files": 13281,
+    "Directories": 311,
+    "Bytes": 714222639,
+    "Sha256": "8BFFEC94AE384AB929F1DEEB3DD96B37670B529F700C58427741C46534F28F38"
+  },
+  "vaultAfter": {
+    "Files": 13281,
+    "Directories": 311,
+    "Bytes": 714222639,
+    "Sha256": "8BFFEC94AE384AB929F1DEEB3DD96B37670B529F700C58427741C46534F28F38"
+  },
+  "vaultMainDataUnchanged": true,
+  "gameSettingsUnchangedUntilUse": true,
+  "legacyDirectoriesRemainAbsent": true,
+  "installedExeSha256": "E757A5C4247EBB02B2EE36EC3F77793F1160A008AE552AEC794878FCA48B3E69",
+  "installerSha256": "5DA91BE878B8A1671E23C9DA49EBBBB57D0A5E91BB68591FD6582C3420B11EEF",
+  "installedDuelUi": {
+    "success": true,
+    "dualModeSelectable": true,
+    "openingRulesVisible": true,
+    "startButtonWorks": true,
+    "rulesCanReopen": true,
+    "mutePersistsWithoutChangingGuide": true,
+    "fortyPercentArea": true,
+    "screenCentred": true,
+    "originalPreferencesRestored": true,
+    "failure": "",
+    "screenPixels": [
+      2560,
+      1440
+    ],
+    "windowPixels": [
+      470,
+      265,
+      1619,
+      911
+    ],
+    "areaRatio": 0.4000946723090278
+  },
+  "oldPackageArchived": "E:\\yingyon\\DesktopNook.UpgradeBackup-0.13.1-20261112-231928\\旧版交付包\\轻匣-v0.13.1",
+  "release": {
+    "url": "https://github.com/fangmingzhao69-glitch/desktop-nook-releases/releases/tag/v0.14.0",
+    "sourceCommit": "11a77f13eb6b331c27e44c755362fd7cb655e046",
+    "serverAssetHashesVerified": true,
+    "exeBytes": 1063982,
+    "installerBytes": 468827
+  },
+  "primaryMetadataStillUnchangedAfterGameUi": true,
+  "legacyScoresUnchangedAfterIncompleteDemos": true
+}
