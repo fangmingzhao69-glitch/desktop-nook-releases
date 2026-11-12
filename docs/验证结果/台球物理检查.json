@@ -1,0 +1,62 @@
+{
+  "passed": 14,
+  "failed": 0,
+  "checks": [
+    {
+      "name": "Ball count bounds and independent clone identities",
+      "passed": true
+    },
+    {
+      "name": "No time elapses before first shot",
+      "passed": true
+    },
+    {
+      "name": "Pause freezes physics and excludes paused time",
+      "passed": true
+    },
+    {
+      "name": "Charge cancellation and invalid input never fires",
+      "passed": true
+    },
+    {
+      "name": "Frontal collision transfers velocity",
+      "passed": true
+    },
+    {
+      "name": "Separating bodies do not receive extra impulse",
+      "passed": true
+    },
+    {
+      "name": "Coincident centres stay finite",
+      "passed": true
+    },
+    {
+      "name": "Aim preview uses expanded collision radius and first obstacle",
+      "passed": true
+    },
+    {
+      "name": "Wall preview reflects direction",
+      "passed": true
+    },
+    {
+      "name": "Shot gating, clock and friction settle deterministically",
+      "passed": true
+    },
+    {
+      "name": "White pocket does not count as an icon and respawns safely",
+      "passed": true
+    },
+    {
+      "name": "Pocketing all icons finishes and freezes score time",
+      "passed": true
+    },
+    {
+      "name": "Restart resets complete round state",
+      "passed": true
+    },
+    {
+      "name": "High-speed play remains bounded and finite",
+      "passed": true
+    }
+  ]
+}

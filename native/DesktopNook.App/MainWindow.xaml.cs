@@ -74,14 +74,14 @@ public partial class MainWindow : Window
     {
         if(_allowExit)return;e.Cancel=true;
         if(_dragging||_interactions>0)return;
-        if(App.Options.CloseEndsProcess){_allowExit=true;e.Cancel=false;Dispatcher.BeginInvoke(()=>Application.Current.Shutdown());}else BeginHidePanel();
+        if(App.Options.CloseEndsProcess){if(!StopBilliards())return;_allowExit=true;e.Cancel=false;Dispatcher.BeginInvoke(()=>Application.Current.Shutdown());}else BeginHidePanel();
     }
     private void OnCloseButton(object sender,RoutedEventArgs e)=>Close();
     private void OnMinimizeButton(object sender,RoutedEventArgs e)=>BeginHidePanel();
-    public void Quit() { _idleRelease.Stop();FinishPanelMotion();_shutter.ReleaseBuffer();UiMotion.CancelAll();_allowExit=true; Application.Current.Shutdown(); }
+    public void Quit() { if(!StopBilliards())return;_idleRelease.Stop();FinishPanelMotion();_shutter.ReleaseBuffer();UiMotion.CancelAll();_allowExit=true; Application.Current.Shutdown(); }
     internal void QuitForMaintenance(){if(!_dragging&&_interactions==0)Quit();}
     private bool _storageMoving;
-    internal bool TryBeginStorageMove(){if(_dragging||_interactions>0||_menus>0||_onlineBusy)return false;_storageMoving=true;_interactions++;IsEnabled=false;return true;}
+    internal bool TryBeginStorageMove(){if(_dragging||_interactions>0||_menus>0||_onlineBusy||!StopBilliards())return false;_storageMoving=true;_interactions++;IsEnabled=false;return true;}
     internal void EndStorageMove(){_storageMoving=false;_interactions--;IsEnabled=true;Render();}
     public void SetStatus(string message) { _shutter.InvalidateSnapshot();Status.Text=message;Status.ToolTip=message; }
     public void Render()
@@ -195,7 +195,7 @@ public partial class MainWindow : Window
             var choice=Menu(name,()=>Run(()=>{options.MotionMode=mode;UiMotion.Configure(mode);},"动画效果已更新"));choice.IsCheckable=true;choice.IsChecked=options.MotionMode==mode;motion.Items.Add(choice);
         }
         Popup((FrameworkElement)sender,[
-        startup,closing,WindowSizeMenu(),motion,new Separator(),
+        startup,closing,WindowSizeMenu(),motion,GamesMenu(),new Separator(),
         Menu(UpdateMenuText,()=>_ = CheckOnlineUpdateAsync(true)),
         Menu("从本地文件更新…",()=>_ = SelectUpdateAsync()),
         Menu("全部移回桌面",RestoreAll,Store.State.Items.Count>0),
@@ -212,8 +212,8 @@ public partial class MainWindow : Window
         {
             var picker=new Microsoft.Win32.OpenFileDialog{Title="选择轻匣新版本",Filter="轻匣程序或安装包 (*.exe)|*.exe",CheckFileExists=true};if(picker.ShowDialog(this)!=true)return;
             var source=picker.FileName;var target=Environment.ProcessPath!;var candidate=await Task.Run(()=>LocalUpdater.Inspect(source));
-            if(UiDialogs.ShowUpdate(this,"当前版本："+CurrentVersionLabel+"\n更新到：v"+candidate.Version.ToString(3)+"\n\n程序会在原位置更新，保留分类、收纳内容和设置，完成后自动打开。","更新轻匣",MessageBoxButton.OKCancel)!=MessageBoxResult.OK)return;
-            SetStatus("正在准备更新…");var staged=await Task.Run(()=>LocalUpdater.Stage(source,target,Store.DataDirectory,App.IsSandbox?App.SandboxRoot:null,options:App.Options,state:Store.State));
+            if(UiDialogs.ShowUpdate(this,"当前版本："+CurrentVersionLabel+"\n更新到：v"+candidate.Version.ToString(3)+GameUpdateNotice+"\n\n程序会在原位置更新，保留分类、收纳内容和设置，完成后自动打开。","更新轻匣",MessageBoxButton.OKCancel)!=MessageBoxResult.OK)return;
+            if(!StopBilliards())return;SetStatus("正在准备更新…");var staged=await Task.Run(()=>LocalUpdater.Stage(source,target,Store.DataDirectory,App.IsSandbox?App.SandboxRoot:null,options:App.Options,state:Store.State));
             var helper=new ProcessStartInfo(staged.Helper){UseShellExecute=false,CreateNoWindow=true};helper.ArgumentList.Add("--apply-update");helper.ArgumentList.Add(staged.Plan);Process.Start(helper);Quit();
         }
         catch(Exception ex){ShowFailure(ex);}
@@ -234,11 +234,11 @@ public partial class MainWindow : Window
             }
             SetStatus($"发现新版本 v{_latestRelease.Version.ToString(3)}，点击更新查看详情");
             if(!manual)return;
-            string notes=_latestRelease.Notes.Length>600?_latestRelease.Notes[..600]+"…":_latestRelease.Notes;
-            if(UiDialogs.ShowUpdate(this,$"当前版本：{CurrentVersionLabel}\n更新到：v{_latestRelease.Version.ToString(3)}\n来源：GitHub 官方发行版\n\n{notes}\n\n选择确定后从 GitHub 下载更新并自动重启，分类、收纳内容和设置保留。","发现新版本",MessageBoxButton.OKCancel)!=MessageBoxResult.OK)return;
-            var download=new UpdateDownloadWindow(this,_latestRelease,Store.DataDirectory);
+            string gameNotice=GameUpdateNotice;string notes=_latestRelease.Notes.Length>600?_latestRelease.Notes[..600]+"…":_latestRelease.Notes;
+            if(UiDialogs.ShowUpdate(this,$"当前版本：{CurrentVersionLabel}\n更新到：v{_latestRelease.Version.ToString(3)}\n来源：GitHub 官方发行版\n\n{notes}{gameNotice}\n\n选择确定后从 GitHub 下载更新并自动重启，分类、收纳内容和设置保留。","发现新版本",MessageBoxButton.OKCancel)!=MessageBoxResult.OK)return;
+            if(!StopBilliards())return;var download=new UpdateDownloadWindow(this,_latestRelease,Store.DataDirectory);
             if(download.ShowDialog()!=true||download.DownloadedFile is null)return;
-            SetStatus("正在准备更新…");
+            if(!StopBilliards())return;SetStatus("正在准备更新…");
             var staged=await Task.Run(()=>LocalUpdater.Stage(download.DownloadedFile,Environment.ProcessPath!,Store.DataDirectory,App.IsSandbox?App.SandboxRoot:null,options:App.Options,state:Store.State));
             using(var plan=System.Text.Json.JsonDocument.Parse(File.ReadAllText(staged.Plan)))
                 if(!plan.RootElement.GetProperty("CandidateHash").GetString()!.Equals(_latestRelease.Sha256,StringComparison.OrdinalIgnoreCase))throw new IOException("更新文件校验失败，请重新下载。");

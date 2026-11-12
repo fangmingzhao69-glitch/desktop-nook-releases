@@ -1,0 +1,69 @@
+{
+  "conditions": "45 unique synthetic URL sources; 1920x1040 DIP window; warm three rounds; own isolated processes",
+  "first": {
+    "failure": "",
+    "samples": [
+      {
+        "phase": "first-shot",
+        "PrivateWorkingSet": 88932352,
+        "Commit": 157188096,
+        "FrameP95": 31.16249999999991,
+        "FrameMean": 16.539953719008263,
+        "FrameCount": 121
+      },
+      {
+        "phase": "three-rounds-warm",
+        "PrivateWorkingSet": 82673664,
+        "Commit": 151830528,
+        "FrameP95": 31.553399999999783,
+        "FrameMean": 17.031002625820566,
+        "FrameCount": 457,
+        "approximateFps": 58.71644917040339
+      },
+      {
+        "phase": "minimized-2s",
+        "PrivateWorkingSet": 82706432,
+        "Commit": 151830528,
+        "cpuMs": 62.5,
+        "FrameSubscribed": false,
+        "Paused": true
+      }
+    ],
+    "forcedGc": false
+  },
+  "final": {
+    "failure": "",
+    "samples": [
+      {
+        "phase": "first-shot",
+        "PrivateWorkingSet": 80351232,
+        "Commit": 149925888,
+        "FrameP95": 33.88619999999992,
+        "FrameMean": 16.871184033613446,
+        "FrameCount": 119
+      },
+      {
+        "phase": "three-rounds-warm",
+        "PrivateWorkingSet": 82997248,
+        "Commit": 154509312,
+        "FrameP95": 34.16740000000027,
+        "FrameMean": 16.624643290043288,
+        "FrameCount": 462,
+        "approximateFps": 60.15166656832347,
+        "parentPrivateWorkingSet": 61157376,
+        "totalPrivateWorkingSet": 144154624
+      },
+      {
+        "phase": "minimized-2s",
+        "PrivateWorkingSet": 83025920,
+        "Commit": 154546176,
+        "cpuMs": 93.75,
+        "FrameSubscribed": false,
+        "Paused": true
+      }
+    ],
+    "forcedGc": false
+  },
+  "forcedGc": false,
+  "trimWorkingSet": false
+}

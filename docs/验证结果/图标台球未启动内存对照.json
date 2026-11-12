@@ -1,0 +1,119 @@
+{
+  "baselineVersion": "0.12.13",
+  "candidateVersion": "0.13.0",
+  "conditions": "58 synthetic URL icons; 7 categories; motion on; 10 cycles; separate processes; one run each",
+  "forcedGc": false,
+  "trimWorkingSet": false,
+  "baseline": {
+    "variant": "on-1",
+    "cycles": 10,
+    "items": 58,
+    "categories": 7,
+    "samples": [
+      {
+        "stage": "startup-minimized",
+        "privateWorkingSet": 36610048,
+        "workingSet": 119484416,
+        "private": 62648320,
+        "handles": 660,
+        "cpuMs": 812.5
+      },
+      {
+        "stage": "first-open",
+        "privateWorkingSet": 83226624,
+        "workingSet": 205643776,
+        "private": 129961984,
+        "handles": 1134,
+        "cpuMs": 2421.875
+      },
+      {
+        "stage": "after-10-cycles-open",
+        "privateWorkingSet": 96694272,
+        "workingSet": 221876224,
+        "private": 213000192,
+        "handles": 1134,
+        "cpuMs": 5796.875
+      },
+      {
+        "stage": "idle-minimized-3s",
+        "privateWorkingSet": 94912512,
+        "workingSet": 218316800,
+        "private": 192905216,
+        "handles": 1134,
+        "cpuMs": 5859.375
+      },
+      {
+        "stage": "idle-minimized-6s",
+        "privateWorkingSet": 93093888,
+        "workingSet": 216776704,
+        "private": 191688704,
+        "handles": 1124,
+        "cpuMs": 5984.375
+      },
+      {
+        "stage": "idle-minimized-15s",
+        "privateWorkingSet": 86732800,
+        "workingSet": 210427904,
+        "private": 120107008,
+        "handles": 1119,
+        "cpuMs": 6015.625
+      }
+    ]
+  },
+  "candidate": {
+    "variant": "on-1",
+    "cycles": 10,
+    "items": 58,
+    "categories": 7,
+    "samples": [
+      {
+        "stage": "startup-minimized",
+        "privateWorkingSet": 36151296,
+        "workingSet": 119087104,
+        "private": 62423040,
+        "handles": 660,
+        "cpuMs": 828.125
+      },
+      {
+        "stage": "first-open",
+        "privateWorkingSet": 82980864,
+        "workingSet": 205381632,
+        "private": 129941504,
+        "handles": 1134,
+        "cpuMs": 2343.75
+      },
+      {
+        "stage": "after-10-cycles-open",
+        "privateWorkingSet": 98541568,
+        "workingSet": 224915456,
+        "private": 213655552,
+        "handles": 1138,
+        "cpuMs": 6093.75
+      },
+      {
+        "stage": "idle-minimized-3s",
+        "privateWorkingSet": 96845824,
+        "workingSet": 221437952,
+        "private": 146604032,
+        "handles": 1138,
+        "cpuMs": 6218.75
+      },
+      {
+        "stage": "idle-minimized-6s",
+        "privateWorkingSet": 88084480,
+        "workingSet": 212987904,
+        "private": 138596352,
+        "handles": 1128,
+        "cpuMs": 6281.25
+      },
+      {
+        "stage": "idle-minimized-15s",
+        "privateWorkingSet": 80674816,
+        "workingSet": 205590528,
+        "private": 114192384,
+        "handles": 1123,
+        "cpuMs": 6328.125
+      }
+    ]
+  }
+}

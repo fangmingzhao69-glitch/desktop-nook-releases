@@ -8,6 +8,8 @@ try {
     if (-not $SkipTests) {
         dotnet run --project DesktopNook.Tests -c Release -- test-results\core.json
         if ($LASTEXITCODE -ne 0) { throw 'Core checks failed.' }
+        dotnet run --project DesktopNook.Games.Tests -c Release -- test-results\game-core.json
+        if ($LASTEXITCODE -ne 0) { throw 'Game core checks failed.' }
     }
     dotnet publish DesktopNook.App -c Release -r win-x64 --self-contained false -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -p:DebugType=None -p:DebugSymbols=false -o artifacts\win-x64
     if ($LASTEXITCODE -ne 0) { throw 'Publish failed.' }

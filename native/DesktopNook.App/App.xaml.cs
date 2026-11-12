@@ -19,6 +19,8 @@ public partial class App : Application
     {
         try
         {
+            var game=Array.IndexOf(e.Args,"--icon-billiards");if(game>=0){_=BilliardsHost.Run(e.Args,game);return;}
+            if(e.Args.Any(a=>a is "--billiards-self-test" or "--billiards-parent-probe" or "--billiards-perf-test")&&!e.Args.Contains("--sandbox"))throw new IOException("台球检查必须使用沙箱。");
             var storageTest=Array.IndexOf(e.Args,"--storage-self-test");if(storageTest>=0){Shutdown(StorageVerification.Run(Path.GetFullPath(e.Args[storageTest+1])));return;}
             var relocate=Array.IndexOf(e.Args,"--relocate-storage");if(relocate>=0){Shutdown(DataPaths.MigrateCommand(e.Args[relocate+1],e.Args[relocate+2],e.Args[relocate+3]));return;}
             var onlineTest=Array.IndexOf(e.Args,"--verify-online-update");if(onlineTest>=0){Shutdown(Task.Run(()=>OnlineUpdateVerification.Run(e.Args[onlineTest+1],e.Args[onlineTest+2],e.Args.Contains("--live"),e.Args.Contains("--live-check"))).GetAwaiter().GetResult());return;}
@@ -85,6 +87,9 @@ public partial class App : Application
             if(legacyHandoff)Dispatcher.BeginInvoke(async()=>await RelocateAfterHandoff(window,e.Args[Array.IndexOf(e.Args,"--resume-update")+1]),System.Windows.Threading.DispatcherPriority.ContextIdle);
             DispatcherUnhandledException += (_, args) => { args.Handled = true; window.ShowFailure(args.Exception); };
             if (e.Args.Contains("--ui-self-test")) Dispatcher.BeginInvoke(async () => await NativeVerification.Run(window, root), System.Windows.Threading.DispatcherPriority.Loaded);
+            if (e.Args.Contains("--billiards-self-test")) Dispatcher.BeginInvoke(async () => await BilliardsVerification.Run(window, root), System.Windows.Threading.DispatcherPriority.Loaded);
+            if (e.Args.Contains("--billiards-parent-probe")) Dispatcher.BeginInvoke(async () => await BilliardsVerification.ParentProbe(window, root), System.Windows.Threading.DispatcherPriority.Loaded);
+            if (e.Args.Contains("--billiards-perf-test")) Dispatcher.BeginInvoke(async () => await BilliardsVerification.Performance(window, root), System.Windows.Threading.DispatcherPriority.Loaded);
             if (e.Args.Contains("--motion-visibility-self-test")) Dispatcher.BeginInvoke(async () => await MotionVisibilityVerification.Run(window, root), System.Windows.Threading.DispatcherPriority.Loaded);
             if (e.Args.Contains("--memory-self-test")) Dispatcher.BeginInvoke(async () => await ResidencyVerification.Run(window, root), System.Windows.Threading.DispatcherPriority.Loaded);
             if (e.Args.Contains("--size-self-test")) Dispatcher.BeginInvoke(async () => await SizingVerification.Run(window, root), System.Windows.Threading.DispatcherPriority.Loaded);
@@ -133,7 +138,7 @@ public partial class App : Application
     [System.Runtime.InteropServices.DllImport("kernel32.dll",EntryPoint="CreateHardLinkW",CharSet=System.Runtime.InteropServices.CharSet.Unicode,SetLastError=true)]
     [return:System.Runtime.InteropServices.MarshalAs(System.Runtime.InteropServices.UnmanagedType.Bool)]
     private static extern bool CreateHardLink(string fileName,string existingFileName,IntPtr securityAttributes);
-    protected override void OnExit(ExitEventArgs e) { _stop?.Dispose();_activate?.Dispose(); if (_ownsMutex) _mutex?.ReleaseMutex(); _mutex?.Dispose(); base.OnExit(e); }
+    protected override void OnExit(ExitEventArgs e) { BilliardsController.Current?.Dispose();_stop?.Dispose();_activate?.Dispose(); if (_ownsMutex) _mutex?.ReleaseMutex(); _mutex?.Dispose(); base.OnExit(e); }
 }
 
 internal sealed class SandboxRecycle(string root) : IRecycleBin

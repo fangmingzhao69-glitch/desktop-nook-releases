@@ -1,0 +1,15 @@
+{
+  "success": true,
+  "helperExit": 0,
+  "oldVersion": "0.12.13.0",
+  "newVersion": "0.13.0.0",
+  "deletedCategoryRetained": true,
+  "uncheckedPreferenceRetained": true,
+  "collectViewRetained": true,
+  "motionModeRetained": true,
+  "categoryOrdersRetained": true,
+  "orderedCategories": 3,
+  "configurationHashUnchanged": true,
+  "payloadUnchanged": true,
+  "newProcessConfirmed": true
+}
