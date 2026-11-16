@@ -20,7 +20,7 @@ public partial class App : Application
         try
         {
             var game=Array.IndexOf(e.Args,"--icon-billiards");if(game>=0){_=BilliardsHost.Run(e.Args,game);return;}
-            if(e.Args.Any(a=>a is "--billiards-self-test" or "--billiards-parent-probe" or "--billiards-perf-test" or "--billiards-protocol-self-test" or "--billiards-mouse-self-test" or "--friend-self-test")&&!e.Args.Contains("--sandbox"))throw new IOException("台球检查必须使用沙箱。");
+            if(e.Args.Any(a=>a is "--billiards-self-test" or "--billiards-parent-probe" or "--billiards-perf-test" or "--billiards-protocol-self-test" or "--billiards-mouse-self-test" or "--friend-self-test" or "--brand-self-test")&&!e.Args.Contains("--sandbox"))throw new IOException("台球检查必须使用沙箱。");
             var storageTest=Array.IndexOf(e.Args,"--storage-self-test");if(storageTest>=0){Shutdown(StorageVerification.Run(Path.GetFullPath(e.Args[storageTest+1])));return;}
             var relocate=Array.IndexOf(e.Args,"--relocate-storage");if(relocate>=0){Shutdown(DataPaths.MigrateCommand(e.Args[relocate+1],e.Args[relocate+2],e.Args[relocate+3]));return;}
             var onlineTest=Array.IndexOf(e.Args,"--verify-online-update");if(onlineTest>=0){Shutdown(Task.Run(()=>OnlineUpdateVerification.Run(e.Args[onlineTest+1],e.Args[onlineTest+2],e.Args.Contains("--live"),e.Args.Contains("--live-check"))).GetAwaiter().GetResult());return;}
@@ -74,7 +74,7 @@ public partial class App : Application
             Store = new NookStore(dataDirectory, desktops, Recycle,storeAllPayloads:!IsSandbox||File.Exists(Path.Combine(dataDirectory,"storage.json")));
             UiMotion.Configure(Options.MotionMode);
             var window = new MainWindow(); MainWindow = window;
-            if(!IsSandbox)Dispatcher.BeginInvoke(()=>{try{BrandMigration.Refresh(Store.DataDirectory);}catch(Exception){window.SetStatus("入口图标刷新未完成，可稍后重新打开轻匣重试。");}},System.Windows.Threading.DispatcherPriority.ContextIdle);
+            if(!IsSandbox)Dispatcher.BeginInvoke(()=>{try{BrandMigration.Refresh(Store.DataDirectory,refreshShortcuts:false);}catch(Exception){window.SetStatus("入口图标刷新未完成，可稍后重新打开轻匣重试。");}},System.Windows.Threading.DispatcherPriority.ContextIdle);
             window.KeepOpenForVerification=IsSandbox&&e.Args.Contains("--keep-open-verification");
             if(e.Args.Contains("--autostart")){window.ShowActivated=false;window.WindowState=WindowState.Minimized;}
             window.Show();
@@ -86,6 +86,7 @@ public partial class App : Application
             var readyIndex=Array.IndexOf(e.Args,"--update-ready");if(readyIndex>=0)Dispatcher.BeginInvoke(()=>WriteUpdateReady(e.Args[readyIndex+1]),System.Windows.Threading.DispatcherPriority.Loaded);
             if(legacyHandoff)Dispatcher.BeginInvoke(async()=>await RelocateAfterHandoff(window,e.Args[Array.IndexOf(e.Args,"--resume-update")+1]),System.Windows.Threading.DispatcherPriority.ContextIdle);
             DispatcherUnhandledException += (_, args) => { args.Handled = true; window.ShowFailure(args.Exception); };
+            if(e.Args.Contains("--brand-self-test"))Dispatcher.BeginInvoke(async()=>{var checks=new List<string>();string failure="";try{window.KeepOpenForVerification=true;await BrandVerification.Run(window,root,checks);}catch(Exception ex){failure=ex.ToString();}File.WriteAllText(Path.Combine(root,"brand-verification.json"),System.Text.Json.JsonSerializer.Serialize(new{passed=checks.Count,failure,checks}));Shutdown(failure.Length==0?0:1);},System.Windows.Threading.DispatcherPriority.Loaded);
             if (e.Args.Contains("--ui-self-test")) Dispatcher.BeginInvoke(async () => await NativeVerification.Run(window, root), System.Windows.Threading.DispatcherPriority.Loaded);
             if (e.Args.Contains("--friend-self-test")) Dispatcher.BeginInvoke(async () => await FriendVerification.Run(window, root), System.Windows.Threading.DispatcherPriority.Loaded);
             if (e.Args.Contains("--billiards-self-test")) Dispatcher.BeginInvoke(async () => await BilliardsVerification.Run(window, root), System.Windows.Threading.DispatcherPriority.Loaded);

@@ -52,14 +52,18 @@ internal static class BrandVerification
             {
                 using(var key=Microsoft.Win32.Registry.CurrentUser.CreateSubKey(reg))key.SetValue("InstallLocation",Path.GetDirectoryName(Environment.ProcessPath!)!);
                 var publicIcons=Path.Combine(root,"public-icon-cache");BrandMigration.Refresh(App.Store.DataDirectory,folder,pinned,reg,publicIcons);
+                string expectedIcon;using(var source=Application.GetResourceStream(new Uri("pack://application:,,,/Assets/AppIcon.ico")).Stream)expectedIcon=Path.Combine(publicIcons,"Qingxia-"+Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(source))[..16]+".ico");
                 dynamic updatedPin=shell.CreateShortcut(ownedPath);
-                try{if((string)updatedPin.TargetPath!=Environment.ProcessPath||(string)updatedPin.Arguments!=args||(string)updatedPin.WorkingDirectory!=root||!((string)updatedPin.IconLocation).Contains(publicIcons+"\\Qingxia-"+MainWindow.CurrentVersionLabel[1..]+".ico"))throw new Exception("固定入口迁移未保留目标或参数。");}
-                finally{Marshal.FinalReleaseComObject(updatedPin);}
-                if((File.GetAttributes(Path.Combine(publicIcons,"Qingxia-"+MainWindow.CurrentVersionLabel[1..]+".ico"))&FileAttributes.Encrypted)!=0)throw new Exception("公开图标仍被 EFS 加密。");using(var key=Microsoft.Win32.Registry.CurrentUser.OpenSubKey(reg))if(key?.GetValue("DisplayName") as string!="轻匣")throw new Exception("安装显示名未迁移。");
+                try{if((string)updatedPin.TargetPath!=Environment.ProcessPath||(string)updatedPin.Arguments!=args||(string)updatedPin.WorkingDirectory!=root||(string)updatedPin.IconLocation!=expectedIcon+",0")throw new Exception("固定入口迁移未保留目标或参数。");updatedPin.IconLocation=Environment.ProcessPath+",0";updatedPin.Save();}finally{Marshal.FinalReleaseComObject(updatedPin);}
+                var pinBefore=LocalUpdater.Hash(ownedPath);var pinTime=File.GetLastWriteTimeUtc(ownedPath);var startBefore=LocalUpdater.Hash(renamed);
+                for(int n=0;n<5;n++)BrandMigration.Refresh(App.Store.DataDirectory,folder,pinned,reg,publicIcons,refreshShortcuts:false);
+                if(pinBefore!=LocalUpdater.Hash(ownedPath)||pinTime!=File.GetLastWriteTimeUtc(ownedPath)||startBefore!=LocalUpdater.Hash(renamed))throw new Exception("日常启动改写了任务栏或开始菜单入口。");
+                checks.Add("Five startup refreshes preserve pinned shortcut bytes/timestamp and start-menu identity even with an older icon reference");
+                if((File.GetAttributes(expectedIcon)&FileAttributes.Encrypted)!=0)throw new Exception("公开图标仍被 EFS 加密。");using(var key=Microsoft.Win32.Registry.CurrentUser.OpenSubKey(reg))if(key?.GetValue("DisplayName") as string!="轻匣")throw new Exception("安装显示名未迁移。");
                 if(LocalUpdater.Hash(otherPath)!=otherHash||!File.Exists(legacy)||LocalUpdater.Hash(Path.Combine(App.Store.DataDirectory,"state.json"))!=stateHash)throw new Exception("迁移影响了其他入口或收纳配置。");
             }
             finally{Microsoft.Win32.Registry.CurrentUser.DeleteSubKeyTree(reg,false);}
-            checks.Add("Pinned icon migration uses versioned ICO, preserves pin path/target/arguments and other shortcuts, and refreshes install branding");
+            checks.Add("Explicit pinned icon migration uses artwork-hash ICO, preserves pin path/target/arguments and other shortcuts, and refreshes install branding");
         }
         finally{Marshal.FinalReleaseComObject(shell);}
         checks.Add("Start-menu rename migrates only matching legacy target and preserves unrelated links");

@@ -7,7 +7,7 @@ namespace DesktopNook.App;
 
 internal static class BrandMigration
 {
-    internal static void Refresh(string dataRoot,string? startFolder=null,string? pinnedFolder=null,string registryKey=@"Software\Microsoft\Windows\CurrentVersion\Uninstall\DesktopNook",string? iconFolder=null)
+    internal static void Refresh(string dataRoot,string? startFolder=null,string? pinnedFolder=null,string registryKey=@"Software\Microsoft\Windows\CurrentVersion\Uninstall\DesktopNook",string? iconFolder=null,bool refreshShortcuts=true)
     {
         var program=Environment.ProcessPath??throw new IOException("无法定位程序。");
         var version=System.Reflection.Assembly.GetExecutingAssembly().GetName().Version!.ToString(3);
@@ -19,7 +19,9 @@ internal static class BrandMigration
         }
         string EnsureIcon(string folder)
         {
-            Directory.CreateDirectory(folder);var file=Path.Combine(folder,"Qingxia-"+version+".ico");
+            // Icon identity changes with artwork, not every application release.
+            var artwork=Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(bytes))[..16];
+            Directory.CreateDirectory(folder);var file=Path.Combine(folder,"Qingxia-"+artwork+".ico");
             if(!File.Exists(file)||!File.ReadAllBytes(file).SequenceEqual(bytes))File.WriteAllBytes(file,bytes);
             // Shell cache brokers need an unencrypted public icon. Do not decrypt or
             // relax protection on any folder/file; choose a different cache instead.
@@ -37,7 +39,8 @@ internal static class BrandMigration
         }
         var iconLocation=icon+",0";int changed=0;
         startFolder??=Environment.GetFolderPath(Environment.SpecialFolder.Programs);
-        pinnedFolder??=Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),@"Microsoft\Internet Explorer\Quick Launch\User Pinned\TaskBar");
+        // Never enumerate or rewrite the user's pins implicitly. Explicit folders
+        // are used only by an intentional migration/isolated verification.
         var type=Type.GetTypeFromProgID("WScript.Shell")??throw new IOException("无法读取程序入口。");
         dynamic shell=Activator.CreateInstance(type)!;
         try
@@ -50,12 +53,12 @@ internal static class BrandMigration
                 finally{Marshal.FinalReleaseComObject(entry);}
             }
             var legacy=Path.Combine(startFolder,"桌面小筑.lnk");var current=Path.Combine(startFolder,"轻匣.lnk");
-            if((Owned(legacy)||Owned(current))&&(!File.Exists(current)||Owned(current)))
+            if(refreshShortcuts&&(Owned(legacy)||Owned(current))&&(!File.Exists(current)||Owned(current)))
             {
                 if(Owned(legacy)){ShortcutInstaller.Install(startFolder);changed++;}
                 RefreshLink(current);
             }
-            if(Directory.Exists(pinnedFolder))foreach(var link in Directory.EnumerateFiles(pinnedFolder,"*.lnk"))if(Owned(link))RefreshLink(link);
+            if(refreshShortcuts&&pinnedFolder is not null&&Directory.Exists(pinnedFolder))foreach(var link in Directory.EnumerateFiles(pinnedFolder,"*.lnk"))if(Owned(link))RefreshLink(link);
             void RefreshLink(string link)
             {
                 dynamic entry=shell.CreateShortcut(link);
