@@ -1,0 +1,99 @@
+{
+  "Date": "2026-11-17",
+  "Version": "0.16.0",
+  "Phase": "pre-release",
+  "LiveUserDataTouched": false,
+  "Notes": {
+    "passed": 22,
+    "failure": "",
+    "checks": [
+      "首次启动不创建演示项目",
+      "中文多行文字在停止输入后自动持久保存",
+      "自动保存不重建编辑控件或打断正文焦点",
+      "不同项目内容隔离",
+      "切回项目保留正文",
+      "左侧分类切换不重建右侧内容",
+      "切换项目恢复编辑位置与选区",
+      "待办回车新增一项",
+      "待办勾选及正文持久保存",
+      "项目内搜索按记录内容过滤",
+      "搜索状态下新建清除筛选使新记录可见",
+      "磁盘写入失败返回失败状态",
+      "写入失败保留内存草稿",
+      "解除故障后重试成功提交草稿",
+      "默认宽度保留左侧六列图标",
+      "窄窗保留三列图标与可读便签宽度（3列，300.0，窗口800.0，表面714.3，内部712.0）",
+      "缩窄窗口不缩小正文字号",
+      "便签与左侧整体收起",
+      "闲置释放后恢复编辑内容",
+      "便签数据位于独立 Notes 目录",
+      "已归档项目的记录只读",
+      "更新暂存备份逐字节包含便签正文"
+    ]
+  },
+  "Upgrade": {
+    "success": true,
+    "helperExit": 0,
+    "oldVersion": "0.15.1.0",
+    "newVersion": "0.16.0.0",
+    "notesRetained": true,
+    "notesBackupRetained": true,
+    "deletedCategoryRetained": true,
+    "uncheckedPreferenceRetained": true,
+    "collectViewRetained": true,
+    "motionModeRetained": true,
+    "categoryOrdersRetained": true,
+    "orderedCategories": 3,
+    "configurationHashUnchanged": true,
+    "payloadUnchanged": true,
+    "newProcessConfirmed": true
+  },
+  "Online": {
+    "success": true,
+    "passed": 12,
+    "checks": [
+      "最新发行版本与指定 EXE 识别",
+      "已是最新版时不重复更新",
+      "流式下载、长度、SHA-256 与 EXE 产品版本联合校验",
+      "损坏下载拒绝执行并清理临时文件",
+      "取消下载保留现有程序",
+      "非专用仓库下载地址拒绝",
+      "失败及取消不会留下可执行的半成品",
+      "API 403、429、502 自动转官方发行页，固定版本校验清单与 HEAD 大小，下载仍校验程序",
+      "API 网络异常及超时可回退，备用检查不会提前下载 EXE",
+      "备用通道相同或旧版返回已是最新版；用户取消不会启动备用请求",
+      "备用通道拒绝缺失、重复、非法哈希、外部发行地址、无效大小及预发行标签",
+      "API 返回无效发布信息时保持拒绝，不通过备用通道掩盖校验错误"
+    ],
+    "failure": ""
+  },
+  "Brand": {
+    "passed": 8,
+    "failure": "",
+    "checks": [
+      "Qingxia display name preserves DesktopNook update identity and ten native icon sizes",
+      "Five startup refreshes preserve pinned shortcut bytes/timestamp and start-menu identity even with an older icon reference",
+      "Explicit pinned icon migration uses artwork-hash ICO, preserves pin path/target/arguments and other shortcuts, and refreshes install branding",
+      "Start-menu rename migrates only matching legacy target and preserves unrelated links",
+      "Collect tiles highlight without checkbox glyphs; independent toggles retain multi-selection and deselect only the clicked item",
+      "Collect icons/details switch preserves selection/category, defaults to icons and persists a chosen default through preference writes",
+      "Collect window stays within 90 percent of normal/smaller owner dimensions with its action footer visible",
+      "Branded collect, checkboxes, category dropdown and rename dialog work without changing collection data"
+    ]
+  },
+  "Installer": {
+    "Installed": true,
+    "Upgraded": true,
+    "UserStateHashPreserved": true,
+    "UserPreferencesHashPreserved": true,
+    "DisplayName": "轻匣",
+    "Uninstalled": true,
+    "RemainingItems": 0,
+    "RecoveredFiles": 7,
+    "LiveUserDataTouched": false
+  },
+  "InstallerNotes": {
+    "NotesPreservedAcrossInstallUpgradeUninstall": true,
+    "LiveDataTouched": false
+  }
+}

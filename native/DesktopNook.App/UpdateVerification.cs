@@ -22,6 +22,11 @@ internal static class UpdateVerification
             store.ReorderItems(category.Id,store.OrderedItems(category.Id).Reverse().Select(i=>i.Id).ToArray());
         }
         var orders=store.State.Categories.ToDictionary(c=>c.Id,c=>store.OrderedItems(c.Id).Select(i=>i.Id).ToArray());
+        var notes=new DesktopNook.Core.NotesStore(data);var draft=notes.Draft();
+        var project=DesktopNook.Core.NotesStore.AddProject(draft,"升级保留项目");
+        draft.Notes.Add(new(){ProjectId=project.Id,Title="沟通记录",Text="升级前的中文正文"});
+        draft.Notes.Add(new(){ProjectId=project.Id,Kind="todo",Title="项目待办",Tasks=[new(){Text="保留待办完成状态",Done=true}]});
+        notes.Commit(draft);var notesBefore=LocalUpdater.Hash(notes.FilePath);
         var targetDir=Path.Combine(root,"portable");Directory.CreateDirectory(targetDir);var target=Path.Combine(targetDir,"DesktopNook.exe");File.Copy(oldExe,target,false);
         var before=LocalUpdater.Hash(Path.Combine(data,"state.json"));var staged=LocalUpdater.Stage(candidate,target,data,profile,0,options,store.State);
         var helperStart=new ProcessStartInfo(staged.Helper){UseShellExecute=false,CreateNoWindow=true};helperStart.ArgumentList.Add("--apply-update");helperStart.ArgumentList.Add(staged.Plan);
@@ -35,9 +40,11 @@ internal static class UpdateVerification
         bool motionModeRetained=savedPreferences.RootElement.GetProperty("MotionMode").GetString()=="off";
         var reloaded=new DesktopNook.Core.NookStore(data,[desktop],new SandboxRecycle(profile));
         bool categoryOrdersRetained=orders.All(pair=>reloaded.OrderedItems(pair.Key).Select(i=>i.Id).SequenceEqual(pair.Value));
-        var ok=result==0&&deletedCategoryRetained&&uncheckedPreferenceRetained&&collectViewRetained&&motionModeRetained&&categoryOrdersRetained&&LocalUpdater.Inspect(target).Version==LocalUpdater.Inspect(candidate).Version&&LocalUpdater.Hash(Path.Combine(data,"state.json"))==before&&File.ReadAllText(store.ManagedPath(item))=="user edited data";
+        bool notesRetained=LocalUpdater.Hash(notes.FilePath)==notesBefore&&new DesktopNook.Core.NotesStore(data).State.Notes.Last().Tasks[0].Done;
+        bool notesBackupRetained=LocalUpdater.Hash(Path.Combine(Path.GetDirectoryName(staged.Plan)!,"metadata-backup","Notes","notes.json"))==notesBefore;
+        var ok=result==0&&notesRetained&&notesBackupRetained&&deletedCategoryRetained&&uncheckedPreferenceRetained&&collectViewRetained&&motionModeRetained&&categoryOrdersRetained&&LocalUpdater.Inspect(target).Version==LocalUpdater.Inspect(candidate).Version&&LocalUpdater.Hash(Path.Combine(data,"state.json"))==before&&File.ReadAllText(store.ManagedPath(item))=="user edited data";
         var stop=new ProcessStartInfo(target){UseShellExecute=false,CreateNoWindow=true};stop.ArgumentList.Add("--maintenance=stop");stop.ArgumentList.Add("--sandbox");stop.ArgumentList.Add(profile);using(var process=Process.Start(stop)!){process.WaitForExit();}
-        File.WriteAllText(Path.Combine(root,"update-verification.json"),JsonSerializer.Serialize(new{success=ok,helperExit=result,oldVersion=LocalUpdater.Inspect(oldExe).Version.ToString(),newVersion=LocalUpdater.Inspect(target).Version.ToString(),deletedCategoryRetained,uncheckedPreferenceRetained,collectViewRetained,motionModeRetained,categoryOrdersRetained,orderedCategories=orders.Count,configurationHashUnchanged=LocalUpdater.Hash(Path.Combine(data,"state.json"))==before,payloadUnchanged=File.ReadAllText(store.ManagedPath(item))=="user edited data",newProcessConfirmed=updateResult.RootElement.GetProperty("success").GetBoolean()},new JsonSerializerOptions{WriteIndented=true}));
+        File.WriteAllText(Path.Combine(root,"update-verification.json"),JsonSerializer.Serialize(new{success=ok,helperExit=result,oldVersion=LocalUpdater.Inspect(oldExe).Version.ToString(),newVersion=LocalUpdater.Inspect(target).Version.ToString(),notesRetained,notesBackupRetained,deletedCategoryRetained,uncheckedPreferenceRetained,collectViewRetained,motionModeRetained,categoryOrdersRetained,orderedCategories=orders.Count,configurationHashUnchanged=LocalUpdater.Hash(Path.Combine(data,"state.json"))==before,payloadUnchanged=File.ReadAllText(store.ManagedPath(item))=="user edited data",newProcessConfirmed=updateResult.RootElement.GetProperty("success").GetBoolean()},new JsonSerializerOptions{WriteIndented=true}));
         return ok?0:1;
     }
 }
