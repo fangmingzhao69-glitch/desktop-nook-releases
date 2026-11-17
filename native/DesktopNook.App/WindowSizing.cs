@@ -105,6 +105,11 @@ public partial class MainWindow
         ResizeHint.Visibility=ResizeHandles.Visibility;
         if(LastMenu?.IsOpen==true)MenuLayout.Adapt(LastMenu,this);
     }
+    private void UpdateIconColumns()
+    {
+        IconColumns=Math.Clamp((int)Math.Floor((LauncherColumn.Width.Value-56)/(584d/6)),3,30);
+        foreach(var panel in FindVisualChildren<UniformGrid>(Icons))panel.Columns=IconColumns;
+    }
     internal int IconColumns {get;private set;}=6;
     private void ResizeDelta(object sender,DragDeltaEventArgs e)
     {

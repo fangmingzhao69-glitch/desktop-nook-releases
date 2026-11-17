@@ -55,12 +55,12 @@ public partial class MainWindow : Window
     private async void OnUpdateAvailable(object sender,RoutedEventArgs e)=>await CheckOnlineUpdateAsync(true);
     private async void Place()
     {
-        if(_resizing || KeepOpenForVerification || !IsLoaded || WindowState!=WindowState.Normal)return;
+        if(_resizing || _notesSplitting || KeepOpenForVerification || !IsLoaded || WindowState!=WindowState.Normal)return;
         var version=++_placementVersion;
         var fallback=TaskbarPlacement.Fallback();if(TaskbarPlacement.WouldMove(this,fallback,PreferredWindowSize))UiMotion.StopReveal(Surface);
         TaskbarPlacement.Apply(this,fallback,PreferredWindowSize);
         var anchor=await TaskbarPlacement.FindAsync();
-        if(anchor is not null && version==_placementVersion && !_resizing && !KeepOpenForVerification && WindowState==WindowState.Normal){if(TaskbarPlacement.WouldMove(this,anchor,PreferredWindowSize))UiMotion.StopReveal(Surface);TaskbarPlacement.Apply(this,anchor,PreferredWindowSize);}
+        if(anchor is not null && version==_placementVersion && !_resizing && !_notesSplitting && !KeepOpenForVerification && WindowState==WindowState.Normal){if(TaskbarPlacement.WouldMove(this,anchor,PreferredWindowSize))UiMotion.StopReveal(Surface);TaskbarPlacement.Apply(this,anchor,PreferredWindowSize);}
     }
     public void ShowPanel() { EnsurePanelContent();bool reverse=_hidePending;WindowState=WindowState.Normal;Show();Place();if(reverse)OpenPanelMotion();Activate(); }
     public void TogglePanel(){if(_hidePending)ShowPanel();else if(WindowState==WindowState.Normal&&IsVisible)BeginHidePanel();else ShowPanel();}
@@ -365,6 +365,7 @@ public partial class MainWindow : Window
     }
     private void OnKeyDown(object sender,KeyEventArgs e)
     {
+        if(e.Key==Key.Escape&&_notesSplitting){NotesSplit.CancelDrag();e.Handled=true;return;}
         if(e.Key==Key.Escape && !_dragging){e.Handled=true;if(!KeepOpenForVerification)BeginHidePanel();return;}
         if(_shutter.Active)FinishPanelMotion();
         if(e.OriginalSource is not Button button || button.Tag is not NookItem)return;

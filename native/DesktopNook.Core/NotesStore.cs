@@ -116,35 +116,35 @@ public sealed class NotesStore
         var ids = new HashSet<string>();
         foreach (var p in state.Projects)
             if (p is null || !Guid.TryParseExact(p.Id, "N", out _) || !ids.Add(p.Id) || string.IsNullOrWhiteSpace(p.Name) || p.Search is null || p.EditorKey is null || p.Caret < 0 || p.SelectionLength < 0 || !double.IsFinite(p.Scroll) || p.Scroll < 0)
-                throw new IOException("便签项目无效。");
+                throw new IOException("标签分类无效。");
         var noteIds = new HashSet<string>();
         foreach (var n in state.Notes)
             if (n is null || !Guid.TryParseExact(n.Id, "N", out _) || !noteIds.Add(n.Id) || !ids.Contains(n.ProjectId) ||
                 n.Kind is not ("text" or "todo") || n.Title is null || n.Text is null || n.Tasks is null || n.Tasks.Any(t => t is null || t.Text is null) ||
                 (n.DeletedUtc is null && state.Projects.Single(p => p.Id == n.ProjectId).DeletedUtc is not null))
-                throw new IOException("便签记录或项目归属无效。");
+                throw new IOException("便签记录或分类归属无效。");
     }
     public static NoteProject AddProject(NotesState draft, string name)
     {
         name = name.Trim();
-        if (name.Length == 0 || name.Length > 100) throw new ArgumentException("项目名称需为 1 至 100 个字符。");
+        if (name.Length == 0 || name.Length > 100) throw new ArgumentException("分类名称需为 1 至 100 个字符。");
         EnsureName(draft, name, null);
         var project = new NoteProject { Name = name }; draft.Projects.Add(project); draft.ActiveProject = project.Id; return project;
     }
     private static void EnsureName(NotesState state, string name, string? except)
     {
         if (state.Projects.Any(p => p.Id != except && p.DeletedUtc is null && string.Equals(p.Name, name, StringComparison.OrdinalIgnoreCase)))
-            throw new ArgumentException("项目名称已存在，请换一个名称。");
+            throw new ArgumentException("分类名称已存在，请换一个名称。");
     }
     public static void RenameProject(NotesState state, NoteProject project, string name)
     {
-        name = name.Trim(); if (name.Length == 0 || name.Length > 100) throw new ArgumentException("项目名称需为 1 至 100 个字符。");
+        name = name.Trim(); if (name.Length == 0 || name.Length > 100) throw new ArgumentException("分类名称需为 1 至 100 个字符。");
         EnsureName(state, name, project.Id); project.Name = name; project.ModifiedUtc = DateTime.UtcNow;
     }
     public static void DeleteProject(NotesState state, NoteProject project, string? destination = null)
     {
         if (destination is not null && !state.Projects.Any(p => p.Id == destination && p.Id != project.Id && !p.Archived && p.DeletedUtc is null))
-            throw new ArgumentException("请选择其他活动项目。");
+            throw new ArgumentException("请选择其他活动分类。");
         var batch = Guid.NewGuid().ToString("N");
         foreach (var note in state.Notes.Where(n => n.ProjectId == project.Id && n.DeletedUtc is null))
             if (destination is not null) note.ProjectId = destination;
