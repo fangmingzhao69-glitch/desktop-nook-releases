@@ -11,14 +11,14 @@ internal sealed record WindowSizePreference
     public bool Free {get;init;}
     public bool Locked {get;init;}
     public double Zoom {get;init;}=1;
-    public double Width {get;init;}=716.8;
+    public double Width {get;init;}=1120;
     public double Height {get;init;}=627.2;
-    internal const double BaseWidth=716.8,BaseHeight=627.2,Ratio=8d/7;
+    internal const double BaseWidth=1120,BaseHeight=627.2,Ratio=1120d/627.2;
     internal static readonly double[] Presets=[.8,1,1.25,1.5];
     internal WindowSizePreference Validated()=>this with
     {
         Zoom=Presets.Contains(Zoom)?Zoom:1,
-        Width=double.IsFinite(Width)?Math.Clamp(Width,560,4096):BaseWidth,
+        Width=double.IsFinite(Width)?Math.Clamp(Width,800,4096):BaseWidth,
         Height=double.IsFinite(Height)?Math.Clamp(Height,360,4096):BaseHeight
     };
     internal Size Desired=>Free?new(Width,Locked?Width/Ratio:Height):new(BaseWidth*Zoom,BaseHeight*Zoom);
@@ -39,6 +39,7 @@ public partial class MainWindow
         _sizePreference=App.Options.ReadWindowSize();
         Width=PreferredWindowSize.Width;Height=PreferredWindowSize.Height;
         SizeChanged+=(_,_)=>UpdateSizingLayout();
+        SplitLayout.SizeChanged+=(_,_)=>UpdateSizingLayout();
         foreach(string edge in new[]{"L","R","T","B","LT","RT","LB","RB"})
         {
             var thumb=new Thumb{Tag=edge,Width=edge.Contains('L')||edge.Contains('R')?8:double.NaN,
@@ -97,7 +98,8 @@ public partial class MainWindow
         // constrains the window shape only; available space controls row/column count.
         Surface.Width=Math.Max(1,(ActualWidth>0?ActualWidth:Width)/ContentScale);
         Surface.Height=Math.Max(1,(ActualHeight>0?ActualHeight:Height)/ContentScale);
-        IconColumns=Math.Clamp((int)Math.Floor((Surface.Width-56)/(584d/6)),3,30);
+        UpdateNotesColumns();
+        IconColumns=Math.Clamp((int)Math.Floor((LauncherColumn.Width.Value-56)/(584d/6)),3,30);
         foreach(var panel in FindVisualChildren<UniformGrid>(Icons))panel.Columns=IconColumns;
         ResizeHandles.Visibility=_sizePreference.Free?Visibility.Visible:Visibility.Collapsed;
         ResizeHint.Visibility=ResizeHandles.Visibility;
@@ -115,7 +117,7 @@ public partial class MainWindow
     {
         double width=start.Width+(edge.Contains('L')?-dx:edge.Contains('R')?dx:0);
         double height=start.Height+(edge.Contains('T')?-dy:edge.Contains('B')?dy:0);
-        double minWidth=Math.Min(560,work.Width),minHeight=Math.Min(360,work.Height);
+        double minWidth=Math.Min(800,work.Width),minHeight=Math.Min(360,work.Height);
         if(locked)
         {
             if(edge is "T" or "B"||(edge.Length==2&&Math.Abs(dy*WindowSizePreference.Ratio)>Math.Abs(dx)))width=height*WindowSizePreference.Ratio;

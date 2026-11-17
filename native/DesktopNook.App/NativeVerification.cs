@@ -90,22 +90,22 @@ internal static class NativeVerification
             var positions=window.IconPositions();
             if(positions.Count!=7 || positions.Take(6).Any(p=>Math.Abs(p.Y-positions[0].Y)>1) || positions[6].Y-positions[0].Y>90)throw new Exception("图标行距或六列排列与紧凑布局不符。");
             checks.Add("Six icons share the first row, seventh wraps with compact row spacing");
-            if(Math.Abs(window.ActualWidth-716.8)>2 || Math.Abs(window.ActualHeight-627.2)>2)throw new Exception("整体放大 40% 的尺寸校验失败。");
+            if(Math.Abs(window.ActualWidth-1120)>2 || Math.Abs(window.ActualHeight-627.2)>2)throw new Exception("项目便签整窗尺寸校验失败。");
             var bottom=new TaskbarAnchor(new Rect(100,1040,44,40),new Rect(0,1040,1920,40),new Rect(0,0,1920,1040),96);
-            var placement=TaskbarPlacement.Calculate(bottom,716.8,627.2);
+            var placement=TaskbarPlacement.Calculate(bottom,1120,627.2);
             if(placement.Left!=100 || Math.Abs(placement.Bottom-1032)>1)throw new Exception("任务栏左边缘对齐校验失败。");
-            var edge=TaskbarPlacement.Calculate(bottom with{Button=new Rect(1820,1040,44,40)},716.8,627.2);
+            var edge=TaskbarPlacement.Calculate(bottom with{Button=new Rect(1820,1040,44,40)},1120,627.2);
             if(edge.Right>1920)throw new Exception("任务栏边缘溢出。");
-            var secondary=TaskbarPlacement.Calculate(new(new Rect(-1800,1040,44,40),new Rect(-1920,1040,1920,40),new Rect(-1920,0,1920,1040),144),716.8,627.2);
-            if(secondary.Left!=-1800 || Math.Abs(secondary.Width-1075.2)>1)throw new Exception("副屏 DPI 换算校验失败。");
-            checks.Add("40 percent larger surfaces and taskbar alignment, screen edges and 150 percent DPI math");
+            var secondary=TaskbarPlacement.Calculate(new(new Rect(-1800,1040,44,40),new Rect(-1920,1040,1920,40),new Rect(-1920,0,1920,1040),144),1120,627.2);
+            if(secondary.Left!=-1800 || Math.Abs(secondary.Width-1680)>1)throw new Exception("副屏 DPI 换算校验失败。");
+            checks.Add("Project notes surfaces and taskbar alignment, screen edges and 150 percent DPI math");
             var actualAnchor=await TaskbarPlacement.FindAsync();
             if(actualAnchor is null)throw new Exception("本机任务栏未找到轻匣按钮。");
             File.WriteAllText(Path.Combine(root,"taskbar-anchor.json"),JsonSerializer.Serialize(new{button=actualAnchor.Button.ToString(),tray=actualAnchor.Tray.ToString(),work=actualAnchor.Work.ToString(),dpi=actualAnchor.Dpi}));
             checks.Add("Live taskbar button bounds discovered using application identity");
             var bitmap=new RenderTargetBitmap((int)Math.Ceiling(window.ActualWidth),(int)Math.Ceiling(window.ActualHeight),96,96,PixelFormats.Pbgra32);bitmap.Render(window);
             var encoder=new PngBitmapEncoder();encoder.Frames.Add(BitmapFrame.Create(bitmap));using(var file=File.Create(Path.Combine(root,"native-preview.png")))encoder.Save(file);
-            checks.Add("Native window rendered at 716.8x627.2 with production icon");
+            checks.Add("Native window rendered at 1120x627.2 with production icon");
             window.ShowIconMenu(window.IconButton(App.Store.State.Items[0].Id),App.Store.State.Items[0]);
             try
             {

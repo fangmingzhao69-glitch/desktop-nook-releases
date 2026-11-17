@@ -45,7 +45,7 @@ public partial class MainWindow
     internal void FinishPanelMotion(){_hidePending=false;_hideRevision++;_shutter.Stop();}
     private void OpenPanelMotion()
     {
-        _idleRelease.Stop();EnsurePanelContent();UpdateSizingLayout();UpdateLayout();
+        _idleRelease.Stop();EnsurePanelContent();RestoreNotesVisuals();UpdateSizingLayout();UpdateLayout();
         foreach(var icon in FindVisualChildren<ShellIcon>(Icons)){icon.Resume();icon.PrimeForReveal(this);}
         _hidePending=false;_hideRevision++;_shutter.Play(true);
         if(_shutter.Active||!UiMotion.Enabled||_shutter.Failure is not null||(Surface.IsLoaded&&Surface.IsVisible))Opacity=1;
@@ -59,7 +59,7 @@ public partial class MainWindow
     {
         if(WindowState!=WindowState.Minimized){_idleRelease.Stop();return;}
         if(_dragging||_interactions>0||_menus>0||_onlineBusy)return;
-        _idleRelease.Stop();_shutter.ReleaseBuffer();ShellIntegration.TrimIdleIcons();
+        _idleRelease.Stop();ParkNotesVisuals();_shutter.ReleaseBuffer();ShellIntegration.TrimIdleIcons();
         if(LastMenu?.IsOpen!=true)LastMenu=null;
         // Detach the root from the native render target, retaining logical state
         // and the HWND used by the taskbar. No working-set manipulation.
@@ -69,6 +69,7 @@ public partial class MainWindow
     internal void BeginHidePanel()
     {
         if(_hidePending||WindowState==WindowState.Minimized||_dragging||_interactions>0)return;
+        if(!FlushNotes())return;
         UiMotion.CancelAll();_hidePending=true;int revision=++_hideRevision;
         _shutter.Play(false,()=>{if(_hidePending&&revision==_hideRevision)CommitPanelHide();});
     }

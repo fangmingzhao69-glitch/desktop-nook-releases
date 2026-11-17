@@ -245,6 +245,48 @@ Test("Installation data cannot collect itself or copy recursively into itself",r
     try{VerifiedContent.Copy(data,Path.Combine(data,"nested"));throw new Exception("recursive copy accepted");}catch(IOException){}
     Assert(VerifiedContent.Equal(before,VerifiedContent.Snapshot(data))&&!Directory.Exists(Path.Combine(data,"nested")),"self operations rejected before mutation");
 });
+
+Test("Notes projects are isolated and atomic moves/deletes restore original membership", root=>{
+    var store=new NotesStore(root);var draft=store.Draft();var a=NotesStore.AddProject(draft,"项目A");var b=NotesStore.AddProject(draft,"项目B");
+    var first=new ProjectNote{ProjectId=a.Id,Text="中文正文",Tasks=[new(){Text="待办",Done=true}]};var earlierDeleted=new ProjectNote{ProjectId=a.Id,Text="早已删除",DeletedUtc=DateTime.UtcNow};
+    draft.Notes.AddRange([first,earlierDeleted]);store.Commit(draft);
+    NotesStore.RenameProject(draft,a,"改名项目");Assert(first.ProjectId==a.Id,"rename uses stable IDs");
+    NotesStore.DeleteProject(draft,a);store.Commit(draft);Assert(draft.Notes.All(n=>n.DeletedUtc is not null),"batch deleted");
+    NotesStore.RestoreProject(draft,a,"已恢复");store.Commit(draft);
+    Assert(first.DeletedUtc is null&&earlierDeleted.DeletedUtc is not null,"restore batch never resurrects older deleted notes");
+    NotesStore.DeleteProject(draft,a,b.Id);store.Commit(draft);var loaded=new NotesStore(root).State;
+    Assert(loaded.Notes.Single(n=>n.Id==first.Id).ProjectId==b.Id&&loaded.Notes.Single(n=>n.Id==first.Id).Tasks[0].Done,"atomic move persists text and checklist");
+});
+Test("Notes duplicate names, dangling references and stale revisions are rejected",root=>{
+    var store=new NotesStore(root);var draft=store.Draft();var a=NotesStore.AddProject(draft," 项目A ");store.Commit(draft);var stale=store.Draft();
+    try{NotesStore.AddProject(draft,"项目A");throw new Exception("duplicate accepted");}catch(ArgumentException){}
+    draft.Projects[0].Archived=true;store.Commit(draft);
+    try{store.Commit(stale);throw new Exception("stale accepted");}catch(IOException){}
+    var before=File.ReadAllBytes(store.FilePath);draft.Notes.Add(new(){ProjectId=Guid.NewGuid().ToString("N")});
+    try{store.Commit(draft);throw new Exception("orphan accepted");}catch(IOException){}
+    Assert(before.SequenceEqual(File.ReadAllBytes(store.FilePath)),"rejected state never changes disk");
+});
+Test("Notes recover valid backup and preserve damaged bytes without rotating corruption",root=>{
+    var store=new NotesStore(root);var draft=store.Draft();var project=NotesStore.AddProject(draft,"测试项目");draft.Notes.Add(new(){ProjectId=project.Id,Text="应恢复正文"});store.Commit(draft);
+    File.WriteAllText(store.FilePath,"corrupt bytes");store=new(root);Assert(store.State.Notes.Single().Text=="应恢复正文"&&store.RecoveryMessage is not null,"valid backup recovered");
+    Assert(Directory.GetFiles(store.DirectoryPath,"*.damaged-*").Any(),"broken original preserved");
+    draft=store.Draft();draft.Notes[0].Text="恢复后继续";store.Commit(draft);
+    Assert(new NotesStore(root).State.Notes.Single().Text=="恢复后继续","recovery can safely commit");
+    Assert(JsonSerializer.Deserialize<NotesState>(File.ReadAllText(store.FilePath+".bak"))!.Notes.Count==1,"backup stays valid");
+    File.WriteAllText(store.FilePath,"bad");File.WriteAllText(store.FilePath+".bak","bad backup");store=new(root);
+    draft=store.Draft();NotesStore.AddProject(draft,"不可覆盖");try{store.Commit(draft);throw new Exception("overwritten");}catch(IOException){}
+    Assert(File.ReadAllText(store.FilePath)=="bad"&&File.ReadAllText(store.FilePath+".bak")=="bad backup","double corruption blocks all writes");
+});
+Test("Notes failed writes leave committed state and draft available for retry",root=>{
+    var store=new NotesStore(root);var draft=store.Draft();var p=NotesStore.AddProject(draft,"项目");draft.Notes.Add(new(){ProjectId=p.Id,Text="first"});store.Commit(draft);
+    var before=File.ReadAllBytes(store.FilePath);draft.Notes[0].Text="unsaved latest";
+    using(var locked=new FileStream(store.FilePath,FileMode.Open,FileAccess.Read,FileShare.None)){
+        try{store.Commit(draft);throw new Exception("write not blocked");}catch(Exception ex) when(ex is IOException or UnauthorizedAccessException){}
+        Assert(store.State.Notes[0].Text=="first"&&draft.Notes[0].Text=="unsaved latest","both states retained");
+    }
+    Assert(before.SequenceEqual(File.ReadAllBytes(store.FilePath)),"failed publication preserves main file");store.Commit(draft);
+    Assert(new NotesStore(root).State.Notes[0].Text=="unsaved latest","retry succeeds");
+});
 var failed = results.Count(r => JsonSerializer.Serialize(r).Contains("\"passed\":false"));
 var output = args.FirstOrDefault() ?? Path.Combine(runRoot,"results.json");Directory.CreateDirectory(Path.GetDirectoryName(Path.GetFullPath(output))!);
 File.WriteAllText(output,JsonSerializer.Serialize(new{passed=results.Count-failed,failed,runRoot,checks=results},new JsonSerializerOptions{WriteIndented=true}));

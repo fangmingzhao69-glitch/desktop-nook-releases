@@ -33,7 +33,7 @@ public partial class MainWindow : Window
     internal List<Point> IconPositions() => FindVisualChildren<Button>(Icons).Select(b=>b.TranslatePoint(new Point(0,0),this)).ToList();
     public MainWindow()
     {
-        InitializeComponent();InitializePanelMotion();InitializeSizing();Activated+=(_,_)=>{Place();if(IsLoaded&&!App.IsSandbox&&DateTime.UtcNow-_lastUpdateCheck>TimeSpan.FromMinutes(15))_=CheckOnlineUpdateAsync(false);};
+        InitializeComponent();InitializePanelMotion();InitializeNotes();InitializeSizing();Activated+=(_,_)=>{Place();if(IsLoaded&&!App.IsSandbox&&DateTime.UtcNow-_lastUpdateCheck>TimeSpan.FromMinutes(15))_=CheckOnlineUpdateAsync(false);};
         SourceInitialized+=(_,_)=>UiMotion.PrepareWindow(this);
         _updateTimer.Tick+=(_,_)=>_=CheckOnlineUpdateAsync(false);
         Closed+=(_,_)=>_updateTimer.Stop();
@@ -73,16 +73,17 @@ public partial class MainWindow : Window
     private void OnClosing(object? sender,CancelEventArgs e)
     {
         if(_allowExit)return;e.Cancel=true;
+        if(!FlushNotes())return;
         if(_dragging||_interactions>0)return;
         if(App.Options.CloseEndsProcess){if(!StopBilliards())return;_allowExit=true;e.Cancel=false;Dispatcher.BeginInvoke(()=>Application.Current.Shutdown());}else BeginHidePanel();
     }
     private void OnCloseButton(object sender,RoutedEventArgs e)=>Close();
     private void OnMinimizeButton(object sender,RoutedEventArgs e)=>BeginHidePanel();
-    public void Quit() { if(!StopBilliards())return;_idleRelease.Stop();FinishPanelMotion();_shutter.ReleaseBuffer();UiMotion.CancelAll();_allowExit=true; Application.Current.Shutdown(); }
+    public void Quit() { if(!FlushNotes()||!StopBilliards())return;_idleRelease.Stop();FinishPanelMotion();_shutter.ReleaseBuffer();UiMotion.CancelAll();_allowExit=true; Application.Current.Shutdown(); }
     internal void QuitForMaintenance(){if(!_dragging&&_interactions==0)Quit();}
     private bool _storageMoving;
-    internal bool TryBeginStorageMove(){if(_dragging||_interactions>0||_menus>0||_onlineBusy||!StopBilliards())return false;_storageMoving=true;_interactions++;IsEnabled=false;return true;}
-    internal void EndStorageMove(){_storageMoving=false;_interactions--;IsEnabled=true;Render();}
+    internal bool TryBeginStorageMove(){if(_dragging||_interactions>0||_menus>0||_onlineBusy||!FlushNotes()||!StopBilliards())return false;_storageMoving=true;_interactions++;IsEnabled=false;return true;}
+    internal void EndStorageMove(){_storageMoving=false;_interactions--;IsEnabled=true;if(!NotesStore.DirectoryPath.Equals(System.IO.Path.Combine(Store.DataDirectory,"Notes"),StringComparison.OrdinalIgnoreCase)){NotesStore=new(Store.DataDirectory);NotesDraft=NotesStore.Draft();RenderNotes();}Render();}
     public void SetStatus(string message) { _shutter.InvalidateSnapshot();Status.Text=message;Status.ToolTip=message; }
     public void Render()
     {
@@ -213,7 +214,7 @@ public partial class MainWindow : Window
             var picker=new Microsoft.Win32.OpenFileDialog{Title="选择轻匣新版本",Filter="轻匣程序或安装包 (*.exe)|*.exe",CheckFileExists=true};if(picker.ShowDialog(this)!=true)return;
             var source=picker.FileName;var target=Environment.ProcessPath!;var candidate=await Task.Run(()=>LocalUpdater.Inspect(source));
             if(UiDialogs.ShowUpdate(this,"当前版本："+CurrentVersionLabel+"\n更新到：v"+candidate.Version.ToString(3)+GameUpdateNotice+"\n\n程序会在原位置更新，保留分类、收纳内容和设置，完成后自动打开。","更新轻匣",MessageBoxButton.OKCancel)!=MessageBoxResult.OK)return;
-            if(!StopBilliards())return;SetStatus("正在准备更新…");var staged=await Task.Run(()=>LocalUpdater.Stage(source,target,Store.DataDirectory,App.IsSandbox?App.SandboxRoot:null,options:App.Options,state:Store.State));
+            if(!FlushNotes()||!StopBilliards())return;SetStatus("正在准备更新…");var staged=await StageUpdateWithNotesAsync(source,target);
             var helper=new ProcessStartInfo(staged.Helper){UseShellExecute=false,CreateNoWindow=true};helper.ArgumentList.Add("--apply-update");helper.ArgumentList.Add(staged.Plan);Process.Start(helper);Quit();
         }
         catch(Exception ex){ShowFailure(ex);}
@@ -239,7 +240,7 @@ public partial class MainWindow : Window
             if(!StopBilliards())return;var download=new UpdateDownloadWindow(this,_latestRelease,Store.DataDirectory);
             if(download.ShowDialog()!=true||download.DownloadedFile is null)return;
             if(!StopBilliards())return;SetStatus("正在准备更新…");
-            var staged=await Task.Run(()=>LocalUpdater.Stage(download.DownloadedFile,Environment.ProcessPath!,Store.DataDirectory,App.IsSandbox?App.SandboxRoot:null,options:App.Options,state:Store.State));
+            var staged=await StageUpdateWithNotesAsync(download.DownloadedFile,Environment.ProcessPath!);
             using(var plan=System.Text.Json.JsonDocument.Parse(File.ReadAllText(staged.Plan)))
                 if(!plan.RootElement.GetProperty("CandidateHash").GetString()!.Equals(_latestRelease.Sha256,StringComparison.OrdinalIgnoreCase))throw new IOException("更新文件校验失败，请重新下载。");
             var helper=new ProcessStartInfo(staged.Helper){UseShellExecute=false,CreateNoWindow=true};helper.ArgumentList.Add("--apply-update");helper.ArgumentList.Add(staged.Plan);
@@ -275,7 +276,7 @@ public partial class MainWindow : Window
     }
     private void OnIconClick(object sender,RoutedEventArgs e)
     {
-        if(_dragging || DateTime.UtcNow<_suppressUntil)return;
+        if(_dragging || DateTime.UtcNow<_suppressUntil||!FlushNotes())return;
         if(((Button)sender).Tag is NookItem item)Run(()=>{ShellIntegration.Launch(Store,item);if(!KeepOpenForVerification)BeginHidePanel();});
     }
     private void OnIconRightClick(object sender,MouseButtonEventArgs e)

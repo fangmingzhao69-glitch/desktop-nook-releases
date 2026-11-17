@@ -42,7 +42,7 @@ internal static class SizingVerification
                 Check(settings.ReadWindowSize()==preference,"自定义宽高保存并重读");
                 using(var registry=Registry.CurrentUser.CreateSubKey(key+@"\Settings"))registry.SetValue("WindowSize","broken json");
                 Check(settings.ReadWindowSize()==new WindowSizePreference(),"损坏偏好安全恢复默认");
-                Check(new WindowSizePreference{Width=double.NaN,Height=-20,Zoom=9}.Validated().Width==716.8,"非法尺寸数值校验");
+                Check(new WindowSizePreference{Width=double.NaN,Height=-20,Zoom=9}.Validated().Width==1120,"非法尺寸数值校验");
             }
             finally{Registry.CurrentUser.DeleteSubKeyTree(key,false);}
             for(int n=1;n<=12;n++){var file=Path.Combine(App.Store.DesktopRoots[0],$"示例应用 {n}.url");File.WriteAllText(file,"[InternetShortcut]\r\nURL=https://example.invalid/\r\n");App.Store.Collect(file,"office");}window.Render();await Layout();
@@ -50,27 +50,27 @@ internal static class SizingVerification
             foreach(var scale in WindowSizePreference.Presets)
             {
                 window.SelectWindowSize(scale);await Layout();
-                Check(Math.Abs(window.ActualWidth-716.8*scale)<2&&Math.Abs(window.ActualHeight-627.2*scale)<2,$"固定 {scale*100}% 尺寸");
+                Check(Math.Abs(window.ActualWidth-1120*scale)<2&&Math.Abs(window.ActualHeight-627.2*scale)<2,$"固定 {scale*100}% 尺寸");
                 Check(Math.Abs(IconWidth()-originalIconWidth)<.25,$"{scale*100}% 窗口下图标尺寸不变（{IconWidth():F2}）");
                 Snapshot("preset-"+(int)(scale*100));
             }
-            window.SelectWindowSize(reset:true);window.SelectWindowSize();window.Width=1000;window.Height=430;await Layout();
+            window.SelectWindowSize(reset:true);window.SelectWindowSize();window.Width=1600;window.Height=430;await Layout();
             Check(window.IconColumns>6&&Math.Abs(window.Surface.Width-window.ActualWidth/1.12)<1,"自由模式宽面板自动增加列数且保持内容比例");Snapshot("free-wide");
             Check(Math.Abs(IconWidth()-originalIconWidth)<.25,"自由模式图标尺寸不变");
-            window.Width=560;window.Height=700;await Layout();Check(window.IconColumns<6,"窄窗口自动减少列数");Snapshot("free-narrow");
-            window.SelectWindowSize(locked:true);await Layout();Check(Math.Abs(window.ActualWidth/window.ActualHeight-8d/7)<.01,"锁定宽高比恢复 8:7");
+            window.Width=800;window.Height=700;await Layout();Check(window.IconColumns<6,"窄窗口自动减少列数");Snapshot("free-narrow");
+            window.SelectWindowSize(locked:true);await Layout();Check(Math.Abs(window.ActualWidth/window.ActualHeight-WindowSizePreference.Ratio)<.01,"锁定宽高比恢复 新默认比例");
             Check(Math.Abs(IconWidth()-originalIconWidth)<.25,"锁定窗口宽高比时图标尺寸不变");
-            var start=new Rect(100,100,716.8,627.2);var work=new Rect(0,0,1920,1040);
+            var start=new Rect(100,100,1120,627.2);var work=new Rect(0,0,1920,1040);
             foreach(string edge in new[]{"L","R","T","B","LT","RT","LB","RB"})
             {
                 foreach(bool locked in new[]{false,true})
                 {
                     var resized=MainWindow.CalculateResize(start,edge,200,120,locked,work);
-                    Check(work.Contains(resized)&&resized.Width>=560&&resized.Height>=360&&(!locked||Math.Abs(resized.Width/resized.Height-8d/7)<.001),$"{edge} 边缘拖动，锁定={locked}");
+                    Check(work.Contains(resized)&&resized.Width>=800&&resized.Height>=360&&(!locked||Math.Abs(resized.Width/resized.Height-WindowSizePreference.Ratio)<.001),$"{edge} 边缘拖动，锁定={locked}");
                 }
             }
             var huge=MainWindow.CalculateResize(start,"RB",5000,5000,false,work);Check(work.Contains(huge),"超大尺寸限制在屏幕内");
-            var tiny=MainWindow.CalculateResize(start,"RB",-5000,-5000,false,work);Check(tiny.Width==560&&tiny.Height==360,"最小尺寸保护");
+            var tiny=MainWindow.CalculateResize(start,"RB",-5000,-5000,false,work);Check(tiny.Width==800&&tiny.Height==360,"最小尺寸保护");
             // Exercise the same routed events used by actual mouse capture.
             window.SelectWindowSize(reset:true);window.SelectWindowSize();await Layout();
             var handle=window.ResizeHandles.Children.OfType<Thumb>().Single(t=>(string)t.Tag=="RB");
@@ -88,7 +88,7 @@ internal static class SizingVerification
                 SetCursorPos((int)position.X,(int)position.Y);mouse_event(2,0,0,0,UIntPtr.Zero);await Task.Delay(100);
                 for(int step=1;step<=4;step++){SetCursorPos((int)(position.X+60*dpi.DpiScaleX*step/4),(int)(position.Y+40*dpi.DpiScaleY*step/4));await Task.Delay(60);}
                 mouse_event(4,0,0,0,UIntPtr.Zero);await Layout();
-                Check(Math.Abs(window.ActualWidth-776.8)<4&&Math.Abs(window.ActualHeight-667.2)<4,$"真实鼠标拖动右下角改变窗口宽高（实际 {window.ActualWidth:F1}×{window.ActualHeight:F1}）");
+                Check(Math.Abs(window.ActualWidth-1180)<4&&Math.Abs(window.ActualHeight-667.2)<4,$"真实鼠标拖动右下角改变窗口宽高（实际 {window.ActualWidth:F1}×{window.ActualHeight:F1}）");
                 Check(Math.Abs(App.Options.ReadWindowSize().Width-window.ActualWidth)<2,"真实拖动尺寸持久保存");Snapshot("mouse-resize");
             }
             finally{mouse_event(4,0,0,0,UIntPtr.Zero);SetCursorPos(originalCursor.X,originalCursor.Y);}

@@ -115,7 +115,7 @@ internal static class TaskbarPlacement
     }
     public static void Apply(Window window,TaskbarAnchor anchor,Size? preferred=null)
     {
-        var size=preferred??new Size(716.8,627.2);
+        var size=preferred??new Size(WindowSizePreference.BaseWidth,WindowSizePreference.BaseHeight);
         var rect=Calculate(anchor,size.Width,size.Height);
         SetWindowPos(new WindowInteropHelper(window).Handle,IntPtr.Zero,(int)Math.Round(rect.X),(int)Math.Round(rect.Y),(int)Math.Round(rect.Width),(int)Math.Round(rect.Height),0x14);
     }
