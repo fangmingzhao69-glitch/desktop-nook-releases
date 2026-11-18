@@ -1,0 +1,130 @@
+using System.Windows;
+using System.Windows.Automation;
+using System.Windows.Controls;
+using System.Windows.Controls.Primitives;
+using System.Windows.Documents;
+using System.Windows.Input;
+using System.Windows.Media;
+using System.Windows.Threading;
+using DesktopNook.Core;
+
+namespace DesktopNook.App;
+
+public partial class MainWindow
+{
+    private Thumb? _noteDragHandle;
+    private NoteInsertionMark? _noteInsertionMark;
+    private DispatcherTimer? _noteDragScroll;
+
+    private List<ProjectNote> ActiveCategoryNotes() =>
+        NotesDraft.Notes.Where(note => note.ProjectId == NoteProject?.Id && !note.Archived).ToList();
+
+    private bool CanReorderNotes =>
+        !_showNotesArchive && !_notesComposing && NoteProject is { Archived: false, Search.Length: 0 };
+
+    private FrameworkElement NoteOrdinal(ProjectNote note, int number, bool readOnly)
+    {
+        if (readOnly || !CanReorderNotes)
+        {
+            var label = NotesText(number.ToString(), 11);
+            label.Foreground = Brush("#0877BE");
+            label.FontWeight = FontWeights.SemiBold;
+            label.Margin = new Thickness(4, 0, 8, 0);
+            return label;
+        }
+
+        var handle = new Thumb
+        {
+            Style = (Style)FindResource("NoteOrderHandle"),
+            Tag = number,
+            ToolTip = $"第 {number} 条 · 拖动序号调整顺序"
+        };
+        AutomationProperties.SetAutomationId(handle, "NoteOrder-" + note.Id);
+        AutomationProperties.SetName(handle, $"第 {number} 条，拖动排序");
+        handle.DragStarted += (_, _) =>
+        {
+            if (!CanReorderNotes) return;
+            _noteDragHandle = handle;
+            _interactions++;
+            _noteDragScroll = new DispatcherTimer(TimeSpan.FromMilliseconds(45), DispatcherPriority.Input,
+                (_, _) => ScrollNoteDrag(note), Dispatcher);
+            _noteDragScroll.Start();
+        };
+        handle.DragDelta += (_, _) =>
+        {
+            if (_noteDragHandle != handle) return;
+            UpdateNoteInsertionMark(NoteDropTarget(note));
+        };
+        handle.DragCompleted += (_, args) =>
+        {
+            if (_noteDragHandle != handle) return;
+            _noteDragHandle = null;
+            _noteDragScroll?.Stop();
+            _noteDragScroll = null;
+            _interactions--;
+            UpdateNoteInsertionMark(null);
+            if (!args.Canceled && CanReorderNotes && NoteDropTarget(note) is { } drop)
+                ChangeNotes(() => NotesStore.ReorderNote(NotesDraft, note, (ProjectNote)drop.Card.Tag, drop.After));
+        };
+        return handle;
+    }
+
+    private (Border Card, bool After)? NoteDropTarget(ProjectNote source)
+    {
+        var pointer = Mouse.GetPosition(_notesScroll);
+        if (pointer.X < 0 || pointer.X >= _notesScroll.ViewportWidth ||
+            pointer.Y < 0 || pointer.Y >= _notesScroll.ViewportHeight) return null;
+
+        var cards = _noteCards.Children.OfType<Border>().Where(card => card.Tag is ProjectNote).ToList();
+        if (cards.Count < 2) return null;
+        var y = Mouse.GetPosition(_noteCards).Y;
+        var card = cards.FirstOrDefault(item => y <= item.TranslatePoint(new Point(0, item.ActualHeight), _noteCards).Y + 5) ?? cards[^1];
+        if (card.Tag == source) return null;
+        bool after = y > card.TranslatePoint(new Point(0, card.ActualHeight / 2), _noteCards).Y;
+        int index = cards.IndexOf(card);
+        int adjacent = after ? index + 1 : index - 1;
+        if (adjacent >= 0 && adjacent < cards.Count && cards[adjacent].Tag == source) return null;
+        return (card, after);
+    }
+
+    private void ScrollNoteDrag(ProjectNote source)
+    {
+        if (_noteDragHandle is null) return;
+        var pointer = Mouse.GetPosition(_notesScroll);
+        if (pointer.X < 0 || pointer.X >= _notesScroll.ViewportWidth ||
+            pointer.Y < 0 || pointer.Y >= _notesScroll.ViewportHeight) return;
+        double delta = pointer.Y < 24 ? -18 : pointer.Y > _notesScroll.ViewportHeight - 24 ? 18 : 0;
+        if (delta != 0)
+        {
+            _notesScroll.ScrollToVerticalOffset(_notesScroll.VerticalOffset + delta);
+            UpdateNoteInsertionMark(NoteDropTarget(source));
+        }
+    }
+
+    private void UpdateNoteInsertionMark((Border Card, bool After)? destination)
+    {
+        if (_noteInsertionMark is { } existing)
+        {
+            if (destination is { } same && existing.AdornedElement == same.Card && existing.After == same.After) return;
+            existing.Layer.Remove(existing);
+            _noteInsertionMark = null;
+        }
+        if (destination is { } target && AdornerLayer.GetAdornerLayer(target.Card) is { } layer)
+        {
+            _noteInsertionMark = new NoteInsertionMark(target.Card, target.After, layer) { IsHitTestVisible = false };
+            layer.Add(_noteInsertionMark);
+        }
+    }
+
+    private sealed class NoteInsertionMark(UIElement card, bool after, AdornerLayer layer) : Adorner(card)
+    {
+        internal bool After { get; } = after;
+        internal AdornerLayer Layer { get; } = layer;
+
+        protected override void OnRender(DrawingContext drawingContext)
+        {
+            double y = After ? AdornedElement.RenderSize.Height + 3 : -3;
+            drawingContext.DrawLine(new Pen(Brush("#218DEB"), 2), new Point(0, y), new Point(AdornedElement.RenderSize.Width, y));
+        }
+    }
+}

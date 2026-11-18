@@ -3,6 +3,7 @@ using System.Text.Json;
 using System.Windows;
 using System.Windows.Automation;
 using System.Windows.Controls;
+using System.Windows.Controls.Primitives;
 using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
@@ -18,6 +19,17 @@ internal static class NotesVerification
         IEnumerable<T> Find<T>(DependencyObject parent) where T:DependencyObject
         {for(int i=0;i<VisualTreeHelper.GetChildrenCount(parent);i++){var child=VisualTreeHelper.GetChild(parent,i);if(child is T t)yield return t;foreach(var item in Find<T>(child))yield return item;}}
         TextBox Field(string name)=>Find<TextBox>(window.NotesHost).First(b=>AutomationProperties.GetName(b)==name);
+        void ClickMenu(MenuItem item)
+        {
+            if (window.LastMenu is { } menu) menu.IsOpen = false;
+            item.RaiseEvent(new RoutedEventArgs(MenuItem.ClickEvent));
+        }
+        MenuItem OpenLastCardMenu(string item)
+        {
+            var menuButton = Find<Button>(window.NotesHost).Last(b => AutomationProperties.GetName(b) == "便签操作");
+            menuButton.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            return window.LastMenu!.Items.OfType<MenuItem>().Single(entry => Equals(entry.Header, item));
+        }
         async Task Layout(){window.UpdateLayout();await window.Dispatcher.InvokeAsync(()=>{},System.Windows.Threading.DispatcherPriority.ContextIdle);window.UpdateLayout();}
         void Snapshot(string name)
         {
@@ -44,6 +56,11 @@ internal static class NotesVerification
             var addButton=Find<Button>(window.NotesHost).Single(b=>AutomationProperties.GetAutomationId(b)=="AddProjectNote");addButton.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));await Layout();
             Check(window.NotesDraft.Notes.Last().Kind=="todo"&&window.LastMenu?.IsOpen!=true,"记一条直接新增待办，不弹出文字类型菜单");
             Check(Find<TextBlock>(window.NotesHost).Any(t=>t.Text=="便签"),"右侧标题显示便签");
+            var launcherHeading = Find<TextBlock>(window).First(text => text.Text == "轻匣");
+            var notesHeading = Find<TextBlock>(window.NotesHost).Single(text => text.Text == "便签");
+            Check(notesHeading.FontFamily.Equals(launcherHeading.FontFamily) && notesHeading.FontWeight == launcherHeading.FontWeight &&
+                notesHeading.FontSize == launcherHeading.FontSize && Field("记录标题").FontFamily.Equals(launcherHeading.FontFamily),
+                "便签标题和编辑框共用轻匣字体，面板标题字号和字重一致");
             var customTitle=Find<TextBox>(window.NotesHost).Last(b=>AutomationProperties.GetName(b)=="记录标题");customTitle.Text="可编辑清单名称";
             Check(window.FlushNotes(false)&&new NotesStore(App.Store.DataDirectory).State.Notes.Last().Title=="可编辑清单名称","自定义清单名称持久保存");
             var taskBox=Find<TextBox>(window.NotesHost).Last();taskBox.Text="确认设计方案";
@@ -58,6 +75,16 @@ internal static class NotesVerification
             Check(window.FlushNotes(false)&&new NotesStore(App.Store.DataDirectory).State.Notes.Last().Tasks.Count==1,"右键删除实际移除细项并保存");
             var check=Find<CheckBox>(window.NotesHost).First();check.IsChecked=true;check.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
             Check(window.FlushNotes(false)&&new NotesStore(App.Store.DataDirectory).State.Notes.Last().Tasks[0].Done,"待办勾选及正文持久保存");
+            var typeMenu = OpenLastCardMenu("便签类型");
+            ClickMenu(typeMenu.Items.OfType<MenuItem>().Single(item => Equals(item.Header, "文字记录")));
+            await Layout();
+            var converted = window.NotesDraft.Notes.Last();
+            Check(converted.Kind == "text" && Find<TextBox>(window.NotesHost).Last().AcceptsReturn &&
+                Find<TextBox>(window.NotesHost).Last().Text == "确认设计方案", "菜单切换为多行文字，保留待办原文");
+            typeMenu = OpenLastCardMenu("便签类型");
+            ClickMenu(typeMenu.Items.OfType<MenuItem>().Single(item => Equals(item.Header, "待办清单")));
+            await Layout();
+            Check(window.NotesDraft.Notes.Last().Tasks.Single().Done, "切回待办后保留未修改条目的勾选状态");
             Field("搜索当前分类的记录").Text="需求沟通";await Task.Delay(500);await Layout();
             Check(!Find<CheckBox>(window.NotesHost).Any(),"项目内搜索按记录内容过滤");
             window.AddProjectNote();await Layout();Check(Field("搜索当前分类的记录").Text=="","搜索状态下新建清除筛选使新记录可见");
@@ -84,10 +111,51 @@ internal static class NotesVerification
             var staged=LocalUpdater.Stage(Environment.ProcessPath!,target,App.Store.DataDirectory,root,0,App.Options,App.Store.State);
             var backup=Path.Combine(Path.GetDirectoryName(staged.Plan)!,"metadata-backup","Notes","notes.json");
             Check(File.ReadAllBytes(backup).SequenceEqual(File.ReadAllBytes(window.NotesStore.FilePath)),"更新暂存备份逐字节包含便签正文");
+            var longProject = NotesStore.AddProject(window.NotesDraft, "完整的归档分类名称用于检查窄窗口时的换行和滚动展示");
+            longProject.Archived = true;
+            var archivedTodo = new ProjectNote { ProjectId = other.Id, Title = "单独归档的便签", Archived = true };
+            window.NotesDraft.Notes.Add(archivedTodo);
+            window.NotesDraft.Notes.Add(new() { ProjectId = longProject.Id, Title = "整个分类的只读便签", Text = "归档内容" });
+            window.NotesDraft.ActiveProject = p.Id;
+            window.NotesStore.Commit(window.NotesDraft);
+            window.RenderNotes();
+            var archiveButton = Find<Button>(window.NotesHost).Single(button => AutomationProperties.GetAutomationId(button) == "NotesArchive");
+            archiveButton.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            await Layout();
+            var archiveGroup = Find<TextBlock>(window.NotesHost).Single(text => text.Text.StartsWith(longProject.Name, StringComparison.Ordinal));
+            Check(archiveGroup.Text == longProject.Name + "（整个分类已归档）" && archiveGroup.TextWrapping == TextWrapping.Wrap &&
+                Find<TextBlock>(window.NotesHost).Any(text => text.Text == other.Name), "归档页同时显示单独归档的原分类与整个归档分类，长名称可完整换行");
+            Check(Find<TextBox>(window.NotesHost).Any(box => box.Text == "归档内容" && box.IsReadOnly),
+                "整个归档分类的正文可只读查看");
+            Snapshot("notes-archive-preview");
+            var categoryMenuButton = Find<Button>(window.NotesHost).Single(button => AutomationProperties.GetName(button) == "管理已归档分类：" + longProject.Name);
+            categoryMenuButton.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            ClickMenu(window.LastMenu!.Items.OfType<MenuItem>().Single(item => Equals(item.Header, "恢复整个分类")));
+            await Layout();
+            Check(!window.NotesDraft.Projects.Single(project => project.Id == longProject.Id).Archived &&
+                window.NotesDraft.Notes.Single(note => note.Id == archivedTodo.Id).Archived, "恢复整个分类保留其他单独归档的便签");
+            archiveButton.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            window.SelectNoteProject(p.Id);
+            await Layout();
             for(int i=1;i<=7;i++){var source=Path.Combine(App.Store.DesktopRoots[0],$"示例应用 {i}.url");File.WriteAllText(source,"[InternetShortcut]\r\nURL=https://example.invalid/\r\n");App.Store.Collect(source,"office");}
             window.NotesDraft.Notes.Clear();window.NotesDraft.Notes.Add(new(){ProjectId=p.Id,Kind="todo",Title="本周待办",Tasks=[new(){Text="整理需求资料"},new(){Text="确认设计方案"}]});
             window.NotesDraft.Notes.Add(new(){ProjectId=p.Id,Title="项目待办",Kind="todo",Tasks=[new(){Text="整理项目资料"},new(){Text="确认设计方案"},new(){Text="建立项目档案",Done=true}]});
-            active.SelectedNote=null;active.Scroll=0;active.Search="";window.NotesStore.Commit(window.NotesDraft);window.Render();window.RenderNotes();await Layout();await NotesSplitVerification.Run(window,checks);window.NotesDraft.LeftFraction=.646;window.NotesStore.Commit(window.NotesDraft);window.RenderNotes();await Layout();Snapshot("notes-final-preview");
+            active.SelectedNote=null;active.Scroll=0;active.Search="";window.NotesStore.Commit(window.NotesDraft);window.Render();window.RenderNotes();await Layout();
+            var cards = Find<Border>(window.NotesHost).Where(border => border.Tag is ProjectNote).ToList();
+            var handles = Find<Thumb>(window.NotesHost).Where(thumb => AutomationProperties.GetAutomationId(thumb).StartsWith("NoteOrder-")).ToList();
+            Check(handles.Select(handle => handle.Tag).SequenceEqual(new object[] { 1, 2 }), "分类内便签显示连续序号");
+            var firstId = ((ProjectNote)cards[0].Tag).Id;
+            var secondId = ((ProjectNote)cards[1].Tag).Id;
+            await NotesSplitVerification.DragNote(window, handles[1], cards[0], cancel: true);
+            Check(window.NotesDraft.Notes.First().Id == firstId, "Esc 取消便签拖动，顺序不变");
+            await NotesSplitVerification.DragNote(window, handles[1], cards[0]);
+            Check(new NotesStore(App.Store.DataDirectory).State.Notes.First().Id == secondId &&
+                Find<Thumb>(window.NotesHost).First(thumb => AutomationProperties.GetAutomationId(thumb).StartsWith("NoteOrder-")).Tag.Equals(1),
+                "真实鼠标拖动改变便签顺序及序号，重读顺序一致");
+            ClickMenu(OpenLastCardMenu("上移一位"));
+            await Layout();
+            Check(new NotesStore(App.Store.DataDirectory).State.Notes.First().Id == firstId, "右键上移立即保存");
+            await NotesSplitVerification.Run(window,checks);window.NotesDraft.LeftFraction=.646;window.NotesStore.Commit(window.NotesDraft);window.RenderNotes();await Layout();Snapshot("notes-final-preview");
         }
         catch(Exception ex){failure=ex.ToString();}
         File.WriteAllText(Path.Combine(root,"notes-verification.json"),JsonSerializer.Serialize(new{passed=checks.Count,failure,checks},new JsonSerializerOptions{WriteIndented=true}));

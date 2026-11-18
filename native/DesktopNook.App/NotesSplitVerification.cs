@@ -1,6 +1,7 @@
 using System.Runtime.InteropServices;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Controls.Primitives;
 using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Threading;
@@ -13,6 +14,39 @@ internal static class NotesSplitVerification
     [DllImport("user32.dll")] private static extern bool GetCursorPos(out Pointer point);
     [DllImport("user32.dll")] private static extern bool SetCursorPos(int x,int y);
     [DllImport("user32.dll")] private static extern void mouse_event(uint flags,uint x,uint y,uint data,UIntPtr extra);
+
+    internal static async Task DragNote(MainWindow window, Thumb handle, Border target, bool cancel = false)
+    {
+        if (!App.IsSandbox) throw new InvalidOperationException("便签拖动检查仅允许沙箱。");
+        GetCursorPos(out var original);
+        bool pressed = false;
+        try
+        {
+            window.Activate();
+            handle.BringIntoView();
+            await window.Dispatcher.InvokeAsync(window.UpdateLayout, DispatcherPriority.ContextIdle);
+            var from = handle.PointToScreen(new Point(handle.ActualWidth / 2, handle.ActualHeight / 2));
+            var to = target.PointToScreen(new Point(24, target.ActualHeight / 4));
+            SetCursorPos((int)from.X, (int)from.Y);
+            mouse_event(2, 0, 0, 0, UIntPtr.Zero);
+            pressed = true;
+            await Task.Delay(80);
+            if (!handle.IsDragging) throw new Exception("真实鼠标未捕获序号拖动手柄。");
+            SetCursorPos((int)to.X, (int)to.Y);
+            await Task.Delay(100);
+            if (cancel)
+                window.RaiseEvent(new KeyEventArgs(Keyboard.PrimaryDevice, PresentationSource.FromVisual(window), 0, Key.Escape)
+                    { RoutedEvent = Keyboard.PreviewKeyDownEvent });
+            mouse_event(4, 0, 0, 0, UIntPtr.Zero);
+            pressed = false;
+            await window.Dispatcher.InvokeAsync(window.UpdateLayout, DispatcherPriority.ContextIdle);
+        }
+        finally
+        {
+            if (pressed) mouse_event(4, 0, 0, 0, UIntPtr.Zero);
+            SetCursorPos(original.X, original.Y);
+        }
+    }
     internal static async Task Run(MainWindow window,List<string> checks)
     {
         if(!App.IsSandbox)throw new InvalidOperationException("分栏检查仅允许沙箱。");
@@ -35,7 +69,7 @@ internal static class NotesSplitVerification
             double moving=window.LauncherColumn.ActualWidth;
             Check(moving<before-100&&window.IconColumns<6,"拖动中即时减少图标列数，不等松手才重排");
             window.RenderNotes();await Layout();
-            Check(Math.Abs(window.LauncherColumn.ActualWidth-moving)<2,"拖动时刷新标签不按旧比例拉回分隔线");
+            Check(Math.Abs(window.LauncherColumn.ActualWidth-moving)<2,"拖动时刷新便签不按旧比例拉回分隔线");
             mouse_event(4,0,0,0,UIntPtr.Zero);pressed=false;await Layout();
             Check(Math.Abs(window.LauncherColumn.ActualWidth-moving)<2&&window.FlushNotes(false),"松手保持当前位置并保存比例");
             var saved=window.NotesDraft.LeftFraction;

@@ -291,6 +291,46 @@ Test("Notes duplicate names, dangling references and stale revisions are rejecte
     try{store.Commit(draft);throw new Exception("orphan accepted");}catch(IOException){}
     Assert(before.SequenceEqual(File.ReadAllBytes(store.FilePath)),"rejected state never changes disk");
 });
+Test("Notes preserve the previous display order on upgrade and store manual order by category", root =>
+{
+    var store = new NotesStore(root);
+    var draft = store.Draft();
+    var firstCategory = NotesStore.AddProject(draft, "分类 A");
+    var otherCategory = NotesStore.AddProject(draft, "分类 B");
+    var first = new ProjectNote { ProjectId = firstCategory.Id, Title = "最早" };
+    var favorite = new ProjectNote { ProjectId = firstCategory.Id, Title = "常用", Favorite = true, CreatedUtc = first.CreatedUtc.AddSeconds(1) };
+    var other = new ProjectNote { ProjectId = otherCategory.Id, Title = "其他" };
+    draft.Notes.AddRange([first, favorite, other]);
+    store.Commit(draft);
+    var legacyDisk = System.Text.Json.Nodes.JsonNode.Parse(File.ReadAllText(store.FilePath))!.AsObject();
+    legacyDisk.Remove("RecordsInDisplayOrder");
+    File.WriteAllText(store.FilePath, legacyDisk.ToJsonString());
+
+    store = new NotesStore(root);
+    draft = store.Draft();
+    var categoryNotes = draft.Notes.Where(note => note.ProjectId == firstCategory.Id).ToList();
+    Assert(categoryNotes.Select(note => note.Id).SequenceEqual(new[] { favorite.Id, first.Id }), "legacy seed respects the original visible order");
+    NotesStore.ReorderNote(draft, categoryNotes[1], categoryNotes[0], after: false);
+    store.Commit(draft);
+    var reloaded = new NotesStore(root).State;
+    Assert(reloaded.Notes.Select(note => note.Id).SequenceEqual(new[] { first.Id, favorite.Id, other.Id }), "manual order wins and other category retains its records");
+    Assert(NotesMarkdown.Export(reloaded, project: firstCategory).IndexOf("### 最早", StringComparison.Ordinal) <
+        NotesMarkdown.Export(reloaded, project: firstCategory).IndexOf("### 常用", StringComparison.Ordinal), "Markdown follows the saved sequence");
+});
+Test("Changing note kind keeps text, duplicates and matching completion states", root =>
+{
+    var note = new ProjectNote
+    {
+        Kind = "todo",
+        Tasks = [new() { Text = "相同", Done = true }, new() { Text = "相同" }, new() { Text = "第三项", Done = true }]
+    };
+    note.ChangeKind("text");
+    Assert(note.Kind == "text" && note.Text == "相同\n相同\n第三项", "plain text has one line per original task");
+    note.Text = "第三项\r\n相同\r\n\r\n相同\r\n新增";
+    note.ChangeKind("todo");
+    Assert(note.Tasks.Select(task => task.Text).SequenceEqual(new[] { "第三项", "相同", "", "相同", "新增" }) &&
+        note.Tasks.Select(task => task.Done).SequenceEqual(new[] { true, true, false, false, false }), "edited text becomes tasks and retained lines keep checkmarks");
+});
 Test("Notes recover valid backup and preserve damaged bytes without rotating corruption",root=>{
     var store=new NotesStore(root);var draft=store.Draft();var project=NotesStore.AddProject(draft,"测试项目");draft.Notes.Add(new(){ProjectId=project.Id,Text="应恢复正文"});store.Commit(draft);
     File.WriteAllText(store.FilePath,"corrupt bytes");store=new(root);Assert(store.State.Notes.Single().Text=="应恢复正文"&&store.RecoveryMessage is not null,"valid backup recovered");

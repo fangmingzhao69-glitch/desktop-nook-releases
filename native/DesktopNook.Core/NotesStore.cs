@@ -37,6 +37,33 @@ public sealed class ProjectNote
     public DateTime ModifiedUtc { get; set; } = DateTime.UtcNow;
     public DateTime? DeletedUtc { get; set; }
     public string? DeleteBatch { get; set; }
+
+    public void ChangeKind(string kind)
+    {
+        if (kind == Kind) return;
+        if (kind == "text")
+        {
+            Text = string.Join("\n", Tasks.Select(task => task.Text));
+        }
+        else if (kind == "todo")
+        {
+            var body = Text.ReplaceLineEndings("\n");
+            // Keep existing checkmarks on unchanged tasks, including duplicate lines.
+            if (Tasks.Count == 0 || body != string.Join("\n", Tasks.Select(task => task.Text.ReplaceLineEndings("\n"))))
+            {
+                var previous = Tasks.GroupBy(task => task.Text, StringComparer.Ordinal)
+                    .ToDictionary(group => group.Key, group => new Queue<NoteTask>(group), StringComparer.Ordinal);
+                Tasks = body.Split('\n').Select(line =>
+                    previous.TryGetValue(line, out var matches) && matches.TryDequeue(out var task)
+                        ? task
+                        : new NoteTask { Text = line }).ToList();
+            }
+        }
+        else throw new ArgumentException("不支持的便签类型。", nameof(kind));
+
+        Kind = kind;
+        ModifiedUtc = DateTime.UtcNow;
+    }
 }
 public sealed class NotesState
 {
@@ -88,11 +115,13 @@ public sealed class NotesStore
         public long Revision { get; set; }
         public string? ActiveProject { get; set; }
         public double LeftFraction { get; set; }
+        public bool RecordsInDisplayOrder { get; set; }
         public List<CategoryData> Categories { get; set; } = [];
     }
     private static Document Snapshot(NotesState state) => new()
     {
         Revision = state.Revision, ActiveProject = state.ActiveProject, LeftFraction = state.LeftFraction,
+        RecordsInDisplayOrder = true,
         Categories = state.Projects.Select(p => new CategoryData { Project = p, Records = state.Notes.Where(n => n.ProjectId == p.Id).ToList() }).ToList()
     };
     private static NotesState Read(string path)
@@ -101,6 +130,7 @@ public sealed class NotesStore
         using var json = JsonDocument.Parse(text);
         if (json.RootElement.ValueKind != JsonValueKind.Object || !json.RootElement.TryGetProperty("Format", out var version) || version.ValueKind != JsonValueKind.Number || !version.TryGetInt32(out var format)) throw new IOException("便签格式无效。");
         NotesState state;
+        bool recordsInDisplayOrder = false;
         if (format == 1)
         {
             state = JsonSerializer.Deserialize<NotesState>(text, Json) ?? throw new IOException("便签为空。");
@@ -120,9 +150,14 @@ public sealed class NotesStore
                 throw new IOException("便签分类存储无效。");
             state = new() { Revision = doc.Revision, ActiveProject = doc.ActiveProject, LeftFraction = doc.LeftFraction,
                 Projects = doc.Categories.Select(c => c.Project).ToList(), Notes = doc.Categories.SelectMany(c => c.Records).ToList() };
+            recordsInDisplayOrder = doc.RecordsInDisplayOrder;
         }
         else throw new IOException("便签版本暂不支持。");
-        Validate(state); return state;
+        Validate(state);
+        // Earlier versions displayed favorites first, then sorted by creation time.
+        if (!recordsInDisplayOrder)
+            state.Notes = state.Notes.OrderByDescending(note => note.Favorite).ThenBy(note => note.CreatedUtc).ToList();
+        return state;
     }
     public NotesState Draft() => JsonSerializer.Deserialize<NotesState>(JsonSerializer.Serialize(State, Json), Json)!;
     public void Commit(NotesState draft)
@@ -186,12 +221,35 @@ public sealed class NotesStore
         name = name.Trim(); if (name.Length == 0 || name.Length > 100) throw new ArgumentException("分类名称需为 1 至 100 个字符。");
         EnsureName(state, name, project.Id); project.Name = name; project.ModifiedUtc = DateTime.UtcNow;
     }
+
+    public static void ReorderNote(NotesState state, ProjectNote note, ProjectNote target, bool after)
+    {
+        if (note == target || note.ProjectId != target.ProjectId || note.Archived || target.Archived ||
+            !state.Projects.Any(project => project.Id == note.ProjectId && !project.Archived) ||
+            !state.Notes.Contains(target) || !state.Notes.Remove(note)) return;
+        var index = state.Notes.IndexOf(target);
+        state.Notes.Insert(after ? index + 1 : index, note);
+    }
+
+    public static void MoveNoteToProject(NotesState state, ProjectNote note, NoteProject destination)
+    {
+        if (note.ProjectId == destination.Id || destination.Archived || !state.Notes.Remove(note)) return;
+        note.ProjectId = destination.Id;
+        note.ModifiedUtc = DateTime.UtcNow;
+        state.Notes.Add(note);
+    }
+
     public static void DeleteProject(NotesState state, NoteProject project, string? destination = null)
     {
         if (destination is not null && !state.Projects.Any(p => p.Id == destination && p.Id != project.Id && !p.Archived && p.DeletedUtc is null))
             throw new ArgumentException("请选择其他活动分类。");
         if (destination is not null)
-            foreach (var note in state.Notes.Where(n => n.ProjectId == project.Id)) note.ProjectId = destination;
+        {
+            var moved = state.Notes.Where(note => note.ProjectId == project.Id).ToList();
+            state.Notes.RemoveAll(note => note.ProjectId == project.Id);
+            foreach (var note in moved) note.ProjectId = destination;
+            state.Notes.AddRange(moved);
+        }
         else state.Notes.RemoveAll(n => n.ProjectId == project.Id);
         state.Projects.Remove(project);
         if (state.ActiveProject == project.Id) state.ActiveProject = state.Projects.FirstOrDefault(p => !p.Archived)?.Id;

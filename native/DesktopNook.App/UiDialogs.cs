@@ -8,7 +8,7 @@ internal static class UiDialogs
 {
     public static void Chrome(Window window,bool compact=false)
     {
-        window.UseLayoutRounding=true;window.SnapsToDevicePixels=true;TextOptions.SetTextFormattingMode(window,TextFormattingMode.Display);window.FontFamily=new FontFamily("Microsoft YaHei UI, Segoe UI");var body=(UIElement)window.Content;window.Content=null;window.WindowStyle=WindowStyle.None;window.AllowsTransparency=true;window.Background=Brushes.Transparent;
+        window.UseLayoutRounding=true;window.SnapsToDevicePixels=true;TextOptions.SetTextFormattingMode(window,TextFormattingMode.Display);window.FontFamily=(FontFamily)Application.Current.FindResource("UiFontFamily");var body=(UIElement)window.Content;window.Content=null;window.WindowStyle=WindowStyle.None;window.AllowsTransparency=true;window.Background=Brushes.Transparent;
         var dock=new DockPanel();var heading=new Grid{Margin=compact?new Thickness(16,12,12,0):new Thickness(20,16,14,0)};heading.ColumnDefinitions.Add(new(){Width=new GridLength(1,GridUnitType.Star)});heading.ColumnDefinitions.Add(new(){Width=GridLength.Auto});
         heading.Children.Add(new TextBlock{Text=window.Title,FontSize=compact?14:15,FontWeight=FontWeights.SemiBold,Foreground=new SolidColorBrush(Color.FromRgb(25,60,88)),VerticalAlignment=VerticalAlignment.Center});
         var close=new Button{Content="×",FontSize=19,Padding=new Thickness(8,1,8,3),Foreground=Brushes.SlateGray};close.Click+=(_,_)=>window.DialogResult=false;Grid.SetColumn(close,1);heading.Children.Add(close);
