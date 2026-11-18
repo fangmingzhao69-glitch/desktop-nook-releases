@@ -72,7 +72,17 @@ internal static class ShellIntegration
     public static event Action<string,int,ImageSource,int>? IconReady;
     internal static IntPtr VerificationDesktopHandle { get; set; }
     public static void SetAppId(string id) => Marshal.ThrowExceptionForHR(SetCurrentProcessExplicitAppUserModelID(id));
-    public static ImageSource AppIcon { get; } = new BitmapImage(new Uri("pack://application:,,,/Assets/AppIcon.png"));
+    private static readonly Lazy<ImageSource> FallbackIcon = new(() =>
+    {
+        var icon = new BitmapImage();
+        icon.BeginInit();
+        icon.UriSource = new Uri("pack://application:,,,/Assets/AppIcon.png");
+        icon.CacheOption = BitmapCacheOption.OnLoad;
+        icon.EndInit();
+        icon.Freeze();
+        return icon;
+    });
+    public static ImageSource AppIcon => FallbackIcon.Value;
     private static readonly System.Collections.Concurrent.BlockingCollection<(string Path,string Key,int Pixels,int Generation)> IconJobs=new();
     static ShellIntegration()
     {

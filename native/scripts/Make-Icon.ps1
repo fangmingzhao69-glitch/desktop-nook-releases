@@ -16,7 +16,7 @@ function Render-Icon([int]$size) {
     $stream = [IO.MemoryStream]::new()
     try { $encoder.Save($stream); return ,$stream.ToArray() } finally { $stream.Dispose() }
 }
-[IO.File]::WriteAllBytes((Join-Path $assets 'AppIcon.png'),(Render-Icon 512))
+[IO.File]::WriteAllBytes((Join-Path $assets 'AppIcon.png'),(Render-Icon 256))
 $sizes = @(16,20,24,32,40,48,64,96,128,256)
 $frames = @($sizes | ForEach-Object { ,(Render-Icon $_) })
 $writer = [IO.BinaryWriter]::new([IO.File]::Create((Join-Path $assets 'AppIcon.ico')))

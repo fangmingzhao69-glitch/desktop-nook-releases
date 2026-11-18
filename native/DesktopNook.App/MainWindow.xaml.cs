@@ -40,9 +40,11 @@ public partial class MainWindow : Window
     internal Button IconButton(string id) => FindVisualChildren<Button>(Icons).Single(b => b.Tag is NookItem item && item.Id == id);
     internal Point DropPoint => DropSurface.PointToScreen(new Point(DropSurface.ActualWidth/2,DropSurface.ActualHeight/2));
     internal List<Point> IconPositions() => FindVisualChildren<Button>(Icons).Select(b=>b.TranslatePoint(new Point(0,0),this)).ToList();
-    public MainWindow()
+    public MainWindow() : this(deferNoteVisuals: false) { }
+
+    internal MainWindow(bool deferNoteVisuals)
     {
-        InitializeComponent();InitializePanelMotion();InitializeNotes();InitializeSizing();Activated+=(_,_)=>{Place();if(IsLoaded&&!App.IsSandbox&&DateTime.UtcNow-_lastUpdateCheck>TimeSpan.FromMinutes(15))_=CheckOnlineUpdateAsync(false);};
+        InitializeComponent();InitializePanelMotion();InitializeNotes(deferNoteVisuals);InitializeSizing();Activated+=(_,_)=>{Place();if(IsLoaded&&!App.IsSandbox&&DateTime.UtcNow-_lastUpdateCheck>TimeSpan.FromMinutes(15))_=CheckOnlineUpdateAsync(false);};
         SourceInitialized+=(_,_)=>UiMotion.PrepareWindow(this);
         _updateTimer.Tick+=(_,_)=>_=CheckOnlineUpdateAsync(false);
         Closed+=(_,_)=>_updateTimer.Stop();

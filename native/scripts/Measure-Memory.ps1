@@ -1,4 +1,4 @@
-param([string]$Executable=(Join-Path $PSScriptRoot '..\artifacts\win-x64\DesktopNook.exe'),[ValidateRange(1,100)][int]$Cycles=10,[string[]]$Variants=@('on-1','off-1','off-2','on-2'),[switch]$ProductionPlacement,[switch]$Software)
+param([string]$Executable=(Join-Path $PSScriptRoot '..\artifacts\win-x64\DesktopNook.exe'),[ValidateRange(1,100)][int]$Cycles=10,[string[]]$Variants=@('on-1','off-1','off-2','on-2'),[switch]$ProductionPlacement,[switch]$Software,[ValidateRange(0,200)][int]$NoteCards=0)
 $ErrorActionPreference='Stop'
 Add-Type @"
 using System;using System.Runtime.InteropServices;
@@ -19,6 +19,18 @@ $categories=@(0..5|ForEach-Object{@{Id=('c'+$_);Name=('测试分类'+$_)}})+@(@{
 $items=@(1..58|ForEach-Object{$id=[guid]::NewGuid().ToString('N');$file=('入口'+$_+'.url');$vault=Join-Path $data ('vault\'+$id);New-Item -ItemType Directory -Path $vault|Out-Null;$path=Join-Path $vault $file;[IO.File]::WriteAllText($path,"[InternetShortcut]`r`nURL=https://example.invalid/`r`n");@{Id=$id;Name=('入口'+$_);Kind='shortcut';CategoryId=$categories[($_-1)%7].Id;OriginalPath=(Join-Path $desktop $file);FileName=$file;Hash=(Get-FileHash $path).Hash}})
 [IO.File]::WriteAllText((Join-Path $data 'state.json'),(@{Version=1;Categories=$categories;Items=$items}|ConvertTo-Json -Depth 7))
 [IO.File]::WriteAllText((Join-Path $data 'preferences.json'),(@{CloseEndsProcess=$false;MotionMode=$mode}|ConvertTo-Json))
+if($NoteCards -gt 0){
+    $noteData=Join-Path $data 'Notes'
+    New-Item -ItemType Directory -Path $noteData|Out-Null
+    $project=[guid]::NewGuid().ToString('N')
+    $records=@(1..$NoteCards|ForEach-Object{
+        @{Id=[guid]::NewGuid().ToString('N');ProjectId=$project;Title="验证便签 $_";Kind='todo'
+          Tasks=@(@{Text='检查状态';Done=$false},@{Text='保留备注';Done=$true})}
+    })
+    $notes=@{Format=2;Revision=1;LeftFraction=.646;ActiveProject=$project;RecordsInDisplayOrder=$true
+        Categories=@(@{Project=@{Id=$project;Name='验证分类'};Records=$records})}
+    [IO.File]::WriteAllText((Join-Path $noteData 'notes.json'),($notes|ConvertTo-Json -Depth 8))
+}
 $arguments=@('--sandbox',('"'+$root+'"'),'--autostart');if(-not $ProductionPlacement){$arguments+='--keep-open-verification'}
 if($Software){$arguments+='--software-rendering'}
 $p=Start-Process -FilePath $exe -ArgumentList $arguments -WindowStyle Hidden -PassThru
@@ -32,7 +44,7 @@ foreach($n in 1..$Cycles){[AuditWindow]::SendMessage($h,0x112,[IntPtr]0xf020,[In
 $samples+=Sample ('after-'+$Cycles+'-cycles-open')
 [AuditWindow]::SendMessage($h,0x112,[IntPtr]0xf020,[IntPtr]::Zero)|Out-Null;Start-Sleep -Seconds 3;$samples+=Sample 'idle-minimized-3s';Start-Sleep -Seconds 3;$samples+=Sample 'idle-minimized-6s'
 Start-Sleep -Seconds 9;$samples+=Sample 'idle-minimized-15s'
-$row=[pscustomobject]@{variant=$variant;cycles=$Cycles;items=58;categories=7;samples=$samples};$results+=$row;$row|ConvertTo-Json -Depth 7
+$row=[pscustomobject]@{variant=$variant;cycles=$Cycles;items=58;categories=7;notes=$NoteCards;samples=$samples};$results+=$row;$row|ConvertTo-Json -Depth 7
 [IO.File]::WriteAllText((Join-Path $base 'results.json'),($results|ConvertTo-Json -Depth 7))
 }finally{$stop=Start-Process -FilePath $exe -ArgumentList @('--sandbox',('"'+$root+'"'),'--maintenance=stop') -WindowStyle Hidden -PassThru;$stop.WaitForExit();if($stop.ExitCode -ne 0){throw 'Sandbox stop failed'}}
 }

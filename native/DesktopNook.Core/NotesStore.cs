@@ -17,11 +17,15 @@ public sealed class NoteProject
     public string EditorKey { get; set; } = "";
     public int Caret { get; set; }
     public int SelectionLength { get; set; }
+
+    internal NoteProject Copy() => (NoteProject)MemberwiseClone();
 }
 public sealed class NoteTask
 {
     public string Text { get; set; } = "";
     public bool Done { get; set; }
+
+    internal NoteTask Copy() => (NoteTask)MemberwiseClone();
 }
 public sealed class ProjectNote
 {
@@ -37,6 +41,13 @@ public sealed class ProjectNote
     public DateTime ModifiedUtc { get; set; } = DateTime.UtcNow;
     public DateTime? DeletedUtc { get; set; }
     public string? DeleteBatch { get; set; }
+
+    internal ProjectNote Copy()
+    {
+        var copy = (ProjectNote)MemberwiseClone();
+        copy.Tasks = Tasks.Select(task => task.Copy()).ToList();
+        return copy;
+    }
 
     public void ChangeKind(string kind)
     {
@@ -73,6 +84,15 @@ public sealed class NotesState
     public List<ProjectNote> Notes { get; set; } = [];
     public string? ActiveProject { get; set; }
     public double LeftFraction { get; set; } = .646;
+
+    // Copy mutable collections and records. Their string values can be shared.
+    internal NotesState Copy()
+    {
+        var copy = (NotesState)MemberwiseClone();
+        copy.Projects = Projects.Select(project => project.Copy()).ToList();
+        copy.Notes = Notes.Select(note => note.Copy()).ToList();
+        return copy;
+    }
 }
 
 // A single atomic snapshot makes project moves/deletes/restores transactional.
@@ -118,12 +138,17 @@ public sealed class NotesStore
         public bool RecordsInDisplayOrder { get; set; }
         public List<CategoryData> Categories { get; set; } = [];
     }
-    private static Document Snapshot(NotesState state) => new()
+    private static Document Snapshot(NotesState state)
     {
-        Revision = state.Revision, ActiveProject = state.ActiveProject, LeftFraction = state.LeftFraction,
-        RecordsInDisplayOrder = true,
-        Categories = state.Projects.Select(p => new CategoryData { Project = p, Records = state.Notes.Where(n => n.ProjectId == p.Id).ToList() }).ToList()
-    };
+        var records = state.Notes.ToLookup(note => note.ProjectId, StringComparer.Ordinal);
+        return new Document
+        {
+            Revision = state.Revision, ActiveProject = state.ActiveProject, LeftFraction = state.LeftFraction,
+            RecordsInDisplayOrder = true,
+            Categories = state.Projects.Select(project =>
+                new CategoryData { Project = project, Records = records[project.Id].ToList() }).ToList()
+        };
+    }
     private static NotesState Read(string path)
     {
         var text = File.ReadAllText(path);
@@ -159,14 +184,14 @@ public sealed class NotesStore
             state.Notes = state.Notes.OrderByDescending(note => note.Favorite).ThenBy(note => note.CreatedUtc).ToList();
         return state;
     }
-    public NotesState Draft() => JsonSerializer.Deserialize<NotesState>(JsonSerializer.Serialize(State, Json), Json)!;
+    public NotesState Draft() => State.Copy();
     public void Commit(NotesState draft)
     {
         if (_blocked) throw new IOException(RecoveryMessage);
         Validate(draft);
         if (draft.Format != 2) throw new IOException("请先迁移旧版便签格式。");
         if (draft.Revision != State.Revision) throw new IOException("便签版本已变化，请保留草稿后重试。");
-        var next = JsonSerializer.Deserialize<NotesState>(JsonSerializer.Serialize(draft, Json), Json)!;
+        var next = draft.Copy();
         next.Revision++;
         Directory.CreateDirectory(DirectoryPath);
         var temp = FilePath + ".tmp-" + Guid.NewGuid().ToString("N");
@@ -193,15 +218,16 @@ public sealed class NotesStore
         if (state.Format is not (1 or 2) || state.Revision < 0 || state.Projects is null || state.Notes is null ||
             !double.IsFinite(state.LeftFraction) || state.LeftFraction < .2 || state.LeftFraction > .8)
             throw new IOException("便签格式无效或版本暂不支持。");
-        var ids = new HashSet<string>();
+        var projects = new Dictionary<string, NoteProject>(StringComparer.Ordinal);
         foreach (var p in state.Projects)
-            if (p is null || (state.Format == 2 && (p.DeletedUtc is not null || p.DeleteBatch is not null)) || !Guid.TryParseExact(p.Id, "N", out _) || !ids.Add(p.Id) || string.IsNullOrWhiteSpace(p.Name) || p.Search is null || p.EditorKey is null || p.Caret < 0 || p.SelectionLength < 0 || !double.IsFinite(p.Scroll) || p.Scroll < 0)
+            if (p is null || (state.Format == 2 && (p.DeletedUtc is not null || p.DeleteBatch is not null)) || !Guid.TryParseExact(p.Id, "N", out _) || !projects.TryAdd(p.Id, p) || string.IsNullOrWhiteSpace(p.Name) || p.Search is null || p.EditorKey is null || p.Caret < 0 || p.SelectionLength < 0 || !double.IsFinite(p.Scroll) || p.Scroll < 0)
                 throw new IOException("便签分类无效。");
         var noteIds = new HashSet<string>();
         foreach (var n in state.Notes)
-            if (n is null || (state.Format == 2 && (n.DeletedUtc is not null || n.DeleteBatch is not null)) || !Guid.TryParseExact(n.Id, "N", out _) || !noteIds.Add(n.Id) || !ids.Contains(n.ProjectId) ||
+            if (n is null || (state.Format == 2 && (n.DeletedUtc is not null || n.DeleteBatch is not null)) || !Guid.TryParseExact(n.Id, "N", out _) || !noteIds.Add(n.Id) ||
+                n.ProjectId is null || !projects.TryGetValue(n.ProjectId, out var project) ||
                 n.Kind is not ("text" or "todo") || n.Title is null || n.Text is null || n.Tasks is null || n.Tasks.Any(t => t is null || t.Text is null) ||
-                (n.DeletedUtc is null && state.Projects.Single(p => p.Id == n.ProjectId).DeletedUtc is not null))
+                (n.DeletedUtc is null && project.DeletedUtc is not null))
                 throw new IOException("便签记录或分类归属无效。");
     }
     public static NoteProject AddProject(NotesState draft, string name)

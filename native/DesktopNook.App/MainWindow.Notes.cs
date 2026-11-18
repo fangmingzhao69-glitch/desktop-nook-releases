@@ -18,6 +18,7 @@ public partial class MainWindow
     private readonly DispatcherTimer _notesDeadline = new() { Interval = TimeSpan.FromSeconds(2) };
     private readonly DispatcherTimer _notesSearch = new() { Interval = TimeSpan.FromMilliseconds(350) };
     private bool _notesDirty, _notesComposing, _renderingNotes, _showNotesArchive;
+    private bool _notesRecoveryShown;
     private StackPanel _projectTabs = null!, _noteCards = null!;
     private ScrollViewer _projectScroll = null!;
     private TextBox _noteSearch = null!;
@@ -34,7 +35,7 @@ public partial class MainWindow
         if (primary) b.Style = (Style)FindResource("PrimaryButton");
         b.Click += (_,_) => action(b); return b;
     }
-    private void InitializeNotes()
+    private void InitializeNotes(bool deferVisuals)
     {
         NotesStore = new(Store.DataDirectory); NotesDraft = NotesStore.Draft();
         NotesHost.RowDefinitions.Add(new() { Height = new(78) });
@@ -88,8 +89,19 @@ public partial class MainWindow
         _notesSearch.Tick+=(_,_)=>{if(_notesComposing||_noteDragHandle is not null)return;_notesSearch.Stop();RenderNoteCards();};
         SessionEndingCancelEventHandler ending=(_,e)=>{if(!FlushNotes(false))e.Cancel=true;};Application.Current.SessionEnding+=ending;
         Closed+=(_,_)=>{Application.Current.SessionEnding-=ending;_notesSave.Stop();_notesDeadline.Stop();_notesSearch.Stop();};
+        if (deferVisuals) _notesVisualsParked = true;
+        else RenderInitialNotes();
+    }
+
+    private void RenderInitialNotes()
+    {
         RenderNotes();
-        if(NotesStore.RecoveryMessage is not null){_notesStatus.Text=NotesStore.RecoveryMessage;_notesStatus.ToolTip=_notesStatus.Text;}
+        if (!_notesRecoveryShown && NotesStore.RecoveryMessage is not null)
+        {
+            _notesRecoveryShown = true;
+            _notesStatus.Text = NotesStore.RecoveryMessage;
+            _notesStatus.ToolTip = _notesStatus.Text;
+        }
     }
     private void TrackComposition(TextBox editor)
     {
@@ -437,7 +449,7 @@ public partial class MainWindow
     }
     private void RestoreNotesVisuals()
     {
-        if(!_notesVisualsParked)return;_notesVisualsParked=false;RenderNotes();
+        if(!_notesVisualsParked)return;_notesVisualsParked=false;RenderInitialNotes();
     }
     private void OnNotesDrag(object sender,DragEventArgs e){e.Effects=DragDropEffects.None;e.Handled=true;}
     private bool _notesSplitting;

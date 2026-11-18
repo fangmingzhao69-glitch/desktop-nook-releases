@@ -342,6 +342,27 @@ Test("Notes recover valid backup and preserve damaged bytes without rotating cor
     draft=store.Draft();NotesStore.AddProject(draft,"不可覆盖");try{store.Commit(draft);throw new Exception("overwritten");}catch(IOException){}
     Assert(File.ReadAllText(store.FilePath)=="bad"&&File.ReadAllText(store.FilePath+".bak")=="bad backup","double corruption blocks all writes");
 });
+Test("Notes mutable draft records do not alter committed snapshots", root =>
+{
+    var store = new NotesStore(root);
+    var draft = store.Draft();
+    var project = NotesStore.AddProject(draft, "测试分类");
+    draft.Notes.Add(new ProjectNote
+    {
+        ProjectId = project.Id, Kind = "todo", Title = "原清单",
+        Tasks = [new NoteTask { Text = "第一项" }]
+    });
+    store.Commit(draft);
+    draft.Projects[0].Search = "未保存";
+    draft.Notes[0].Tasks[0].Done = true;
+    Assert(store.State.Projects[0].Search == "" && !store.State.Notes[0].Tasks[0].Done,
+        "editing the previous draft leaves committed state unchanged");
+    var later = store.Draft();
+    later.Notes[0].Tasks[0].Text = "未保存文字";
+    later.Notes[0].Tasks.Add(new NoteTask { Text = "第二项" });
+    Assert(store.Draft().Notes[0].Tasks.Count == 1 && store.State.Notes[0].Tasks[0].Text == "第一项",
+        "both mutable task records and lists are isolated");
+});
 Test("Notes failed writes leave committed state and draft available for retry",root=>{
     var store=new NotesStore(root);var draft=store.Draft();var p=NotesStore.AddProject(draft,"项目");draft.Notes.Add(new(){ProjectId=p.Id,Text="first"});store.Commit(draft);
     var before=File.ReadAllBytes(store.FilePath);draft.Notes[0].Text="unsaved latest";

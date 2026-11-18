@@ -1,4 +1,4 @@
-param([switch]$SkipTests)
+param([switch]$SkipTests,[switch]$Verification)
 $ErrorActionPreference = 'Stop'
 $nookRoot = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..'))
 Push-Location $nookRoot
@@ -13,7 +13,9 @@ try {
         dotnet run --project DesktopNook.Network.Tests -c Release -- test-results\network-core.json
         if ($LASTEXITCODE -ne 0) { throw 'Network core checks failed.' }
     }
-    dotnet publish DesktopNook.App -c Release -r win-x64 --self-contained false -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -p:DebugType=None -p:DebugSymbols=false -o artifacts\win-x64
+    $output=if($Verification){'artifacts\win-x64-qa'}else{'artifacts\win-x64'}
+    $includeChecks=$Verification.IsPresent.ToString().ToLowerInvariant()
+    dotnet publish DesktopNook.App -c Release -r win-x64 --self-contained false -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -p:DebugType=None -p:DebugSymbols=false "-p:IncludeUiVerification=$includeChecks" -o $output
     if ($LASTEXITCODE -ne 0) { throw 'Publish failed.' }
-    Write-Output (Join-Path $nookRoot 'artifacts\win-x64\DesktopNook.exe')
+    Write-Output (Join-Path $nookRoot (Join-Path $output 'DesktopNook.exe'))
 } finally { Pop-Location }
