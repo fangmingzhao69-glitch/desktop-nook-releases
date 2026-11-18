@@ -1,26 +1,70 @@
-using System.Globalization;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 
 namespace DesktopNook.Core;
 
-public sealed record TaskbarAppearanceSettings
+public sealed record TaskbarAppearanceScene(string Key, string Name, bool AllowsRules = false);
+
+public sealed record TaskbarAppearanceSettings : TaskbarAppearanceProfile
 {
+    public const string DesktopScene = "desktop_appearance";
+    public static IReadOnlyList<TaskbarAppearanceScene> Scenes { get; } = Array.AsReadOnly(new TaskbarAppearanceScene[]
+    {
+        new(DesktopScene, "桌面"),
+        new("visible_window_appearance", "有可见窗口", true),
+        new("maximized_window_appearance", "窗口最大化", true),
+        new("start_opened_appearance", "开始菜单打开"),
+        new("search_opened_appearance", "搜索打开"),
+        new("task_view_opened_appearance", "任务视图打开"),
+        new("battery_saver_appearance", "节能模式")
+    });
+
     public int Format { get; init; } = 1;
-    public bool Enabled { get; init; }
-    public string Style { get; init; } = "clear";
-    public string Color { get; init; } = "#152D42";
-    public byte Alpha { get; init; }
+    public IReadOnlyDictionary<string, TaskbarAppearanceProfile>? Profiles { get; init; }
+    public JsonElement? IgnoredWindows { get; init; }
 
     [JsonIgnore]
-    public bool UsesComponent => Enabled && Style != "normal";
+    public bool UsesComponent => Enabled && (Style != "normal" || ShowLine.HasValue || ShowPeek.HasValue ||
+        Profiles?.Values.Any(profile => profile.Enabled) == true);
 
     public TaskbarAppearanceSettings Validate()
     {
-        if (Format != 1 || Style is not ("normal" or "clear" or "opaque") ||
-            Color is not { Length: 7 } || Color[0] != '#' || !Color.Skip(1).All(Uri.IsHexDigit))
-            throw new IOException("任务栏外观配置无效。颜色格式为 #RRGGBB。");
-        return this with { Color = Color.ToUpperInvariant() };
+        if (Format != 1) throw new IOException("任务栏外观配置版本不受支持。");
+        if (Profiles is not null)
+        {
+            foreach (var (key, profile) in Profiles)
+            {
+                var scene = Scenes.FirstOrDefault(scene => scene.Key == key && key != DesktopScene);
+                if (scene is null || profile is null) throw new IOException("任务栏外观配置含有不受支持的场景。");
+                profile.ValidateAppearance(scene.AllowsRules);
+            }
+        }
+        if (IgnoredWindows is { } ignored) TaskbarAppearanceFilters.ValidateIgnoredWindows(ignored);
+        return (TaskbarAppearanceSettings)ValidateAppearance(allowsRules: false);
+    }
+
+    public TaskbarAppearanceProfile ProfileFor(string scene) => scene == DesktopScene
+        ? this
+        : Profiles?.GetValueOrDefault(scene) ?? new TaskbarAppearanceProfile { Style = "normal" };
+
+    public TaskbarAppearanceSettings WithProfile(string scene, TaskbarAppearanceProfile profile)
+    {
+        if (scene == DesktopScene)
+        {
+            profile = profile.ValidateAppearance(allowsRules: false);
+            return this with { Style = profile.Style, Color = profile.Color, Alpha = profile.Alpha,
+                BlurRadius = profile.BlurRadius, ShowLine = profile.ShowLine, ShowPeek = profile.ShowPeek };
+        }
+        var descriptor = Scenes.SingleOrDefault(item => item.Key == scene) ?? throw new IOException("当前场景不受支持。");
+        var updated = Profiles is null ? new Dictionary<string, TaskbarAppearanceProfile>() : new(Profiles);
+        updated[scene] = profile.ValidateAppearance(descriptor.AllowsRules);
+        return this with { Profiles = updated };
+    }
+
+    public TaskbarAppearanceSettings ForPreview(string scene)
+    {
+        var style = ProfileFor(scene) with { Rules = null };
+        return WithProfile(DesktopScene, style) with { Profiles = null, IgnoredWindows = null };
     }
 
     public static TaskbarAppearanceSettings Import(string source)
@@ -31,33 +75,28 @@ public sealed record TaskbarAppearanceSettings
         {
             CommentHandling = JsonCommentHandling.Skip, AllowTrailingCommas = true, MaxDepth = 32
         });
-        if (json.RootElement.ValueKind != JsonValueKind.Object ||
-            !json.RootElement.TryGetProperty("desktop_appearance", out var desktop) ||
-            desktop.ValueKind != JsonValueKind.Object ||
-            !desktop.TryGetProperty("accent", out var accent) || accent.ValueKind != JsonValueKind.String)
-            throw new IOException("没有找到可导入的桌面任务栏外观。");
-        var style = accent.GetString();
-        if (style is not ("normal" or "clear" or "opaque"))
-            throw new IOException("当前只导入系统默认、透明和纯色模式。");
-        string color = "#00000000";
-        if (desktop.TryGetProperty("color", out var tint))
+        if (json.RootElement.ValueKind != JsonValueKind.Object)
+            throw new IOException("外观配置必须为 JSON 对象。");
+        var settings = new TaskbarAppearanceSettings();
+        bool hasAppearance = false;
+        foreach (var scene in Scenes)
         {
-            if (tint.ValueKind != JsonValueKind.String || tint.GetString() is not { } value)
-                throw new IOException("原外观的颜色无效。");
-            color = value;
+            if (!json.RootElement.TryGetProperty(scene.Key, out var appearance)) continue;
+            settings = settings.WithProfile(scene.Key, TaskbarAppearanceProfile.Import(
+                appearance, dynamic: scene.Key != DesktopScene, allowsRules: scene.AllowsRules));
+            hasAppearance = true;
         }
-        if (color.Length is 4 or 5 && color[0] == '#')
-            color = "#" + string.Concat(color.Skip(1).Select(c => new string(c, 2)));
-        if (color.Length is not (7 or 9) || color[0] != '#' || !color.Skip(1).All(Uri.IsHexDigit))
-            throw new IOException("原外观的颜色无效。");
-        byte alpha = color.Length == 9 ? byte.Parse(color.AsSpan(7), NumberStyles.HexNumber, CultureInfo.InvariantCulture) : (byte)255;
-        return new TaskbarAppearanceSettings { Style = style, Color = color[..7], Alpha = alpha }.Validate();
+        if (!hasAppearance) throw new IOException("没有找到可导入的任务栏外观。");
+        if (json.RootElement.TryGetProperty("ignored_windows", out var ignored))
+            settings = settings with { IgnoredWindows = ignored.Clone() };
+        return settings.Validate();
     }
 }
 
 public sealed class TaskbarAppearanceStore(string dataRoot)
 {
-    private static readonly JsonSerializerOptions Json = new() { WriteIndented = true };
+    private const int MaximumSettingsBytes = 256 * 1024;
+    private static readonly JsonSerializerOptions Json = new() { WriteIndented = true, DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull };
     public string DirectoryPath { get; } = Path.Combine(dataRoot, "TaskbarAppearance");
     public string SettingsPath => Path.Combine(DirectoryPath, "settings.json");
 
@@ -65,7 +104,7 @@ public sealed class TaskbarAppearanceStore(string dataRoot)
     {
         if (!File.Exists(SettingsPath)) return new();
         using var stream = File.OpenRead(SettingsPath);
-        if (stream.Length > 16 * 1024) throw new IOException("任务栏外观配置文件过大。");
+        if (stream.Length > MaximumSettingsBytes) throw new IOException("任务栏外观配置文件过大。");
         return (JsonSerializer.Deserialize<TaskbarAppearanceSettings>(stream, Json)
             ?? throw new IOException("任务栏外观配置为空。")).Validate();
     }
@@ -75,26 +114,17 @@ public sealed class TaskbarAppearanceStore(string dataRoot)
     public static void WriteComponentSettings(string path, TaskbarAppearanceSettings settings)
     {
         settings = settings.Validate();
-        var desktop = new
+        var output = new Dictionary<string, object>
         {
-            accent = settings.Style,
-            color = $"{settings.Color}{(settings.Style == "opaque" ? 255 : settings.Alpha):X2}"
+            ["hide_tray"] = true,
+            ["disable_saving"] = true,
+            ["copy_dlls"] = false,
+            ["verbosity"] = "off"
         };
-        var disabled = new { enabled = false };
-        Write(path, new
-        {
-            desktop_appearance = desktop,
-            visible_window_appearance = disabled,
-            maximized_window_appearance = disabled,
-            start_opened_appearance = disabled,
-            search_opened_appearance = disabled,
-            task_view_opened_appearance = disabled,
-            battery_saver_appearance = disabled,
-            hide_tray = true,
-            disable_saving = true,
-            copy_dlls = false,
-            verbosity = "off"
-        });
+        foreach (var scene in TaskbarAppearanceSettings.Scenes)
+            output[scene.Key] = settings.ProfileFor(scene.Key).ToEngine(scene.Key != TaskbarAppearanceSettings.DesktopScene);
+        if (settings.IgnoredWindows is { } ignored) output["ignored_windows"] = ignored;
+        Write(path, output);
     }
 
     private static void Write<T>(string path, T value)
@@ -106,6 +136,7 @@ public sealed class TaskbarAppearanceStore(string dataRoot)
             using (var stream = new FileStream(temp, FileMode.CreateNew, FileAccess.Write, FileShare.None))
             {
                 JsonSerializer.Serialize(stream, value, Json);
+                if (stream.Length > MaximumSettingsBytes) throw new IOException("请减少窗口规则或忽略列表，外观配置文件过大。");
                 stream.Flush(flushToDisk: true);
             }
             File.Move(temp, path, overwrite: true);

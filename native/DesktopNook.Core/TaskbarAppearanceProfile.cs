@@ -1,0 +1,147 @@
+using System.Globalization;
+using System.Text.Json;
+
+namespace DesktopNook.Core;
+
+public record TaskbarAppearanceProfile
+{
+    public bool Enabled { get; init; }
+    public string Style { get; init; } = "clear";
+    public string Color { get; init; } = "#152D42";
+    public byte Alpha { get; init; }
+    public double? BlurRadius { get; init; }
+    public bool? ShowLine { get; init; }
+    public bool? ShowPeek { get; init; }
+    public JsonElement? Rules { get; init; }
+
+    internal TaskbarAppearanceProfile ValidateAppearance(bool allowsRules)
+    {
+        if (Style is not ("normal" or "clear" or "opaque" or "blur" or "acrylic") ||
+            Color is not { Length: 7 } || Color[0] != '#' || !Color.Skip(1).All(Uri.IsHexDigit))
+            throw new IOException("任务栏外观样式或颜色无效。颜色格式为 #RRGGBB。");
+        if (BlurRadius is double radius && (!double.IsFinite(radius) || radius is < 0 or > 750))
+            throw new IOException("模糊半径必须在 0 至 750 之间。");
+        if (Rules is { } rules)
+        {
+            if (!allowsRules) throw new IOException("只有窗口可见和最大化场景支持窗口规则。");
+            TaskbarAppearanceFilters.ValidateRules(rules);
+        }
+        return this with { Color = Color.ToUpperInvariant() };
+    }
+
+    internal static (string Color, byte Alpha) ParseColor(string color)
+    {
+        if (color.Length is 4 or 5 && color[0] == '#')
+            color = "#" + string.Concat(color.Skip(1).Select(c => new string(c, 2)));
+        if (color.Length is not (7 or 9) || color[0] != '#' || !color.Skip(1).All(Uri.IsHexDigit))
+            throw new IOException("配置中的颜色无效。");
+        byte alpha = color.Length == 9
+            ? byte.Parse(color.AsSpan(7), NumberStyles.HexNumber, CultureInfo.InvariantCulture)
+            : (byte)255;
+        return (color[..7], alpha);
+    }
+
+    internal static TaskbarAppearanceProfile Import(JsonElement value, bool dynamic, bool allowsRules)
+    {
+        if (value.ValueKind != JsonValueKind.Object) throw new IOException("场景外观必须为 JSON 对象。");
+        var (color, alpha) = ParseColor(ReadString(value, "color") ?? "#00000000");
+        double? radius = null;
+        if (value.TryGetProperty("blur_radius", out var rawRadius))
+        {
+            if (rawRadius.ValueKind != JsonValueKind.Number || !rawRadius.TryGetDouble(out double number))
+                throw new IOException("模糊半径必须为数字。");
+            radius = number;
+        }
+        return new TaskbarAppearanceProfile
+        {
+            Enabled = dynamic && (ReadSwitch(value, "enabled") ?? false),
+            Style = ReadString(value, "accent") ?? "normal",
+            Color = color,
+            Alpha = alpha,
+            BlurRadius = radius,
+            ShowLine = ReadSwitch(value, "show_line"),
+            ShowPeek = ReadSwitch(value, "show_peek"),
+            Rules = value.TryGetProperty("rules", out var rules) ? rules.Clone() : null
+        }.ValidateAppearance(allowsRules);
+    }
+
+    private static string? ReadString(JsonElement node, string key) =>
+        !node.TryGetProperty(key, out var value) ? null :
+        value.ValueKind == JsonValueKind.String ? value.GetString() : throw new IOException($"配置中的 {key} 必须为文字。");
+
+    private static bool? ReadSwitch(JsonElement node, string key) =>
+        !node.TryGetProperty(key, out var value) ? null :
+        value.ValueKind is JsonValueKind.True or JsonValueKind.False ? value.GetBoolean() : throw new IOException($"配置中的 {key} 必须为开关。");
+
+    internal Dictionary<string, object> ToEngine(bool dynamic)
+    {
+        var result = new Dictionary<string, object>
+        {
+            ["accent"] = Style,
+            ["color"] = $"{Color}{(Style == "opaque" ? 255 : Alpha):X2}"
+        };
+        if (dynamic) result["enabled"] = Enabled;
+        if (BlurRadius is double radius) result["blur_radius"] = radius;
+        if (ShowLine is bool line) result["show_line"] = line;
+        if (ShowPeek is bool peek) result["show_peek"] = peek;
+        if (Rules is { } rules) result["rules"] = rules;
+        return result;
+    }
+}
+
+public static class TaskbarAppearanceFilters
+{
+    public static void ValidateIgnoredWindows(JsonElement value)
+    {
+        foreach (var field in Fields(value))
+        {
+            if (field.Value.ValueKind != JsonValueKind.Array)
+                throw new IOException("忽略窗口的每类条件必须为文字数组。");
+            var values = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            foreach (var item in field.Value.EnumerateArray())
+                if (item.ValueKind != JsonValueKind.String || item.GetString() is not { Length: > 0 and <= 512 } name || !values.Add(name))
+                    throw new IOException("忽略窗口条件必须为不重复的有效名称。");
+        }
+    }
+
+    public static void ValidateRules(JsonElement value)
+    {
+        foreach (var field in Fields(value))
+        {
+            if (field.Value.ValueKind != JsonValueKind.Object)
+                throw new IOException("窗口规则必须按窗口名称映射到外观设置。");
+            var names = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            foreach (var rule in field.Value.EnumerateObject())
+            {
+                if (string.IsNullOrWhiteSpace(rule.Name) || rule.Name.Length > 512 || !names.Add(rule.Name))
+                    throw new IOException("窗口规则的名称为空、过长或重复。");
+                ValidateRule(rule.Value, allowInactive: true);
+            }
+        }
+    }
+
+    private static IEnumerable<JsonProperty> Fields(JsonElement value)
+    {
+        if (value.ValueKind != JsonValueKind.Object) throw new IOException("窗口条件必须为 JSON 对象。");
+        var keys = new HashSet<string>();
+        foreach (var field in value.EnumerateObject())
+        {
+            if (field.Name is not ("window_class" or "window_title" or "process_name") || !keys.Add(field.Name))
+                throw new IOException("窗口条件只支持 window_class、window_title 和 process_name，且每类只能出现一次。");
+            yield return field;
+        }
+    }
+
+    private static void ValidateRule(JsonElement value, bool allowInactive)
+    {
+        TaskbarAppearanceProfile.Import(value, dynamic: false, allowsRules: false);
+        var keys = new HashSet<string>();
+        foreach (var field in value.EnumerateObject())
+        {
+            if (!keys.Add(field.Name)) throw new IOException("单条窗口规则中存在重复字段。");
+            if (field.Name is "accent" or "color" or "blur_radius" or "show_line" or "show_peek") continue;
+            if (field.Name != "inactive" || !allowInactive) throw new IOException($"窗口规则中的字段不受支持：{field.Name}。");
+            ValidateRule(field.Value, allowInactive: false);
+        }
+    }
+}

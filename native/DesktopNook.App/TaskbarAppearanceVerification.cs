@@ -95,6 +95,59 @@ internal static class TaskbarAppearanceVerification
             Check(imported.Color == "#112233" && imported.Alpha == 0x44 && File.ReadAllText(original) == import,
                 "只读导入上游简写 RGBA、注释及末尾逗号");
 
+            const string fullImport = """
+                {
+                  "desktop_appearance":{"accent":"normal","show_line":true},
+                  "visible_window_appearance":{"enabled":true,"accent":"acrylic","color":"#884433AA","show_line":false,
+                    "rules":{"process_name":{"notepad.exe":{"accent":"blur","blur_radius":18.5,"inactive":{"accent":"clear","color":"#2018"}}}}},
+                  "maximized_window_appearance":{"enabled":true,"accent":"blur","blur_radius":22.5,"show_peek":false},
+                  "start_opened_appearance":{"enabled":true,"accent":"clear"},
+                  "search_opened_appearance":{"enabled":true,"accent":"opaque"},
+                  "task_view_opened_appearance":{"enabled":true,"accent":"normal"},
+                  "battery_saver_appearance":{"enabled":true,"accent":"acrylic"},
+                  "ignored_windows":{"window_title":["不参与检测"],"window_class":["ExampleWindow"]}
+                }
+                """;
+            File.WriteAllText(original, fullImport);
+            var full = TaskbarAppearanceSettings.Import(original) with { Enabled = true };
+            var visible = full.ProfileFor("visible_window_appearance");
+            var maximized = full.ProfileFor("maximized_window_appearance");
+            Check(full.UsesComponent && full.Profiles?.Count == 6 && full.Profiles.Values.All(profile => profile.Enabled) &&
+                full.Style == "normal" && full.ShowLine == true && visible.Style == "acrylic" && visible.Alpha == 0xAA &&
+                maximized.Style == "blur" && maximized.BlurRadius == 22.5 && maximized.ShowPeek == false,
+                "导入并保留桌面及六种动态场景、模糊与亚克力、细线和旧式开关");
+            store.Save(full);
+            var reloaded = store.Load();
+            TaskbarAppearanceStore.WriteComponentSettings(launchSettings, reloaded);
+            using (var json = JsonDocument.Parse(File.ReadAllText(launchSettings)))
+            {
+                var emitted = json.RootElement;
+                var profile = emitted.GetProperty("visible_window_appearance");
+                Check(profile.GetProperty("accent").GetString() == "acrylic" &&
+                    !profile.GetProperty("show_line").GetBoolean() &&
+                    profile.GetProperty("rules").GetProperty("process_name").GetProperty("notepad.exe")
+                        .GetProperty("inactive").GetProperty("accent").GetString() == "clear" &&
+                    emitted.GetProperty("ignored_windows").GetProperty("window_class")[0].GetString() == "ExampleWindow" &&
+                    emitted.GetProperty("maximized_window_appearance").GetProperty("blur_radius").GetDouble() == 22.5 &&
+                    File.ReadAllText(original) == fullImport,
+                    "规则、非活动外观和忽略列表可重读并传给原渲染组件，原配置保持原样");
+            }
+            Check((full with { Style = "normal", ShowLine = null }).UsesComponent &&
+                !(full with { Enabled = false }).UsesComponent, "桌面为系统默认时可仅启用动态外观，全局关闭保留设置");
+            var selectedPreview = full.ForPreview("maximized_window_appearance");
+            Check(selectedPreview.Style == "blur" && selectedPreview.BlurRadius == 22.5 && selectedPreview.Profiles is null &&
+                full.ProfileFor("visible_window_appearance").Rules is not null,
+                "所选场景可单独预览，已配置的动态规则保持");
+            try { _ = full.WithProfile("maximized_window_appearance", maximized with { BlurRadius = 751 });
+                throw new InvalidOperationException("超限模糊数值被接受"); }
+            catch (IOException) { checks.Add("超出引擎范围的模糊数值被拒绝"); }
+            using (var badRule = JsonDocument.Parse("""{"process_name":{"a.exe":{"inactive":{"blur_radius":-1}}}}"""))
+            {
+                try { TaskbarAppearanceFilters.ValidateRules(badRule.RootElement); throw new InvalidOperationException("错误窗口规则被接受"); }
+                catch (IOException) { checks.Add("单条窗口规则和非活动子规则均验证范围"); }
+            }
+            store.Save(clear);
+
             var sandboxBackend = new TranslucentTaskbarBackend(new TaskbarAppearancePackage(store.DirectoryPath), sandbox: true);
             try { await sandboxBackend.ApplyAsync(clear, true); throw new InvalidOperationException("沙箱未拦截实际组件"); }
             catch (IOException) { checks.Add("沙箱禁止下载和运行会话外观组件"); }
@@ -159,7 +212,7 @@ internal static class TaskbarAppearanceVerification
                 !TaskbarAppearanceDependencies.MeetsMinimum("Microsoft.UI.Xaml.2.8_8.2501.31001.0_x86__8wekyb3d8bbwe", minimum) &&
                 !TaskbarAppearanceDependencies.MeetsMinimum("Microsoft.UI.Xaml.2.8_8.2401.31001.0_x64__8wekyb3d8bbwe", minimum),
                 "依赖检查接受满足版本的 x64 包，并拒绝 x86 和过旧版本");
-            Check(MainWindow.CurrentVersionLabel == "v0.17.0", "正式候选在更新菜单显示完整版本");
+            Check(MainWindow.CurrentVersionLabel == "v0.17.1", "正式候选在更新菜单显示完整版本");
 
             var originalExe = Environment.ProcessPath!;
             var target = Path.Combine(root, "update-target.exe");
@@ -184,6 +237,21 @@ internal static class TaskbarAppearanceVerification
                     dialog.UpdateLayout();
                     Check(Find<TextBlock>(dialog).Any(text => text.Text.Contains("隔离模式", StringComparison.Ordinal)),
                         "从更多菜单打开外观界面，沙箱显示运行限制");
+                    var scenes = Find<ComboBox>(dialog).Single(item => AutomationProperties.GetAutomationId(item) == "AppearanceScene");
+                    var styles = Find<ComboBox>(dialog).Single(item => AutomationProperties.GetAutomationId(item) == "AppearanceStyle");
+                    var blur = Find<Slider>(dialog).Single(item => AutomationProperties.GetAutomationId(item) == "AppearanceBlurRadius");
+                    var enabled = Find<CheckBox>(dialog).Single(item => AutomationProperties.GetAutomationId(item) == "AppearanceSceneEnabled");
+                    Check(scenes.Items.Count == 7 && styles.Items.Count == 5, "设置窗口列出七种场景与五种外观");
+                    scenes.SelectedIndex = 2;
+                    styles.SelectedIndex = 3;
+                    blur.Value = 34;
+                    enabled.IsChecked = true;
+                    scenes.SelectedIndex = 0;
+                    Check(styles.SelectedIndex == 1, "修改最大化场景后，桌面样式独立保持");
+                    scenes.SelectedIndex = 2;
+                    Check(blur.Value == 34 && styles.SelectedIndex == 3 && enabled.IsChecked == true,
+                        "切换场景保留未应用的模糊半径、样式及启用开关");
+                    dialog.UpdateLayout();
                     var bitmap = new RenderTargetBitmap((int)dialog.ActualWidth, (int)dialog.ActualHeight, 96, 96, PixelFormats.Pbgra32);
                     bitmap.Render(dialog);
                     var screenshot = new PngBitmapEncoder();
