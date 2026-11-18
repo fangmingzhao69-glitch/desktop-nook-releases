@@ -55,7 +55,7 @@ public partial class MainWindow
         NotesHost.Children.Add(title);
         var projects = new DockPanel { Margin = new Thickness(14,0,12,0) }; Grid.SetRow(projects,1);
         var manage = NotesButton("⋯",b=>ProjectManagement(b));manage.ToolTip="分类管理"; DockPanel.SetDock(manage,Dock.Right); projects.Children.Add(manage);
-        _notesArchiveButton = NotesButton("归档", _ => ToggleNotesArchive());
+        _notesArchiveButton = NotesButton("查看归档", _ => ToggleNotesArchive());
         AutomationProperties.SetAutomationId(_notesArchiveButton, "NotesArchive");
         DockPanel.SetDock(_notesArchiveButton, Dock.Right);
         projects.Children.Add(_notesArchiveButton);
@@ -83,7 +83,7 @@ public partial class MainWindow
         _notesStatus=NotesText("已保存",10);_notesStatus.TextTrimming=TextTrimming.CharacterEllipsis;footer.Children.Add(_notesStatus);NotesHost.Children.Add(footer);
         _notesSave.Tick+=(_,_)=>{_notesSave.Stop();FlushNotes(false);};
         _notesDeadline.Tick+=(_,_)=>{_notesDeadline.Stop();FlushNotes(false);};
-        _notesSearch.Tick+=(_,_)=>{if(_notesComposing)return;_notesSearch.Stop();RenderNoteCards();};
+        _notesSearch.Tick+=(_,_)=>{if(_notesComposing||_noteDragHandle is not null)return;_notesSearch.Stop();RenderNoteCards();};
         SessionEndingCancelEventHandler ending=(_,e)=>{if(!FlushNotes(false))e.Cancel=true;};Application.Current.SessionEnding+=ending;
         Closed+=(_,_)=>{Application.Current.SessionEnding-=ending;_notesSave.Stop();_notesDeadline.Stop();_notesSearch.Stop();};
         RenderNotes();
@@ -146,7 +146,7 @@ public partial class MainWindow
         _renderingNotes=true;
         try
         {
-            _notesArchiveButton.Content = _showNotesArchive ? "返回便签" : "归档";
+            _notesArchiveButton.Content = _showNotesArchive ? "返回便签" : "查看归档";
             _projectTabs.Visibility = _showNotesArchive ? Visibility.Collapsed : Visibility.Visible;
             _addNoteProject.Visibility = _projectTabs.Visibility;
             _addNote.Visibility = _projectTabs.Visibility;
@@ -236,9 +236,10 @@ public partial class MainWindow
         var content=new StackPanel();
         var border=new Border { Tag=note, CornerRadius=new CornerRadius(10),BorderBrush=Brush("#CDE5F6"),BorderThickness=new Thickness(1),Padding=new Thickness(10),Margin=new Thickness(0,0,0,10),Background=Brush("#F5FAFE"),Child=content };
         var header=new DockPanel();var menu=NotesButton("···",b=>NoteCardMenu(b,note));AutomationProperties.SetName(menu,"便签操作");DockPanel.SetDock(menu,Dock.Right);header.Children.Add(menu);
-        var ordinal = NoteOrdinal(note, number, readOnly);
-        DockPanel.SetDock(ordinal, Dock.Left);
-        header.Children.Add(ordinal);
+        string metadata = note.ModifiedUtc.ToLocalTime().ToString("MM月dd日 HH:mm");
+        if (note.Favorite) metadata += " · 常用";
+        if (note.Archived) metadata += " · 已单独归档";
+        content.Children.Add(NoteOrderBar(note, number, metadata, readOnly));
         var title = NoteEditor(note.Title, note, t => note.Title = t, readOnly: readOnly);
         title.FontWeight = FontWeights.SemiBold;
         title.FontSize = 14;
@@ -246,7 +247,6 @@ public partial class MainWindow
         if (!readOnly) title.ToolTip = "点击编辑便签名称";
         header.Children.Add(title);
         content.Children.Add(header);
-        content.Children.Add(NotesText(note.ModifiedUtc.ToLocalTime().ToString("MM月dd日 HH:mm")+(note.Favorite?" · 常用":"")+(note.Archived?" · 已单独归档":""),10));
         if(note.Kind=="text")
         {
             var body=NoteEditor(note.Text,note,t=>note.Text=t,true,"body",readOnly:readOnly);body.MinHeight=65;AutomationProperties.SetName(body,"文字记录正文");content.Children.Add(body);
@@ -310,7 +310,7 @@ public partial class MainWindow
             }
             entries.Add(type);
             entries.Add(Menu(note.Favorite ? "取消常用" : "设为常用", () => ChangeNotes(() => note.Favorite = !note.Favorite)));
-            var order = ActiveCategoryNotes();
+            var order = ActiveCategoryNotes().Where(MatchesNote).ToList();
             int index = order.IndexOf(note);
             bool canReorder = CanReorderNotes && index >= 0;
             entries.Add(Menu("上移一位", () => ChangeNotes(() => NotesStore.ReorderNote(NotesDraft, note, order[index - 1], false)), canReorder && index > 0));

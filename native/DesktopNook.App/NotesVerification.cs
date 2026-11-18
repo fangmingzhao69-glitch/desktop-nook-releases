@@ -120,6 +120,7 @@ internal static class NotesVerification
             window.NotesStore.Commit(window.NotesDraft);
             window.RenderNotes();
             var archiveButton = Find<Button>(window.NotesHost).Single(button => AutomationProperties.GetAutomationId(button) == "NotesArchive");
+            Check(Equals(archiveButton.Content, "查看归档"), "便签归档入口显示查看归档");
             archiveButton.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
             await Layout();
             var archiveGroup = Find<TextBlock>(window.NotesHost).Single(text => text.Text.StartsWith(longProject.Name, StringComparison.Ordinal));
@@ -135,6 +136,7 @@ internal static class NotesVerification
             Check(!window.NotesDraft.Projects.Single(project => project.Id == longProject.Id).Archived &&
                 window.NotesDraft.Notes.Single(note => note.Id == archivedTodo.Id).Archived, "恢复整个分类保留其他单独归档的便签");
             archiveButton.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            Check(Equals(archiveButton.Content, "查看归档"), "从归档返回后入口仍显示查看归档");
             window.SelectNoteProject(p.Id);
             await Layout();
             for(int i=1;i<=7;i++){var source=Path.Combine(App.Store.DesktopRoots[0],$"示例应用 {i}.url");File.WriteAllText(source,"[InternetShortcut]\r\nURL=https://example.invalid/\r\n");App.Store.Collect(source,"office");}
@@ -144,6 +146,7 @@ internal static class NotesVerification
             var cards = Find<Border>(window.NotesHost).Where(border => border.Tag is ProjectNote).ToList();
             var handles = Find<Thumb>(window.NotesHost).Where(thumb => AutomationProperties.GetAutomationId(thumb).StartsWith("NoteOrder-")).ToList();
             Check(handles.Select(handle => handle.Tag).SequenceEqual(new object[] { 1, 2 }), "分类内便签显示连续序号");
+            Check(handles[0].ActualWidth >= cards[0].ActualWidth - 24, "排序栏覆盖卡片宽度，可从远离序号的位置拖动");
             var firstId = ((ProjectNote)cards[0].Tag).Id;
             var secondId = ((ProjectNote)cards[1].Tag).Id;
             await NotesSplitVerification.DragNote(window, handles[1], cards[0], cancel: true);
@@ -155,6 +158,52 @@ internal static class NotesVerification
             ClickMenu(OpenLastCardMenu("上移一位"));
             await Layout();
             Check(new NotesStore(App.Store.DataDirectory).State.Notes.First().Id == firstId, "右键上移立即保存");
+            cards = Find<Border>(window.NotesHost).Where(border => border.Tag is ProjectNote).ToList();
+            handles = Find<Thumb>(window.NotesHost).Where(thumb => AutomationProperties.GetAutomationId(thumb).StartsWith("NoteOrder-")).ToList();
+            await NotesSplitVerification.DragNote(window, handles[0], cards[1]);
+            Check(new NotesStore(App.Store.DataDirectory).State.Notes.First().Id == secondId,
+                "向下拖到下一张便签的上半部，松手后排到下一张便签之后");
+            var hidden = new ProjectNote { ProjectId = p.Id, Title = "其他文字" };
+            window.NotesDraft.Notes.Insert(1, hidden);
+            window.NotesStore.Commit(window.NotesDraft);
+            window.Width = 800;
+            Field("搜索当前分类的记录").Text = "待办";
+            await Task.Delay(450);
+            await Layout();
+            cards = Find<Border>(window.NotesHost).Where(border => border.Tag is ProjectNote).ToList();
+            handles = Find<Thumb>(window.NotesHost).Where(thumb => AutomationProperties.GetAutomationId(thumb).StartsWith("NoteOrder-")).ToList();
+            Check(handles.Select(handle => handle.Tag).SequenceEqual(new object[] { 1, 3 }), "搜索结果保留原位序号并可拖动");
+            await NotesSplitVerification.DragNote(window, handles[1], cards[0]);
+            var filteredOrder = new NotesStore(App.Store.DataDirectory).State.Notes;
+            Check(filteredOrder.Count == 3 && filteredOrder[0].Id == firstId && filteredOrder.Any(note => note.Id == hidden.Id),
+                "窄窗搜索时拖动并保存，保留未匹配便签");
+            window.NotesDraft.Notes.Remove(hidden);
+            window.NotesStore.Commit(window.NotesDraft);
+            Field("搜索当前分类的记录").Text = "";
+            window.Width = 1120;
+            await Task.Delay(450);
+            await Layout();
+            var temporaryNotes = Enumerable.Range(1, 6)
+                .Select(number => new ProjectNote { ProjectId = p.Id, Title = $"滚动验收 {number}", Text = "临时正文" })
+                .ToList();
+            window.NotesDraft.Notes.AddRange(temporaryNotes);
+            window.NotesStore.Commit(window.NotesDraft);
+            window.RenderNotes();
+            await Layout();
+            var cardsScroll = Find<ScrollViewer>(window.NotesHost).Single(scroll =>
+                scroll.Content is StackPanel panel && panel.Children.OfType<Border>().Any(border => border.Tag is ProjectNote));
+            cardsScroll.ScrollToTop();
+            await Layout();
+            var firstHandle = Find<Thumb>(window.NotesHost).First(thumb => AutomationProperties.GetAutomationId(thumb) == "NoteOrder-" + firstId);
+            await NotesSplitVerification.DragNote(window, firstHandle, cardsScroll,
+                dropPoint: new Point(24, cardsScroll.ViewportHeight - 8), holdMilliseconds: 720);
+            var scrolledOrder = new NotesStore(App.Store.DataDirectory).State.Notes;
+            Check(scrolledOrder.FindIndex(note => note.Id == firstId) >= 2,
+                "拖到列表下缘会自动滚动，并可跨过多张便签保存新顺序");
+            window.NotesDraft.Notes.RemoveAll(note => temporaryNotes.Contains(note));
+            window.NotesStore.Commit(window.NotesDraft);
+            window.RenderNotes();
+            await Layout();
             await NotesSplitVerification.Run(window,checks);window.NotesDraft.LeftFraction=.646;window.NotesStore.Commit(window.NotesDraft);window.RenderNotes();await Layout();Snapshot("notes-final-preview");
         }
         catch(Exception ex){failure=ex.ToString();}

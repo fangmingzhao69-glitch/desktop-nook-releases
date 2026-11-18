@@ -3,16 +3,30 @@
     <FontFamily x:Key="UiFontFamily">Microsoft YaHei UI, Segoe UI</FontFamily>
     <Style x:Key="NoteOrderHandle" TargetType="Thumb">
       <Setter Property="Cursor" Value="SizeNS" />
-      <Setter Property="VerticalAlignment" Value="Center" />
-      <Setter Property="MinWidth" Value="24" />
-      <Setter Property="Margin" Value="0,0,5,0" />
+      <Setter Property="Margin" Value="0,0,0,4" />
       <Setter Property="Template">
         <Setter.Value>
           <ControlTemplate TargetType="Thumb">
-            <Border Background="#DDF2FF" CornerRadius="5" Padding="6,3">
-              <TextBlock Text="{Binding Tag, RelativeSource={RelativeSource TemplatedParent}}"
-                         FontSize="11" FontWeight="SemiBold" Foreground="#0877BE" HorizontalAlignment="Center" />
+            <Border x:Name="DragSurface" Background="#E8F4FD" CornerRadius="5" Padding="8,5">
+              <DockPanel>
+                <StackPanel DockPanel.Dock="Left" Orientation="Horizontal" Margin="0,0,10,0">
+                  <TextBlock Text="⠿" FontSize="13" Foreground="#0877BE" VerticalAlignment="Center" />
+                  <TextBlock Text="{Binding Tag, RelativeSource={RelativeSource TemplatedParent}}"
+                             Margin="6,0" FontSize="11" FontWeight="SemiBold" Foreground="#0877BE" VerticalAlignment="Center" />
+                  <TextBlock Text="拖动排序" FontSize="11" Foreground="#35566E" VerticalAlignment="Center" />
+                </StackPanel>
+                <TextBlock Text="{Binding}" FontSize="10" Foreground="#35566E"
+                           TextTrimming="CharacterEllipsis" TextAlignment="Right" VerticalAlignment="Center" />
+              </DockPanel>
             </Border>
+            <ControlTemplate.Triggers>
+              <Trigger Property="IsMouseOver" Value="True">
+                <Setter TargetName="DragSurface" Property="Background" Value="#DDF2FF" />
+              </Trigger>
+              <Trigger Property="IsDragging" Value="True">
+                <Setter TargetName="DragSurface" Property="Background" Value="#D2EBFF" />
+              </Trigger>
+            </ControlTemplate.Triggers>
           </ControlTemplate>
         </Setter.Value>
       </Setter>

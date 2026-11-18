@@ -20,25 +20,29 @@ public partial class MainWindow
         NotesDraft.Notes.Where(note => note.ProjectId == NoteProject?.Id && !note.Archived).ToList();
 
     private bool CanReorderNotes =>
-        !_showNotesArchive && !_notesComposing && NoteProject is { Archived: false, Search.Length: 0 };
+        !_showNotesArchive && !_notesComposing && NoteProject is { Archived: false };
 
-    private FrameworkElement NoteOrdinal(ProjectNote note, int number, bool readOnly)
+    private FrameworkElement NoteOrderBar(ProjectNote note, int number, string metadata, bool readOnly)
     {
         if (readOnly || !CanReorderNotes)
         {
-            var label = NotesText(number.ToString(), 11);
-            label.Foreground = Brush("#0877BE");
-            label.FontWeight = FontWeights.SemiBold;
-            label.Margin = new Thickness(4, 0, 8, 0);
-            return label;
+            return NotesText($"{number} · {metadata}", 10);
         }
 
         var handle = new Thumb
         {
             Style = (Style)FindResource("NoteOrderHandle"),
             Tag = number,
-            ToolTip = $"第 {number} 条 · 拖动序号调整顺序"
+            DataContext = metadata,
+            ToolTip = $"第 {number} 条 · 上下拖动这条排序栏"
         };
+        Point start = default;
+        bool moved = false;
+        bool HasMoved()
+        {
+            var pointer = Mouse.GetPosition(_notesScroll);
+            return Math.Abs(pointer.Y - start.Y) >= SystemParameters.MinimumVerticalDragDistance;
+        }
         AutomationProperties.SetAutomationId(handle, "NoteOrder-" + note.Id);
         AutomationProperties.SetName(handle, $"第 {number} 条，拖动排序");
         handle.DragStarted += (_, _) =>
@@ -46,13 +50,20 @@ public partial class MainWindow
             if (!CanReorderNotes) return;
             _noteDragHandle = handle;
             _interactions++;
-            _noteDragScroll = new DispatcherTimer(TimeSpan.FromMilliseconds(45), DispatcherPriority.Input,
-                (_, _) => ScrollNoteDrag(note), Dispatcher);
-            _noteDragScroll.Start();
+            start = Mouse.GetPosition(_notesScroll);
+            moved = false;
         };
         handle.DragDelta += (_, _) =>
         {
             if (_noteDragHandle != handle) return;
+            if (!moved)
+            {
+                if (!HasMoved()) return;
+                moved = true;
+                _noteDragScroll = new DispatcherTimer(TimeSpan.FromMilliseconds(45), DispatcherPriority.Input,
+                    (_, _) => ScrollNoteDrag(note), Dispatcher);
+                _noteDragScroll.Start();
+            }
             UpdateNoteInsertionMark(NoteDropTarget(note));
         };
         handle.DragCompleted += (_, args) =>
@@ -63,8 +74,20 @@ public partial class MainWindow
             _noteDragScroll = null;
             _interactions--;
             UpdateNoteInsertionMark(null);
-            if (!args.Canceled && CanReorderNotes && NoteDropTarget(note) is { } drop)
-                ChangeNotes(() => NotesStore.ReorderNote(NotesDraft, note, (ProjectNote)drop.Card.Tag, drop.After));
+            if (args.Canceled || (!moved && !HasMoved()) || !CanReorderNotes || NoteDropTarget(note) is not { } drop)
+                return;
+            _notesSearch.Stop();
+            ChangeNotes(() =>
+            {
+                NotesStore.ReorderNote(NotesDraft, note, (ProjectNote)drop.Card.Tag, drop.After);
+                // Keep the list at the drop location instead of focusing the last text editor.
+                NoteProject!.Scroll = _notesScroll.VerticalOffset;
+                NoteProject.SelectedNote = null;
+            });
+            Dispatcher.BeginInvoke(() =>
+                FindVisualChildren<Thumb>(_noteCards).FirstOrDefault(item =>
+                    AutomationProperties.GetAutomationId(item) == "NoteOrder-" + note.Id)?.BringIntoView(),
+                DispatcherPriority.Loaded);
         };
         return handle;
     }
@@ -76,15 +99,19 @@ public partial class MainWindow
             pointer.Y < 0 || pointer.Y >= _notesScroll.ViewportHeight) return null;
 
         var cards = _noteCards.Children.OfType<Border>().Where(card => card.Tag is ProjectNote).ToList();
-        if (cards.Count < 2) return null;
+        int sourceIndex = cards.FindIndex(card => card.Tag == source);
+        if (cards.Count < 2 || sourceIndex < 0) return null;
         var y = Mouse.GetPosition(_noteCards).Y;
-        var card = cards.FirstOrDefault(item => y <= item.TranslatePoint(new Point(0, item.ActualHeight), _noteCards).Y + 5) ?? cards[^1];
-        if (card.Tag == source) return null;
-        bool after = y > card.TranslatePoint(new Point(0, card.ActualHeight / 2), _noteCards).Y;
-        int index = cards.IndexOf(card);
-        int adjacent = after ? index + 1 : index - 1;
-        if (adjacent >= 0 && adjacent < cards.Count && cards[adjacent].Tag == source) return null;
-        return (card, after);
+        for (int index = 0; index < cards.Count; index++)
+        {
+            var card = cards[index];
+            double top = card.TranslatePoint(new Point(), _noteCards).Y;
+            if (y < top)
+                return index == sourceIndex || index == sourceIndex + 1 ? null : (card, false);
+            if (y < top + card.ActualHeight)
+                return index == sourceIndex ? null : (card, index > sourceIndex);
+        }
+        return sourceIndex == cards.Count - 1 ? null : (cards[^1], true);
     }
 
     private void ScrollNoteDrag(ProjectNote source)
@@ -123,8 +150,11 @@ public partial class MainWindow
 
         protected override void OnRender(DrawingContext drawingContext)
         {
-            double y = After ? AdornedElement.RenderSize.Height + 3 : -3;
-            drawingContext.DrawLine(new Pen(Brush("#218DEB"), 2), new Point(0, y), new Point(AdornedElement.RenderSize.Width, y));
+            var size = AdornedElement.RenderSize;
+            var pen = new Pen(Brush("#218DEB"), 2);
+            drawingContext.DrawRoundedRectangle(null, pen, new Rect(new Point(), size), 10, 10);
+            double y = After ? size.Height - 2 : 2;
+            drawingContext.DrawLine(pen, new Point(6, y), new Point(size.Width - 6, y));
         }
     }
 }

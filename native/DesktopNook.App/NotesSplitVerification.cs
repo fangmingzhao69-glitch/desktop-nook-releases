@@ -15,7 +15,8 @@ internal static class NotesSplitVerification
     [DllImport("user32.dll")] private static extern bool SetCursorPos(int x,int y);
     [DllImport("user32.dll")] private static extern void mouse_event(uint flags,uint x,uint y,uint data,UIntPtr extra);
 
-    internal static async Task DragNote(MainWindow window, Thumb handle, Border target, bool cancel = false)
+    internal static async Task DragNote(MainWindow window, Thumb handle, FrameworkElement target,
+        bool cancel = false, Point? dropPoint = null, int holdMilliseconds = 100)
     {
         if (!App.IsSandbox) throw new InvalidOperationException("便签拖动检查仅允许沙箱。");
         GetCursorPos(out var original);
@@ -25,15 +26,15 @@ internal static class NotesSplitVerification
             window.Activate();
             handle.BringIntoView();
             await window.Dispatcher.InvokeAsync(window.UpdateLayout, DispatcherPriority.ContextIdle);
-            var from = handle.PointToScreen(new Point(handle.ActualWidth / 2, handle.ActualHeight / 2));
-            var to = target.PointToScreen(new Point(24, target.ActualHeight / 4));
+            var from = handle.PointToScreen(new Point(handle.ActualWidth * .82, handle.ActualHeight / 2));
+            var to = target.PointToScreen(dropPoint ?? new Point(24, target.ActualHeight / 4));
             SetCursorPos((int)from.X, (int)from.Y);
             mouse_event(2, 0, 0, 0, UIntPtr.Zero);
             pressed = true;
             await Task.Delay(80);
-            if (!handle.IsDragging) throw new Exception("真实鼠标未捕获序号拖动手柄。");
+            if (!handle.IsDragging) throw new Exception("真实鼠标未捕获排序栏拖动。");
             SetCursorPos((int)to.X, (int)to.Y);
-            await Task.Delay(100);
+            await Task.Delay(holdMilliseconds);
             if (cancel)
                 window.RaiseEvent(new KeyEventArgs(Keyboard.PrimaryDevice, PresentationSource.FromVisual(window), 0, Key.Escape)
                     { RoutedEvent = Keyboard.PreviewKeyDownEvent });
