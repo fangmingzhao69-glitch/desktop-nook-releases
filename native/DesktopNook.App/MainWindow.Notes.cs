@@ -19,6 +19,7 @@ public partial class MainWindow
     private readonly DispatcherTimer _notesSearch = new() { Interval = TimeSpan.FromMilliseconds(350) };
     private bool _notesDirty, _notesComposing, _renderingNotes, _showNotesArchive;
     private StackPanel _projectTabs = null!, _noteCards = null!;
+    private ScrollViewer _projectScroll = null!;
     private TextBox _noteSearch = null!;
     private TextBlock _notesSearchHint = null!;
     private TextBlock _notesStatus = null!, _notesCounts = null!;
@@ -64,8 +65,9 @@ public partial class MainWindow
         DockPanel.SetDock(_addNoteProject, Dock.Right);
         projects.Children.Add(_addNoteProject);
         _projectTabs = new StackPanel { Orientation=Orientation.Horizontal };
-        var projectScroll = new ScrollViewer { Content=_projectTabs, HorizontalScrollBarVisibility=ScrollBarVisibility.Auto,VerticalScrollBarVisibility=ScrollBarVisibility.Disabled };
-        projects.Children.Add(projectScroll); NotesHost.Children.Add(projects);
+        _projectScroll = new ScrollViewer { Content=_projectTabs, HorizontalScrollBarVisibility=ScrollBarVisibility.Auto,VerticalScrollBarVisibility=ScrollBarVisibility.Disabled };
+        AutomationProperties.SetAutomationId(_projectScroll, "NoteProjectTabs");
+        projects.Children.Add(_projectScroll); NotesHost.Children.Add(projects);
         var body=new Grid { Margin=new Thickness(16,8,16,0) }; Grid.SetRow(body,2);
         body.RowDefinitions.Add(new(){Height=GridLength.Auto});body.RowDefinitions.Add(new(){Height=GridLength.Auto});body.RowDefinitions.Add(new());
         _noteSearch=new TextBox { FontSize=12,Padding=new Thickness(9,7,9,7),Margin=new Thickness(0,0,0,8), Height=34 };
@@ -165,6 +167,7 @@ public partial class MainWindow
                 b.Background=project.Id==NotesDraft.ActiveProject?Brush("#DDF2FF"):Brushes.Transparent;
                 b.Foreground=Brush("#0877BE");b.Margin=new Thickness(0,0,4,0);
                 AutomationProperties.SetAutomationId(b,"Project-"+project.Id);
+                if (!project.Archived) EnableNoteProjectDrag(b, project);
                 b.MouseRightButtonUp+=(_,e)=>{e.Handled=true;NoteProjectMenu(b,project);};_projectTabs.Children.Add(b);
             }
             _addNote.IsEnabled=NoteProject is {Archived:false};

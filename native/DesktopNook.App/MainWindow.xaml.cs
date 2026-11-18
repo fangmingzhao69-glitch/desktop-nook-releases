@@ -365,6 +365,12 @@ public partial class MainWindow : Window
     }
     private void OnKeyDown(object sender,KeyEventArgs e)
     {
+        if (e.Key == Key.Escape && _noteProjectDrag is { Started: true } drag)
+        {
+            EndNoteProjectDrag(drag);
+            e.Handled = true;
+            return;
+        }
         if (e.Key == Key.Escape && _noteDragHandle is { } handle)
         {
             handle.CancelDrag();

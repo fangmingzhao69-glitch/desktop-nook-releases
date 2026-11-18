@@ -19,6 +19,8 @@ internal static class NotesVerification
         IEnumerable<T> Find<T>(DependencyObject parent) where T:DependencyObject
         {for(int i=0;i<VisualTreeHelper.GetChildrenCount(parent);i++){var child=VisualTreeHelper.GetChild(parent,i);if(child is T t)yield return t;foreach(var item in Find<T>(child))yield return item;}}
         TextBox Field(string name)=>Find<TextBox>(window.NotesHost).First(b=>AutomationProperties.GetName(b)==name);
+        Button ProjectTab(NoteProject project) => Find<Button>(window.NotesHost)
+            .Single(button => AutomationProperties.GetAutomationId(button) == "Project-" + project.Id);
         void ClickMenu(MenuItem item)
         {
             if (window.LastMenu is { } menu) menu.IsOpen = false;
@@ -42,6 +44,38 @@ internal static class NotesVerification
             window.KeepOpenForVerification=true;window.PanelMotion.Stop();window.Opacity=1;await Layout();
             Check(!window.NotesDraft.Projects.Any(),"首次启动不创建演示项目");
             var p=NotesStore.AddProject(window.NotesDraft,"项目A");var other=NotesStore.AddProject(window.NotesDraft,"项目B");window.NotesStore.Commit(window.NotesDraft);
+            window.RenderNotes();
+            await Layout();
+            await NotesSplitVerification.MoveNoteProject(window, ProjectTab(p));
+            Check(window.NotesDraft.ActiveProject == p.Id, "真实鼠标单击仍能切换便签分类");
+            await NotesSplitVerification.MoveNoteProject(window, ProjectTab(other), ProjectTab(p), cancel: true);
+            Check(window.NotesDraft.Projects.First().Id == p.Id && window.NotesDraft.ActiveProject == p.Id,
+                "Esc 取消分类拖动，顺序和当前分类保持");
+            await NotesSplitVerification.MoveNoteProject(window, ProjectTab(other), ProjectTab(p));
+            var storedProjects = new NotesStore(App.Store.DataDirectory).State;
+            Check(storedProjects.Projects.Select(project => project.Id).SequenceEqual(new[] { other.Id, p.Id }) &&
+                storedProjects.ActiveProject == p.Id && ProjectTab(other).TranslatePoint(new Point(), window).X <
+                ProjectTab(p).TranslatePoint(new Point(), window).X, "拖动未选中的分类向左排序，保存并保持当前分类");
+            await NotesSplitVerification.MoveNoteProject(window, ProjectTab(other), ProjectTab(p));
+            Check(new NotesStore(App.Store.DataDirectory).State.Projects.First().Id == p.Id,
+                "向右拖动分类恢复次序，重读顺序一致");
+
+            var extraProjects = Enumerable.Range(1, 6).Select(number => NotesStore.AddProject(window.NotesDraft, $"滚动测试分类 {number}")).ToList();
+            window.NotesDraft.ActiveProject = p.Id;
+            window.NotesStore.Commit(window.NotesDraft);
+            window.RenderNotes();
+            await Layout();
+            var tabsScroll = Find<ScrollViewer>(window.NotesHost).Single(scroll => AutomationProperties.GetAutomationId(scroll) == "NoteProjectTabs");
+            tabsScroll.ScrollToLeftEnd();
+            await Layout();
+            await NotesSplitVerification.MoveNoteProject(window, ProjectTab(p), tabsScroll,
+                dropPoint: new Point(tabsScroll.ViewportWidth - 7, 15), holdMilliseconds: 840);
+            storedProjects = new NotesStore(App.Store.DataDirectory).State;
+            Check(storedProjects.Projects.FindIndex(project => project.Id == p.Id) >= 2 &&
+                storedProjects.ActiveProject == p.Id, "分类标签在横向滚动后仍能跨多项保存排序");
+            window.NotesDraft.Projects.RemoveAll(project => extraProjects.Contains(project));
+            NotesStore.ReorderProject(window.NotesDraft, p, other, after: false);
+            window.NotesStore.Commit(window.NotesDraft);
             window.SelectNoteProject(p.Id);window.NotesDraft.Notes.Add(new(){ProjectId=p.Id,Kind="text",Title="旧版文字记录"});window.NotesStore.Commit(window.NotesDraft);window.RenderNotes();await Layout();
             Field("记录标题").Text="需求沟通";var body=Field("文字记录正文");body.Focus();body.Text="今天确认了项目需求。\n下一步：整理方案并跟进。";
             await Task.Delay(750);

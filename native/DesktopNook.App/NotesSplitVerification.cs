@@ -16,7 +16,19 @@ internal static class NotesSplitVerification
     [DllImport("user32.dll")] private static extern void mouse_event(uint flags,uint x,uint y,uint data,UIntPtr extra);
 
     internal static async Task DragNote(MainWindow window, Thumb handle, FrameworkElement target,
-        bool cancel = false, Point? dropPoint = null, int holdMilliseconds = 100)
+        bool cancel = false, Point? dropPoint = null, int holdMilliseconds = 100) =>
+        await MoveMouse(window, handle, target, .82,
+            dropPoint ?? new Point(24, target.ActualHeight / 4), cancel, holdMilliseconds, () =>
+            {
+                if (!handle.IsDragging) throw new Exception("真实鼠标未捕获排序栏拖动。");
+            });
+
+    internal static Task MoveNoteProject(MainWindow window, Button tab, FrameworkElement? target = null,
+        bool cancel = false, Point? dropPoint = null, int holdMilliseconds = 100) =>
+        MoveMouse(window, tab, target, .5, dropPoint, cancel, holdMilliseconds);
+
+    private static async Task MoveMouse(MainWindow window, FrameworkElement source, FrameworkElement? target,
+        double horizontalStart, Point? dropPoint, bool cancel, int holdMilliseconds, Action? verifyCapture = null)
     {
         if (!App.IsSandbox) throw new InvalidOperationException("便签拖动检查仅允许沙箱。");
         GetCursorPos(out var original);
@@ -24,17 +36,20 @@ internal static class NotesSplitVerification
         try
         {
             window.Activate();
-            handle.BringIntoView();
+            source.BringIntoView();
             await window.Dispatcher.InvokeAsync(window.UpdateLayout, DispatcherPriority.ContextIdle);
-            var from = handle.PointToScreen(new Point(handle.ActualWidth * .82, handle.ActualHeight / 2));
-            var to = target.PointToScreen(dropPoint ?? new Point(24, target.ActualHeight / 4));
+            var from = source.PointToScreen(new Point(source.ActualWidth * horizontalStart, source.ActualHeight / 2));
             SetCursorPos((int)from.X, (int)from.Y);
             mouse_event(2, 0, 0, 0, UIntPtr.Zero);
             pressed = true;
             await Task.Delay(80);
-            if (!handle.IsDragging) throw new Exception("真实鼠标未捕获排序栏拖动。");
-            SetCursorPos((int)to.X, (int)to.Y);
-            await Task.Delay(holdMilliseconds);
+            verifyCapture?.Invoke();
+            if (target is not null)
+            {
+                var to = target.PointToScreen(dropPoint ?? new Point(target.ActualWidth / 2, target.ActualHeight / 2));
+                SetCursorPos((int)to.X, (int)to.Y);
+                await Task.Delay(holdMilliseconds);
+            }
             if (cancel)
                 window.RaiseEvent(new KeyEventArgs(Keyboard.PrimaryDevice, PresentationSource.FromVisual(window), 0, Key.Escape)
                     { RoutedEvent = Keyboard.PreviewKeyDownEvent });

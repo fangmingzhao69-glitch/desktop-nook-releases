@@ -231,6 +231,15 @@ public sealed class NotesStore
         state.Notes.Insert(after ? index + 1 : index, note);
     }
 
+    public static void ReorderProject(NotesState state, NoteProject project, NoteProject target, bool after)
+    {
+        if (project == target || project.Archived || target.Archived ||
+            !state.Projects.Contains(target) || !state.Projects.Remove(project)) return;
+
+        int index = state.Projects.IndexOf(target);
+        state.Projects.Insert(after ? index + 1 : index, project);
+    }
+
     public static void MoveNoteToProject(NotesState state, ProjectNote note, NoteProject destination)
     {
         if (note.ProjectId == destination.Id || destination.Archived || !state.Notes.Remove(note)) return;

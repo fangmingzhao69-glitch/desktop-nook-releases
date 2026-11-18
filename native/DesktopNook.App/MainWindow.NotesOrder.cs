@@ -128,30 +128,38 @@ public partial class MainWindow
         }
     }
 
-    private void UpdateNoteInsertionMark((Border Card, bool After)? destination)
+    private void UpdateNoteInsertionMark((FrameworkElement Card, bool After)? destination, bool horizontal = false)
     {
         if (_noteInsertionMark is { } existing)
         {
-            if (destination is { } same && existing.AdornedElement == same.Card && existing.After == same.After) return;
+            if (destination is { } same && existing.AdornedElement == same.Card && existing.After == same.After &&
+                existing.Horizontal == horizontal) return;
             existing.Layer.Remove(existing);
             _noteInsertionMark = null;
         }
         if (destination is { } target && AdornerLayer.GetAdornerLayer(target.Card) is { } layer)
         {
-            _noteInsertionMark = new NoteInsertionMark(target.Card, target.After, layer) { IsHitTestVisible = false };
+            _noteInsertionMark = new NoteInsertionMark(target.Card, target.After, layer, horizontal) { IsHitTestVisible = false };
             layer.Add(_noteInsertionMark);
         }
     }
 
-    private sealed class NoteInsertionMark(UIElement card, bool after, AdornerLayer layer) : Adorner(card)
+    private sealed class NoteInsertionMark(UIElement card, bool after, AdornerLayer layer, bool horizontal) : Adorner(card)
     {
         internal bool After { get; } = after;
         internal AdornerLayer Layer { get; } = layer;
+        internal bool Horizontal { get; } = horizontal;
 
         protected override void OnRender(DrawingContext drawingContext)
         {
             var size = AdornedElement.RenderSize;
             var pen = new Pen(Brush("#218DEB"), 2);
+            if (Horizontal)
+            {
+                double x = After ? size.Width - 1 : 1;
+                drawingContext.DrawLine(pen, new Point(x, 3), new Point(x, size.Height - 3));
+                return;
+            }
             drawingContext.DrawRoundedRectangle(null, pen, new Rect(new Point(), size), 10, 10);
             double y = After ? size.Height - 2 : 2;
             drawingContext.DrawLine(pen, new Point(6, y), new Point(size.Width - 6, y));
