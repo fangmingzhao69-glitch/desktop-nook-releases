@@ -31,6 +31,7 @@ public record TaskbarAppearanceProfile
 
     internal static (string Color, byte Alpha) ParseColor(string color)
     {
+        color = color.Trim();
         if (color.Length is 4 or 5 && color[0] == '#')
             color = "#" + string.Concat(color.Skip(1).Select(c => new string(c, 2)));
         if (color.Length is not (7 or 9) || color[0] != '#' || !color.Skip(1).All(Uri.IsHexDigit))
@@ -41,26 +42,29 @@ public record TaskbarAppearanceProfile
         return (color[..7], alpha);
     }
 
-    internal static TaskbarAppearanceProfile Import(JsonElement value, bool dynamic, bool allowsRules)
+    internal static TaskbarAppearanceProfile Import(JsonElement value, bool dynamic, bool allowsRules,
+        TaskbarAppearanceProfile? defaults = null)
     {
         if (value.ValueKind != JsonValueKind.Object) throw new IOException("场景外观必须为 JSON 对象。");
-        var (color, alpha) = ParseColor(ReadString(value, "color") ?? "#00000000");
-        double? radius = null;
+        defaults ??= new TaskbarAppearanceProfile { Color = "#000000", Style = "normal" };
+        string? tint = ReadString(value, "color");
+        var (color, alpha) = tint is null ? (defaults.Color, defaults.Alpha) : ParseColor(tint);
+        double? radius = defaults.BlurRadius;
         if (value.TryGetProperty("blur_radius", out var rawRadius))
         {
-            if (rawRadius.ValueKind != JsonValueKind.Number || !rawRadius.TryGetDouble(out double number))
+            if (rawRadius.ValueKind != JsonValueKind.Number || !rawRadius.TryGetDouble(out double number) || !double.IsFinite(number))
                 throw new IOException("模糊半径必须为数字。");
-            radius = number;
+            radius = Math.Min(number, 750);
         }
         return new TaskbarAppearanceProfile
         {
-            Enabled = dynamic && (ReadSwitch(value, "enabled") ?? false),
-            Style = ReadString(value, "accent") ?? "normal",
+            Enabled = dynamic && (ReadSwitch(value, "enabled") ?? defaults.Enabled),
+            Style = ReadString(value, "accent") ?? defaults.Style,
             Color = color,
             Alpha = alpha,
             BlurRadius = radius,
-            ShowLine = ReadSwitch(value, "show_line"),
-            ShowPeek = ReadSwitch(value, "show_peek"),
+            ShowLine = ReadSwitch(value, "show_line") ?? defaults.ShowLine,
+            ShowPeek = ReadSwitch(value, "show_peek") ?? defaults.ShowPeek,
             Rules = value.TryGetProperty("rules", out var rules) ? rules.Clone() : null
         }.ValidateAppearance(allowsRules);
     }
@@ -78,7 +82,7 @@ public record TaskbarAppearanceProfile
         var result = new Dictionary<string, object>
         {
             ["accent"] = Style,
-            ["color"] = $"{Color}{(Style == "opaque" ? 255 : Alpha):X2}"
+            ["color"] = $"{Color}{Alpha:X2}"
         };
         if (dynamic) result["enabled"] = Enabled;
         if (BlurRadius is double radius) result["blur_radius"] = radius;

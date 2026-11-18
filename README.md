@@ -2,7 +2,7 @@
 
 轻匣是 Windows 桌面收纳工具。用一个任务栏入口打开收纳面板，左侧整理软件、文件和文件夹，右侧记录便签和待办。
 
-[下载 0.17.2 安装包](https://github.com/fangmingzhao69-glitch/desktop-nook-releases/releases/download/v0.17.2/DesktopNook-Setup.exe) · [最新正式版](https://github.com/fangmingzhao69-glitch/desktop-nook-releases/releases/latest) · [使用说明](docs/使用说明.md)
+[下载 0.17.3 安装包](https://github.com/fangmingzhao69-glitch/desktop-nook-releases/releases/download/v0.17.3/DesktopNook-Setup.exe) · [最新正式版](https://github.com/fangmingzhao69-glitch/desktop-nook-releases/releases/latest) · [使用说明](docs/使用说明.md)
 
 ![轻匣收纳与便签双栏界面](docs/images/overview-0.16.png)
 
@@ -33,7 +33,7 @@
 
 ## 任务栏外观
 
-从「更多 → 任务栏外观」启用。点击「设为统一外观」可将所选效果用于所有场景。启用「按场景自动切换外观」可在窗口最大化等场景使用单独配置。可从 TranslucentTB 独立版导入场景和窗口规则。当前正式版沿用在 Windows 11 26H2 构建 26340.9882 单屏验收过的组件。各动态场景的独立实机验证、多屏和实际登录自启仍待覆盖。[0.17.2 发行说明](https://github.com/fangmingzhao69-glitch/desktop-nook-releases/releases/tag/v0.17.2)
+从「更多 → 任务栏外观」启用。点击「设为统一外观」可将所选效果用于所有场景。启用「按场景自动切换外观」可在窗口最大化等场景使用单独配置。可从 TranslucentTB 独立版导入场景和窗口规则，缺失字段沿用相应场景的原版默认值。当前正式版沿用在 Windows 11 26H2 构建 26340.9882 单屏验收过的组件。各动态场景的独立实机验证、多屏和实际登录自启仍待覆盖。[0.17.3 发行说明](https://github.com/fangmingzhao69-glitch/desktop-nook-releases/releases/tag/v0.17.3)
 
 ## 源码与构建
 

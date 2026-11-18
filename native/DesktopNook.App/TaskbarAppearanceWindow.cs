@@ -194,13 +194,16 @@ internal sealed class TaskbarAppearanceWindow : Window
         _loading = true;
         _activeScene = scene;
         var profile = _draft.ProfileFor(scene.Key);
+        var defaults = TaskbarAppearanceSettings.NativeDefaultsFor(scene.Key);
         _scene.SelectedItem = scene;
         _sceneEnabled.Visibility = scene.Key == TaskbarAppearanceSettings.DesktopScene ? Visibility.Collapsed : Visibility.Visible;
         _sceneEnabled.IsChecked = profile.Enabled;
         _style.SelectedItem = _style.Items.OfType<ComboBoxItem>().Single(item => Equals(item.Tag, profile.Style));
         _color.Text = profile.Color;
         _opacity.Value = profile.Alpha;
-        _radius.Value = profile.BlurRadius ?? 9;
+        _radius.Value = profile.BlurRadius ?? defaults.BlurRadius ?? 9;
+        ((ComboBoxItem)_line.Items[0]).Content = defaults.ShowLine == true ? "场景默认（显示）" : "场景默认（隐藏）";
+        ((ComboBoxItem)_peek.Items[0]).Content = defaults.ShowPeek == true ? "场景默认（显示）" : "场景默认（隐藏）";
         _line.SelectedItem = _line.Items.OfType<ComboBoxItem>().Single(item => Equals(item.Tag, profile.ShowLine));
         _peek.SelectedItem = _peek.Items.OfType<ComboBoxItem>().Single(item => Equals(item.Tag, profile.ShowPeek));
         _rules.IsEnabled = scene.AllowsRules;
@@ -288,6 +291,8 @@ internal sealed class TaskbarAppearanceWindow : Window
     private void Import()
     {
         var picker = new OpenFileDialog { Title = "导入 TranslucentTB 的 settings.json", Filter = "JSON 文件 (*.json)|*.json", FileName = "settings.json" };
+        string? installed = FindStandaloneSettingsDirectory();
+        if (installed is not null) picker.InitialDirectory = installed;
         if (picker.ShowDialog(this) != true) return;
         try
         {
@@ -299,6 +304,20 @@ internal sealed class TaskbarAppearanceWindow : Window
         {
             _message.Text = ex.Message;
         }
+    }
+
+    private static string? FindStandaloneSettingsDirectory()
+    {
+        var program = Path.GetDirectoryName(Environment.ProcessPath);
+        var parent = program is null ? null : Path.GetDirectoryName(program);
+        if (parent is not null)
+        {
+            var sibling = Path.Combine(parent, "TranslucentTB");
+            if (File.Exists(Path.Combine(sibling, "settings.json"))) return sibling;
+        }
+        var local = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
+        var defaultDirectory = Path.Combine(local, "Programs", "TranslucentTB");
+        return File.Exists(Path.Combine(defaultDirectory, "settings.json")) ? defaultDirectory : null;
     }
 
     private void EditWindowConditions(bool isRules)

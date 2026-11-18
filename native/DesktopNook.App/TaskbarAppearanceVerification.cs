@@ -82,11 +82,11 @@ internal static class TaskbarAppearanceVerification
             using (var json = JsonDocument.Parse(File.ReadAllText(launchSettings)))
             {
                 var properties = json.RootElement;
-                Check(properties.GetProperty("desktop_appearance").GetProperty("color").GetString() == "#123456FF" &&
+                Check(properties.GetProperty("desktop_appearance").GetProperty("color").GetString() == "#1234566E" &&
                     !properties.GetProperty("maximized_window_appearance").GetProperty("enabled").GetBoolean() &&
                     properties.GetProperty("disable_saving").GetBoolean() && properties.GetProperty("hide_tray").GetBoolean() &&
                     !properties.GetProperty("copy_dlls").GetBoolean(),
-                    "纯色编码与上游格式一致，使用已校验的独立组件目录");
+                    "纯色配置保留原 RGBA，完全不透明由组件渲染时处理");
             }
             var original = Path.Combine(root, "import.json");
             const string import = "{ /* comment */ \"desktop_appearance\":{\"accent\":\"clear\",\"color\":\"#1234\",},}";
@@ -94,6 +94,31 @@ internal static class TaskbarAppearanceVerification
             var imported = TaskbarAppearanceSettings.Import(original);
             Check(imported.Color == "#112233" && imported.Alpha == 0x44 && File.ReadAllText(original) == import,
                 "只读导入上游简写 RGBA、注释及末尾逗号");
+            Check(imported.ProfileFor("task_view_opened_appearance") is { Enabled: true, Style: "normal", ShowLine: true } &&
+                imported.ProfileFor("maximized_window_appearance") is { Enabled: false, Style: "acrylic", ShowLine: true } &&
+                imported.ShowLine == false && imported.ShowPeek == false,
+                "导入缺少的场景时采用原组件的 Windows 11 默认值");
+
+            const string partial = """
+                {"desktop_appearance":{"color":" #abcd "},
+                 "maximized_window_appearance":{"enabled":true,"accent":"normal","show_line":false,"color":"#00000000"},
+                 "visible_window_appearance":{"blur_radius":760}}
+                """;
+            File.WriteAllText(original, partial);
+            var matched = TaskbarAppearanceSettings.Import(original);
+            TaskbarAppearanceStore.WriteComponentSettings(launchSettings, matched);
+            using (var parsed = JsonDocument.Parse(File.ReadAllText(launchSettings)))
+            {
+                var data = parsed.RootElement;
+                var desktop = data.GetProperty("desktop_appearance");
+                var maximum = data.GetProperty("maximized_window_appearance");
+                Check(desktop.GetProperty("accent").GetString() == "clear" &&
+                    desktop.GetProperty("color").GetString() == "#AABBCCDD" &&
+                    maximum.GetProperty("enabled").GetBoolean() && !maximum.GetProperty("show_line").GetBoolean() &&
+                    data.GetProperty("task_view_opened_appearance").GetProperty("enabled").GetBoolean() &&
+                    data.GetProperty("visible_window_appearance").GetProperty("blur_radius").GetDouble() == 750,
+                    "原配置含缺省字段、显式隐藏细线及超上限模糊半径时按原组件规则转换");
+            }
 
             const string fullImport = """
                 {
@@ -150,6 +175,14 @@ internal static class TaskbarAppearanceVerification
                     uniform.ProfileFor("maximized_window_appearance").Enabled,
                     "统一模糊在组件侧关闭场景覆盖，最大化透明仍保存在轻匣设置");
             }
+            var maximizedPreview = reproduction.ForPreview("maximized_window_appearance");
+            var maximizedUniform = reproduction.ForUniformAppearance("maximized_window_appearance");
+            Check(maximizedPreview.ShowLine == true && maximizedPreview.ShowPeek == true && maximizedPreview.BlurRadius == 9 &&
+                maximizedUniform.ShowLine == true && maximizedUniform.ShowPeek == true &&
+                matched.ForPreview("maximized_window_appearance").ShowLine == false,
+                "预览和设为统一外观均保留来源场景的细线、Peek 与模糊默认值，显式隐藏不被改写");
+            Check(clear.ProfileFor("task_view_opened_appearance").Enabled == false,
+                "现有轻匣配置在升级后不会自动开启未设置的场景");
             TaskbarAppearanceStore.WriteComponentSettings(launchSettings, uniform with { FollowScenes = true });
             using (var document = JsonDocument.Parse(File.ReadAllText(launchSettings)))
             {
@@ -231,7 +264,7 @@ internal static class TaskbarAppearanceVerification
                 !TaskbarAppearanceDependencies.MeetsMinimum("Microsoft.UI.Xaml.2.8_8.2501.31001.0_x86__8wekyb3d8bbwe", minimum) &&
                 !TaskbarAppearanceDependencies.MeetsMinimum("Microsoft.UI.Xaml.2.8_8.2401.31001.0_x64__8wekyb3d8bbwe", minimum),
                 "依赖检查接受满足版本的 x64 包，并拒绝 x86 和过旧版本");
-            Check(MainWindow.CurrentVersionLabel == "v0.17.2", "正式候选在更新菜单显示完整版本");
+            Check(MainWindow.CurrentVersionLabel == "v0.17.3", "正式候选在更新菜单显示完整版本");
 
             var originalExe = Environment.ProcessPath!;
             var target = Path.Combine(root, "update-target.exe");
