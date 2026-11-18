@@ -1,4 +1,3 @@
-using System.Globalization;
 using System.Text.Json;
 
 namespace DesktopNook.Core;
@@ -16,7 +15,7 @@ public record TaskbarAppearanceProfile
 
     internal TaskbarAppearanceProfile ValidateAppearance(bool allowsRules)
     {
-        if (Style is not ("normal" or "clear" or "opaque" or "blur" or "acrylic") ||
+        if (!IsSupportedStyle(Style) ||
             Color is not { Length: 7 } || Color[0] != '#' || !Color.Skip(1).All(Uri.IsHexDigit))
             throw new IOException("任务栏外观样式或颜色无效。颜色格式为 #RRGGBB。");
         if (BlurRadius is double radius && (!double.IsFinite(radius) || radius is < 0 or > 750))
@@ -29,53 +28,7 @@ public record TaskbarAppearanceProfile
         return this with { Color = Color.ToUpperInvariant() };
     }
 
-    internal static (string Color, byte Alpha) ParseColor(string color)
-    {
-        color = color.Trim();
-        if (color.Length is 4 or 5 && color[0] == '#')
-            color = "#" + string.Concat(color.Skip(1).Select(c => new string(c, 2)));
-        if (color.Length is not (7 or 9) || color[0] != '#' || !color.Skip(1).All(Uri.IsHexDigit))
-            throw new IOException("配置中的颜色无效。");
-        byte alpha = color.Length == 9
-            ? byte.Parse(color.AsSpan(7), NumberStyles.HexNumber, CultureInfo.InvariantCulture)
-            : (byte)255;
-        return (color[..7], alpha);
-    }
-
-    internal static TaskbarAppearanceProfile Import(JsonElement value, bool dynamic, bool allowsRules,
-        TaskbarAppearanceProfile? defaults = null)
-    {
-        if (value.ValueKind != JsonValueKind.Object) throw new IOException("场景外观必须为 JSON 对象。");
-        defaults ??= new TaskbarAppearanceProfile { Color = "#000000", Style = "normal" };
-        string? tint = ReadString(value, "color");
-        var (color, alpha) = tint is null ? (defaults.Color, defaults.Alpha) : ParseColor(tint);
-        double? radius = defaults.BlurRadius;
-        if (value.TryGetProperty("blur_radius", out var rawRadius))
-        {
-            if (rawRadius.ValueKind != JsonValueKind.Number || !rawRadius.TryGetDouble(out double number) || !double.IsFinite(number))
-                throw new IOException("模糊半径必须为数字。");
-            radius = Math.Min(number, 750);
-        }
-        return new TaskbarAppearanceProfile
-        {
-            Enabled = dynamic && (ReadSwitch(value, "enabled") ?? defaults.Enabled),
-            Style = ReadString(value, "accent") ?? defaults.Style,
-            Color = color,
-            Alpha = alpha,
-            BlurRadius = radius,
-            ShowLine = ReadSwitch(value, "show_line") ?? defaults.ShowLine,
-            ShowPeek = ReadSwitch(value, "show_peek") ?? defaults.ShowPeek,
-            Rules = value.TryGetProperty("rules", out var rules) ? rules.Clone() : null
-        }.ValidateAppearance(allowsRules);
-    }
-
-    private static string? ReadString(JsonElement node, string key) =>
-        !node.TryGetProperty(key, out var value) ? null :
-        value.ValueKind == JsonValueKind.String ? value.GetString() : throw new IOException($"配置中的 {key} 必须为文字。");
-
-    private static bool? ReadSwitch(JsonElement node, string key) =>
-        !node.TryGetProperty(key, out var value) ? null :
-        value.ValueKind is JsonValueKind.True or JsonValueKind.False ? value.GetBoolean() : throw new IOException($"配置中的 {key} 必须为开关。");
+    internal static bool IsSupportedStyle(string? style) => style is "normal" or "clear" or "opaque" or "blur" or "acrylic";
 
     internal Dictionary<string, object> ToEngine(bool dynamic)
     {
@@ -138,14 +91,43 @@ public static class TaskbarAppearanceFilters
 
     private static void ValidateRule(JsonElement value, bool allowInactive)
     {
-        TaskbarAppearanceProfile.Import(value, dynamic: false, allowsRules: false);
+        if (value.ValueKind != JsonValueKind.Object) throw new IOException("窗口规则必须为 JSON 对象。");
         var keys = new HashSet<string>();
         foreach (var field in value.EnumerateObject())
         {
             if (!keys.Add(field.Name)) throw new IOException("单条窗口规则中存在重复字段。");
-            if (field.Name is "accent" or "color" or "blur_radius" or "show_line" or "show_peek") continue;
-            if (field.Name != "inactive" || !allowInactive) throw new IOException($"窗口规则中的字段不受支持：{field.Name}。");
-            ValidateRule(field.Value, allowInactive: false);
+            switch (field.Name)
+            {
+                case "accent":
+                    if (field.Value.ValueKind != JsonValueKind.String || !TaskbarAppearanceProfile.IsSupportedStyle(field.Value.GetString()))
+                        throw new IOException("窗口规则中的外观样式无效。");
+                    break;
+                case "color":
+                    if (field.Value.ValueKind != JsonValueKind.String || !IsRuleColor(field.Value.GetString()))
+                        throw new IOException("窗口规则中的颜色无效。");
+                    break;
+                case "blur_radius":
+                    if (field.Value.ValueKind != JsonValueKind.Number || !field.Value.TryGetDouble(out double radius) ||
+                        !double.IsFinite(radius) || radius < 0)
+                        throw new IOException("窗口规则中的模糊半径无效。");
+                    break;
+                case "show_line":
+                case "show_peek":
+                    if (field.Value.ValueKind is not (JsonValueKind.True or JsonValueKind.False))
+                        throw new IOException($"窗口规则中的 {field.Name} 必须为开关。");
+                    break;
+                case "inactive" when allowInactive:
+                    ValidateRule(field.Value, allowInactive: false);
+                    break;
+                default:
+                    throw new IOException($"窗口规则中的字段不受支持：{field.Name}。");
+            }
         }
+    }
+
+    private static bool IsRuleColor(string? color)
+    {
+        color = color?.Trim();
+        return color is { Length: 4 or 5 or 7 or 9 } && color[0] == '#' && color.Skip(1).All(Uri.IsHexDigit);
     }
 }

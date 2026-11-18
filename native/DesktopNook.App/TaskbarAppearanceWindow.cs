@@ -6,7 +6,6 @@ using System.Windows.Automation;
 using System.Windows.Controls;
 using System.Windows.Threading;
 using DesktopNook.Core;
-using Microsoft.Win32;
 
 namespace DesktopNook.App;
 
@@ -94,9 +93,6 @@ internal sealed class TaskbarAppearanceWindow : Window
         _body.Children.Add(new Expander { Header = "细线与窗口规则", Content = options, Margin = new Thickness(0, 10, 0, 0) });
         _footer.Children.Add(_message);
         var tools = new WrapPanel { Margin = new Thickness(0, 0, 0, 8) };
-        tools.Children.Add(MakeButton("导入独立版设置…", Import));
-        if (session.UsesCompatibilityPackage)
-            tools.Children.Add(MakeButton("导入 26340 兼容组件…", ImportCompatibilityPackage));
         tools.Children.Add(MakeButton("恢复系统外观", () => _ = RunAsync(RestoreSystemAsync)));
         _footer.Children.Add(tools);
         var actions = new WrapPanel { HorizontalAlignment = HorizontalAlignment.Right };
@@ -194,14 +190,14 @@ internal sealed class TaskbarAppearanceWindow : Window
         _loading = true;
         _activeScene = scene;
         var profile = _draft.ProfileFor(scene.Key);
-        var defaults = TaskbarAppearanceSettings.NativeDefaultsFor(scene.Key);
+        var defaults = TaskbarAppearanceSettings.SceneDefaultsFor(scene.Key);
         _scene.SelectedItem = scene;
         _sceneEnabled.Visibility = scene.Key == TaskbarAppearanceSettings.DesktopScene ? Visibility.Collapsed : Visibility.Visible;
         _sceneEnabled.IsChecked = profile.Enabled;
         _style.SelectedItem = _style.Items.OfType<ComboBoxItem>().Single(item => Equals(item.Tag, profile.Style));
         _color.Text = profile.Color;
         _opacity.Value = profile.Alpha;
-        _radius.Value = profile.BlurRadius ?? defaults.BlurRadius ?? 9;
+        _radius.Value = profile.BlurRadius ?? defaults.BlurRadius;
         ((ComboBoxItem)_line.Items[0]).Content = defaults.ShowLine == true ? "场景默认（显示）" : "场景默认（隐藏）";
         ((ComboBoxItem)_peek.Items[0]).Content = defaults.ShowPeek == true ? "场景默认（显示）" : "场景默认（隐藏）";
         _line.SelectedItem = _line.Items.OfType<ComboBoxItem>().Single(item => Equals(item.Tag, profile.ShowLine));
@@ -288,38 +284,6 @@ internal sealed class TaskbarAppearanceWindow : Window
         }).Validate();
     }
 
-    private void Import()
-    {
-        var picker = new OpenFileDialog { Title = "导入 TranslucentTB 的 settings.json", Filter = "JSON 文件 (*.json)|*.json", FileName = "settings.json" };
-        string? installed = FindStandaloneSettingsDirectory();
-        if (installed is not null) picker.InitialDirectory = installed;
-        if (picker.ShowDialog(this) != true) return;
-        try
-        {
-            var imported = TaskbarAppearanceSettings.Import(picker.FileName);
-            LoadFields(imported with { Enabled = _enabled.IsChecked == true });
-            _message.Text = "已读入独立版的场景外观和窗口规则。选择应用后保存到轻匣。";
-        }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or System.Text.Json.JsonException)
-        {
-            _message.Text = ex.Message;
-        }
-    }
-
-    private static string? FindStandaloneSettingsDirectory()
-    {
-        var program = Path.GetDirectoryName(Environment.ProcessPath);
-        var parent = program is null ? null : Path.GetDirectoryName(program);
-        if (parent is not null)
-        {
-            var sibling = Path.Combine(parent, "TranslucentTB");
-            if (File.Exists(Path.Combine(sibling, "settings.json"))) return sibling;
-        }
-        var local = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
-        var defaultDirectory = Path.Combine(local, "Programs", "TranslucentTB");
-        return File.Exists(Path.Combine(defaultDirectory, "settings.json")) ? defaultDirectory : null;
-    }
-
     private void EditWindowConditions(bool isRules)
     {
         if (isRules && !_activeScene.AllowsRules) return;
@@ -389,22 +353,6 @@ internal sealed class TaskbarAppearanceWindow : Window
             return _downloadApproved;
         }
         return true;
-    }
-
-    private void ImportCompatibilityPackage()
-    {
-        var picker = new OpenFileDialog
-        {
-            Title = "导入发行版的 26340 兼容组件",
-            Filter = "组件压缩包 (*.zip)|*.zip",
-            FileName = TaskbarAppearancePackage.CompatibilityFile
-        };
-        if (picker.ShowDialog(this) != true) return;
-        _ = RunAsync(async () =>
-        {
-            await _session.ImportCompatibilityPackageAsync(picker.FileName);
-            _message.Text = _session.Restriction ?? "兼容组件已核验。选择预览或应用后启用。";
-        });
     }
 
     private async Task PreviewAsync()

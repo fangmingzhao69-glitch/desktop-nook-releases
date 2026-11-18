@@ -48,27 +48,20 @@ public sealed record TaskbarAppearanceSettings : TaskbarAppearanceProfile
         ? this
         : Profiles?.GetValueOrDefault(scene) ?? new TaskbarAppearanceProfile { Style = "normal" };
 
-    // The portable engine runs on Windows 11. Defaults belong to a source scene,
-    // so moving a profile to the desktop must preserve the source's resolved values.
-    public static TaskbarAppearanceProfile NativeDefaultsFor(string scene)
+    // These are the renderer's defaults on Windows 11.
+    public static (bool ShowLine, bool ShowPeek, double BlurRadius) SceneDefaultsFor(string scene) => scene switch
     {
-        var baseline = new TaskbarAppearanceProfile { Color = "#000000", BlurRadius = 9, ShowPeek = true, ShowLine = true };
-        return scene switch
-        {
-            DesktopScene => baseline with { ShowPeek = false, ShowLine = false },
-            "visible_window_appearance" => baseline with { ShowLine = false },
-            "maximized_window_appearance" => baseline with { Style = "acrylic" },
-            "start_opened_appearance" or "search_opened_appearance" => baseline with { Style = "normal" },
-            "task_view_opened_appearance" => baseline with { Style = "normal", ShowPeek = false, Enabled = true },
-            "battery_saver_appearance" => baseline with { Style = "opaque", ShowLine = false },
-            _ => throw new IOException("当前场景不受支持。")
-        };
-    }
+        DesktopScene => (false, false, 9),
+        "visible_window_appearance" or "battery_saver_appearance" => (false, true, 9),
+        "maximized_window_appearance" or "start_opened_appearance" or "search_opened_appearance" => (true, true, 9),
+        "task_view_opened_appearance" => (true, false, 9),
+        _ => throw new IOException("当前场景不受支持。")
+    };
 
     internal TaskbarAppearanceProfile ResolvedProfileFor(string scene)
     {
         var profile = ProfileFor(scene);
-        var defaults = NativeDefaultsFor(scene);
+        var defaults = SceneDefaultsFor(scene);
         return profile with
         {
             BlurRadius = profile.BlurRadius ?? defaults.BlurRadius,
@@ -99,35 +92,6 @@ public sealed record TaskbarAppearanceSettings : TaskbarAppearanceProfile
 
     public TaskbarAppearanceSettings ForPreview(string scene) =>
         ForUniformAppearance(scene) with { Profiles = null, IgnoredWindows = null };
-
-    public static TaskbarAppearanceSettings Import(string source)
-    {
-        using var file = File.OpenRead(source);
-        if (file.Length > 128 * 1024) throw new IOException("外观配置文件过大。");
-        using var json = JsonDocument.Parse(file, new JsonDocumentOptions
-        {
-            CommentHandling = JsonCommentHandling.Skip, AllowTrailingCommas = true, MaxDepth = 32
-        });
-        if (json.RootElement.ValueKind != JsonValueKind.Object)
-            throw new IOException("外观配置必须为 JSON 对象。");
-        var settings = new TaskbarAppearanceSettings();
-        bool hasAppearance = false;
-        foreach (var scene in Scenes)
-        {
-            var defaults = NativeDefaultsFor(scene.Key);
-            if (json.RootElement.TryGetProperty(scene.Key, out var appearance))
-            {
-                defaults = TaskbarAppearanceProfile.Import(appearance, dynamic: scene.Key != DesktopScene,
-                    allowsRules: scene.AllowsRules, defaults: defaults);
-                hasAppearance = true;
-            }
-            settings = settings.WithProfile(scene.Key, defaults);
-        }
-        if (!hasAppearance) throw new IOException("没有找到可导入的任务栏外观。");
-        if (json.RootElement.TryGetProperty("ignored_windows", out var ignored))
-            settings = settings with { IgnoredWindows = ignored.Clone() };
-        return settings.Validate();
-    }
 }
 
 public sealed class TaskbarAppearanceStore(string dataRoot)

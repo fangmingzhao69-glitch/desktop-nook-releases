@@ -12,7 +12,6 @@ internal interface ITaskbarAppearanceBackend
     bool NeedsDownload { get; }
     bool Running { get; }
     bool UsesCompatibilityPackage { get; }
-    Task ImportCompatibilityPackageAsync(string source);
     Task ApplyAsync(TaskbarAppearanceSettings settings, bool allowDownload);
     bool Stop();
 }
@@ -25,7 +24,6 @@ internal sealed class TaskbarAppearanceSession(TaskbarAppearanceStore store, ITa
     internal bool NeedsDownload => backend.NeedsDownload;
     internal bool Running => backend.Running;
     internal bool UsesCompatibilityPackage => backend.UsesCompatibilityPackage;
-    internal Task ImportCompatibilityPackageAsync(string source) => backend.ImportCompatibilityPackageAsync(source);
 
     internal Task StartSavedAsync() => backend.ApplyAsync(Saved, allowDownload: false);
 
@@ -74,9 +72,6 @@ internal sealed class TranslucentTaskbarBackend(TaskbarAppearancePackage package
     public bool NeedsDownload => !package.HasArchive;
     public bool UsesCompatibilityPackage => package.UsesCompatibilityPackage;
 
-    public Task ImportCompatibilityPackageAsync(string source) =>
-        Task.Run(() => package.ImportCompatibilityPackage(source));
-
     public string? Restriction
     {
         get
@@ -86,7 +81,7 @@ internal sealed class TranslucentTaskbarBackend(TaskbarAppearancePackage package
             if (RuntimeInformation.OSArchitecture != Architecture.X64 || version.Build is < 22621 or > 26340)
                 return $"当前 Windows 构建 {version.Build} 没有可用的已选版本组件。可继续使用 Windows 默认外观或独立版。";
             if (IndependentBackendExists())
-                return "已有 TranslucentTB 正在管理任务栏。可先导入设置，再从系统托盘退出独立版。";
+                return "已有 TranslucentTB 正在管理任务栏。请从系统托盘退出独立版，再启用轻匣的任务栏外观。";
             return TaskbarAppearanceDependencies.GetRestriction();
         }
     }

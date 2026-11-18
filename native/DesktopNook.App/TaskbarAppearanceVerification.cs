@@ -29,7 +29,6 @@ internal static class TaskbarAppearanceVerification
         public bool Running => LastAppearance?.UsesComponent == true;
         public bool UsesCompatibilityPackage => false;
         public string? RejectStyle { get; set; }
-        public Task ImportCompatibilityPackageAsync(string source) => throw new NotSupportedException();
         public Task ApplyAsync(TaskbarAppearanceSettings settings, bool allowDownload)
         {
             if (settings.Style == RejectStyle) throw new IOException("模拟组件无法重读上次的样式。");
@@ -88,59 +87,29 @@ internal static class TaskbarAppearanceVerification
                     !properties.GetProperty("copy_dlls").GetBoolean(),
                     "纯色配置保留原 RGBA，完全不透明由组件渲染时处理");
             }
-            var original = Path.Combine(root, "import.json");
-            const string import = "{ /* comment */ \"desktop_appearance\":{\"accent\":\"clear\",\"color\":\"#1234\",},}";
-            File.WriteAllText(original, import);
-            var imported = TaskbarAppearanceSettings.Import(original);
-            Check(imported.Color == "#112233" && imported.Alpha == 0x44 && File.ReadAllText(original) == import,
-                "只读导入上游简写 RGBA、注释及末尾逗号");
-            Check(imported.ProfileFor("task_view_opened_appearance") is { Enabled: true, Style: "normal", ShowLine: true } &&
-                imported.ProfileFor("maximized_window_appearance") is { Enabled: false, Style: "acrylic", ShowLine: true } &&
-                imported.ShowLine == false && imported.ShowPeek == false,
-                "导入缺少的场景时采用原组件的 Windows 11 默认值");
-
-            const string partial = """
-                {"desktop_appearance":{"color":" #abcd "},
-                 "maximized_window_appearance":{"enabled":true,"accent":"normal","show_line":false,"color":"#00000000"},
-                 "visible_window_appearance":{"blur_radius":760}}
-                """;
-            File.WriteAllText(original, partial);
-            var matched = TaskbarAppearanceSettings.Import(original);
-            TaskbarAppearanceStore.WriteComponentSettings(launchSettings, matched);
-            using (var parsed = JsonDocument.Parse(File.ReadAllText(launchSettings)))
-            {
-                var data = parsed.RootElement;
-                var desktop = data.GetProperty("desktop_appearance");
-                var maximum = data.GetProperty("maximized_window_appearance");
-                Check(desktop.GetProperty("accent").GetString() == "clear" &&
-                    desktop.GetProperty("color").GetString() == "#AABBCCDD" &&
-                    maximum.GetProperty("enabled").GetBoolean() && !maximum.GetProperty("show_line").GetBoolean() &&
-                    data.GetProperty("task_view_opened_appearance").GetProperty("enabled").GetBoolean() &&
-                    data.GetProperty("visible_window_appearance").GetProperty("blur_radius").GetDouble() == 750,
-                    "原配置含缺省字段、显式隐藏细线及超上限模糊半径时按原组件规则转换");
-            }
-
-            const string fullImport = """
+            using var rules = JsonDocument.Parse("""
+                {"process_name":{"notepad.exe":{"accent":"blur","blur_radius":18.5,"inactive":{"accent":"clear","color":"#2018"}}}}
+                """);
+            using var ignored = JsonDocument.Parse("""{"window_title":["不参与检测"],"window_class":["ExampleWindow"]}""");
+            var full = new TaskbarAppearanceSettings { Enabled = true, Style = "normal", ShowLine = true, IgnoredWindows = ignored.RootElement.Clone() }
+                .WithProfile("visible_window_appearance", new TaskbarAppearanceProfile
                 {
-                  "desktop_appearance":{"accent":"normal","show_line":true},
-                  "visible_window_appearance":{"enabled":true,"accent":"acrylic","color":"#884433AA","show_line":false,
-                    "rules":{"process_name":{"notepad.exe":{"accent":"blur","blur_radius":18.5,"inactive":{"accent":"clear","color":"#2018"}}}}},
-                  "maximized_window_appearance":{"enabled":true,"accent":"blur","blur_radius":22.5,"show_peek":false},
-                  "start_opened_appearance":{"enabled":true,"accent":"clear"},
-                  "search_opened_appearance":{"enabled":true,"accent":"opaque"},
-                  "task_view_opened_appearance":{"enabled":true,"accent":"normal"},
-                  "battery_saver_appearance":{"enabled":true,"accent":"acrylic"},
-                  "ignored_windows":{"window_title":["不参与检测"],"window_class":["ExampleWindow"]}
-                }
-                """;
-            File.WriteAllText(original, fullImport);
-            var full = TaskbarAppearanceSettings.Import(original) with { Enabled = true };
+                    Enabled = true, Style = "acrylic", Color = "#884433", Alpha = 0xAA, ShowLine = false, Rules = rules.RootElement.Clone()
+                })
+                .WithProfile("maximized_window_appearance", new TaskbarAppearanceProfile
+                {
+                    Enabled = true, Style = "blur", BlurRadius = 22.5, ShowPeek = false
+                })
+                .WithProfile("start_opened_appearance", new TaskbarAppearanceProfile { Enabled = true, Style = "clear" })
+                .WithProfile("search_opened_appearance", new TaskbarAppearanceProfile { Enabled = true, Style = "opaque" })
+                .WithProfile("task_view_opened_appearance", new TaskbarAppearanceProfile { Enabled = true, Style = "normal" })
+                .WithProfile("battery_saver_appearance", new TaskbarAppearanceProfile { Enabled = true, Style = "acrylic" });
             var visible = full.ProfileFor("visible_window_appearance");
             var maximized = full.ProfileFor("maximized_window_appearance");
             Check(full.UsesComponent && full.Profiles?.Count == 6 && full.Profiles.Values.All(profile => profile.Enabled) &&
                 full.Style == "normal" && full.ShowLine == true && visible.Style == "acrylic" && visible.Alpha == 0xAA &&
                 maximized.Style == "blur" && maximized.BlurRadius == 22.5 && maximized.ShowPeek == false,
-                "导入并保留桌面及六种动态场景、模糊与亚克力、细线和旧式开关");
+                "手动设置桌面及六种动态场景，保留模糊与亚克力、细线和旧式开关");
             store.Save(full);
             var reloaded = store.Load();
             TaskbarAppearanceStore.WriteComponentSettings(launchSettings, reloaded);
@@ -153,9 +122,8 @@ internal static class TaskbarAppearanceVerification
                     profile.GetProperty("rules").GetProperty("process_name").GetProperty("notepad.exe")
                         .GetProperty("inactive").GetProperty("accent").GetString() == "clear" &&
                     emitted.GetProperty("ignored_windows").GetProperty("window_class")[0].GetString() == "ExampleWindow" &&
-                    emitted.GetProperty("maximized_window_appearance").GetProperty("blur_radius").GetDouble() == 22.5 &&
-                    File.ReadAllText(original) == fullImport,
-                    "规则、非活动外观和忽略列表可重读并传给原渲染组件，原配置保持原样");
+                    emitted.GetProperty("maximized_window_appearance").GetProperty("blur_radius").GetDouble() == 22.5,
+                    "手动编辑的规则、非活动外观和忽略列表可重读并传给渲染组件");
             }
             Check((full with { Style = "normal", ShowLine = null }).UsesComponent &&
                 !(full with { Enabled = false }).UsesComponent, "桌面为系统默认时可仅启用动态外观，全局关闭保留设置");
@@ -179,7 +147,8 @@ internal static class TaskbarAppearanceVerification
             var maximizedUniform = reproduction.ForUniformAppearance("maximized_window_appearance");
             Check(maximizedPreview.ShowLine == true && maximizedPreview.ShowPeek == true && maximizedPreview.BlurRadius == 9 &&
                 maximizedUniform.ShowLine == true && maximizedUniform.ShowPeek == true &&
-                matched.ForPreview("maximized_window_appearance").ShowLine == false,
+                full.WithProfile("maximized_window_appearance", maximized with { ShowLine = false })
+                    .ForPreview("maximized_window_appearance").ShowLine == false,
                 "预览和设为统一外观均保留来源场景的细线、Peek 与模糊默认值，显式隐藏不被改写");
             Check(clear.ProfileFor("task_view_opened_appearance").Enabled == false,
                 "现有轻匣配置在升级后不会自动开启未设置的场景");
@@ -222,14 +191,18 @@ internal static class TaskbarAppearanceVerification
             if (compatibilityArchive is not null)
             {
                 var compatibility = new TaskbarAppearancePackage(store.DirectoryPath, useCompatibilityPackage: true);
-                compatibility.ImportCompatibilityPackage(compatibilityArchive);
+                Directory.CreateDirectory(Path.GetDirectoryName(compatibility.ArchivePath)!);
+                File.Copy(compatibilityArchive, compatibility.ArchivePath);
                 string directory = await compatibility.PrepareAsync(allowDownload: false);
-                Check(File.Exists(Path.Combine(directory, "ExplorerTAP.dll")), "导入并核验 26340 兼容组件，未启动进程");
+                Check(File.Exists(Path.Combine(directory, "ExplorerTAP.dll")), "已缓存的 26340 组件可离线校验与复用");
                 if (archivePath is not null)
                 {
-                    try { compatibility.ImportCompatibilityPackage(archivePath); throw new InvalidOperationException("误接受未修复 ZIP"); }
-                    catch (IOException) { checks.Add("兼容组件入口拒绝将原版 ZIP 误作修复版"); }
-                    await compatibility.PrepareAsync(allowDownload: false);
+                    try
+                    {
+                        TaskbarAppearancePackage.VerifyAndExtract(archivePath, Path.Combine(root, "wrong-compatibility"), compatibility: true);
+                        throw new InvalidOperationException("误接受未修复 ZIP");
+                    }
+                    catch (IOException) { checks.Add("兼容组件校验拒绝将原版 ZIP 误作修复版"); }
                 }
 
                 const string expectedPath = "/fangmingzhao69-glitch/desktop-nook-releases/releases/download/v0.17.0/TranslucentTB-2026.2-26340.zip";
@@ -264,7 +237,7 @@ internal static class TaskbarAppearanceVerification
                 !TaskbarAppearanceDependencies.MeetsMinimum("Microsoft.UI.Xaml.2.8_8.2501.31001.0_x86__8wekyb3d8bbwe", minimum) &&
                 !TaskbarAppearanceDependencies.MeetsMinimum("Microsoft.UI.Xaml.2.8_8.2401.31001.0_x64__8wekyb3d8bbwe", minimum),
                 "依赖检查接受满足版本的 x64 包，并拒绝 x86 和过旧版本");
-            Check(MainWindow.CurrentVersionLabel == "v0.17.3", "正式候选在更新菜单显示完整版本");
+            Check(MainWindow.CurrentVersionLabel == "v0.17.4", "正式候选在更新菜单显示完整版本");
 
             var originalExe = Environment.ProcessPath!;
             var target = Path.Combine(root, "update-target.exe");
@@ -289,6 +262,11 @@ internal static class TaskbarAppearanceVerification
                     dialog.UpdateLayout();
                     Check(Find<TextBlock>(dialog).Any(text => text.Text.Contains("隔离模式", StringComparison.Ordinal)),
                         "从更多菜单打开外观界面，沙箱显示运行限制");
+                    var buttons = Find<Button>(dialog).Select(button => button.Content as string).OfType<string>().ToList();
+                    Check(!buttons.Any(text => text.Contains("导入", StringComparison.Ordinal)) &&
+                        buttons.Contains("选颜色…") && buttons.Contains("恢复系统外观"),
+                        "任务栏外观没有导入入口，保留手动选色和恢复");
+
                     var scenes = Find<ComboBox>(dialog).Single(item => AutomationProperties.GetAutomationId(item) == "AppearanceScene");
                     var styles = Find<ComboBox>(dialog).Single(item => AutomationProperties.GetAutomationId(item) == "AppearanceStyle");
                     var blur = Find<Slider>(dialog).Single(item => AutomationProperties.GetAutomationId(item) == "AppearanceBlurRadius");

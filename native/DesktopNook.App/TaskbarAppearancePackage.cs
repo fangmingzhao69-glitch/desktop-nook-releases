@@ -13,9 +13,9 @@ internal sealed class TaskbarAppearancePackage(string storePath, bool useCompati
     private const int CompatibilitySize = 1799291;
     private const string CompatibilitySha256 = "1C91B81D1296842F4AF22D79A9E6EBE9FA084DCE2374C5CC1DB7C180207CC624";
     private static readonly Uri Source = new("https://github.com/TranslucentTB/TranslucentTB/releases/download/2026.2/TranslucentTB-portable-x64.zip");
-    internal const string CompatibilityFile = "TranslucentTB-2026.2-26340.zip";
+    private const string CompatibilityFile = "TranslucentTB-2026.2-26340.zip";
     private static readonly Uri CompatibilitySource = new($"https://github.com/{OnlineUpdater.Repository}/releases/download/v0.17.0/{CompatibilityFile}");
-    // Retain the on-disk name so an imported preview component also works after upgrading.
+    // Preserve the existing cache across application upgrades.
     private string PackageName => "TranslucentTB-" + Version + (useCompatibilityPackage ? "-26340-preview" : "");
     internal string ArchivePath => Path.Combine(storePath, "components", PackageName + ".zip");
     private string ComponentDirectory => Path.Combine(storePath, "components", PackageName);
@@ -33,27 +33,6 @@ internal sealed class TaskbarAppearancePackage(string storePath, bool useCompati
             await DownloadAsync(client, token).ConfigureAwait(false);
         }
         return await Task.Run(() => VerifyAndExtract(archive, ComponentDirectory, UsesCompatibilityPackage), token).ConfigureAwait(false);
-    }
-
-    internal void ImportCompatibilityPackage(string source)
-    {
-        if (!UsesCompatibilityPackage) throw new IOException("当前构建不需要 26340 兼容组件。");
-        PrepareCache();
-        using var verified = OpenVerifiedArchive(source, compatibility: true);
-        var temp = ArchivePath + "." + Guid.NewGuid().ToString("N") + ".partial";
-        try
-        {
-            using (var file = new FileStream(temp, FileMode.CreateNew, FileAccess.Write, FileShare.None))
-            {
-                verified.CopyTo(file);
-                file.Flush(flushToDisk: true);
-            }
-            File.Move(temp, ArchivePath, overwrite: true);
-        }
-        finally
-        {
-            if (File.Exists(temp)) File.Delete(temp);
-        }
     }
 
     private void PrepareCache()
