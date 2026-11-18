@@ -71,7 +71,7 @@ internal sealed class TranslucentTaskbarBackend(TaskbarAppearancePackage package
     private string? _config;
 
     public bool Running => _owned is { HasExited: false };
-    public bool NeedsDownload => !package.UsesCompatibilityPackage && !package.HasArchive;
+    public bool NeedsDownload => !package.HasArchive;
     public bool UsesCompatibilityPackage => package.UsesCompatibilityPackage;
 
     public Task ImportCompatibilityPackageAsync(string source) =>
@@ -85,11 +85,9 @@ internal sealed class TranslucentTaskbarBackend(TaskbarAppearancePackage package
             var version = Environment.OSVersion.Version;
             if (RuntimeInformation.OSArchitecture != Architecture.X64 || version.Build is < 22621 or > 26340)
                 return $"当前 Windows 构建 {version.Build} 没有可用的已选版本组件。可继续使用 Windows 默认外观或独立版。";
-            if (UsesCompatibilityPackage && !package.HasArchive)
-                return "当前 Windows 构建需先导入预览版随附的 26340 兼容组件。";
             if (IndependentBackendExists())
                 return "已有 TranslucentTB 正在管理任务栏。可先导入设置，再从系统托盘退出独立版。";
-            return null;
+            return TaskbarAppearanceDependencies.GetRestriction();
         }
     }
 

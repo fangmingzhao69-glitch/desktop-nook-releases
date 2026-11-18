@@ -13,6 +13,9 @@ internal sealed class TaskbarAppearancePackage(string storePath, bool useCompati
     private const int CompatibilitySize = 1799291;
     private const string CompatibilitySha256 = "1C91B81D1296842F4AF22D79A9E6EBE9FA084DCE2374C5CC1DB7C180207CC624";
     private static readonly Uri Source = new("https://github.com/TranslucentTB/TranslucentTB/releases/download/2026.2/TranslucentTB-portable-x64.zip");
+    internal const string CompatibilityFile = "TranslucentTB-2026.2-26340.zip";
+    private static readonly Uri CompatibilitySource = new($"https://github.com/{OnlineUpdater.Repository}/releases/download/v0.17.0/{CompatibilityFile}");
+    // Retain the on-disk name so an imported preview component also works after upgrading.
     private string PackageName => "TranslucentTB-" + Version + (useCompatibilityPackage ? "-26340-preview" : "");
     internal string ArchivePath => Path.Combine(storePath, "components", PackageName + ".zip");
     private string ComponentDirectory => Path.Combine(storePath, "components", PackageName);
@@ -25,10 +28,9 @@ internal sealed class TaskbarAppearancePackage(string storePath, bool useCompati
         PrepareCache();
         if (!File.Exists(archive))
         {
-            if (UsesCompatibilityPackage) throw new IOException("请先导入本构建的 26340 兼容组件。");
             if (!allowDownload) throw new IOException("首次启用需要下载任务栏外观组件。");
             using var client = OnlineUpdater.CreateClient();
-            await DownloadAsync(client, archive, token).ConfigureAwait(false);
+            await DownloadAsync(client, token).ConfigureAwait(false);
         }
         return await Task.Run(() => VerifyAndExtract(archive, ComponentDirectory, UsesCompatibilityPackage), token).ConfigureAwait(false);
     }
@@ -62,17 +64,21 @@ internal sealed class TaskbarAppearancePackage(string storePath, bool useCompati
         CheckRegularPath(directory);
     }
 
-    private static async Task DownloadAsync(HttpClient client, string finalPath, CancellationToken token)
+    internal async Task DownloadAsync(HttpClient client, CancellationToken token = default)
     {
+        PrepareCache();
+        string finalPath = ArchivePath;
+        int expectedSize = UsesCompatibilityPackage ? CompatibilitySize : Size;
+        var sourceUri = UsesCompatibilityPackage ? CompatibilitySource : Source;
         var temp = finalPath + "." + Guid.NewGuid().ToString("N") + ".partial";
         using var timeout = CancellationTokenSource.CreateLinkedTokenSource(token);
         timeout.CancelAfter(TimeSpan.FromSeconds(45));
         token = timeout.Token;
         try
         {
-            using var response = await client.GetAsync(Source, HttpCompletionOption.ResponseHeadersRead, token).ConfigureAwait(false);
+            using var response = await client.GetAsync(sourceUri, HttpCompletionOption.ResponseHeadersRead, token).ConfigureAwait(false);
             response.EnsureSuccessStatusCode();
-            if (response.Content.Headers.ContentLength is long length && length != Size)
+            if (response.Content.Headers.ContentLength is long length && length != expectedSize)
                 throw new IOException("组件下载的文件大小与发布记录不一致。");
             using (var destination = new FileStream(temp, FileMode.CreateNew, FileAccess.Write, FileShare.None))
             using (var source = await response.Content.ReadAsStreamAsync(token).ConfigureAwait(false))
@@ -82,12 +88,12 @@ internal sealed class TaskbarAppearancePackage(string storePath, bool useCompati
                 for (int read; (read = await source.ReadAsync(buffer, token).ConfigureAwait(false)) > 0;)
                 {
                     lengthRead += read;
-                    if (lengthRead > Size) throw new IOException("组件下载超出预期大小。");
+                    if (lengthRead > expectedSize) throw new IOException("组件下载超出预期大小。");
                     await destination.WriteAsync(buffer.AsMemory(0, read), token).ConfigureAwait(false);
                 }
                 destination.Flush(flushToDisk: true);
             }
-            using (var file = OpenVerifiedArchive(temp)) { }
+            using (var file = OpenVerifiedArchive(temp, UsesCompatibilityPackage)) { }
             File.Move(temp, finalPath, overwrite: false);
         }
         finally

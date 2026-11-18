@@ -19,7 +19,16 @@ public partial class MainWindow : Window
     private OnlineRelease? _latestRelease;
     private DateTime _lastUpdateCheck=DateTime.MinValue;
     private readonly System.Windows.Threading.DispatcherTimer _updateTimer=new(){Interval=TimeSpan.FromHours(1)};
-    internal static string CurrentVersionLabel=>"v"+System.Reflection.Assembly.GetExecutingAssembly().GetName().Version!.ToString(3);
+    internal static string CurrentVersionLabel
+    {
+        get
+        {
+            var assembly = System.Reflection.Assembly.GetExecutingAssembly();
+            var version = (System.Reflection.AssemblyInformationalVersionAttribute?)Attribute.GetCustomAttribute(
+                assembly, typeof(System.Reflection.AssemblyInformationalVersionAttribute));
+            return "v" + (version?.InformationalVersion.Split('+', 2)[0] ?? assembly.GetName().Version!.ToString(3));
+        }
+    }
     internal string UpdateMenuText=>_latestRelease is null?$"检查在线更新（当前 {CurrentVersionLabel}）…":$"更新到 v{_latestRelease.Version.ToString(3)}（当前 {CurrentVersionLabel}）…";
     private Point _mouseDown; private bool _dragging; private int _interactions; private int _menus; private bool _allowExit; private DateTime _suppressUntil;
     public bool KeepOpenForVerification { get; set; }

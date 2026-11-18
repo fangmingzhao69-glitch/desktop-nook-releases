@@ -144,7 +144,8 @@ internal sealed class TaskbarAppearanceWindow : Window
         }
         if (_session.NeedsDownload && !_downloadApproved)
         {
-            _downloadApproved = UiDialogs.Show(this, "首次启用需从 GitHub 下载并校验 TranslucentTB 2026.2 便携组件，约 1.8 MB。", Title,
+            string package = _session.UsesCompatibilityPackage ? "26340 兼容组件" : "TranslucentTB 2026.2 便携组件";
+            _downloadApproved = UiDialogs.Show(this, $"首次启用需从 GitHub 下载并校验 {package}（约 1.8 MB）。", Title,
                 MessageBoxButton.OKCancel) == MessageBoxResult.OK;
             return _downloadApproved;
         }
@@ -155,9 +156,9 @@ internal sealed class TaskbarAppearanceWindow : Window
     {
         var picker = new OpenFileDialog
         {
-            Title = "导入预览版随附的兼容组件",
+            Title = "导入发行版的 26340 兼容组件",
             Filter = "组件压缩包 (*.zip)|*.zip",
-            FileName = "TranslucentTB-2026.2-26340-preview.zip"
+            FileName = TaskbarAppearancePackage.CompatibilityFile
         };
         if (picker.ShowDialog(this) != true) return;
         _ = RunAsync(async () =>

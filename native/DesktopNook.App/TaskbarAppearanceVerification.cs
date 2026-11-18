@@ -1,4 +1,7 @@
 using System.IO;
+using System.Net;
+using System.Net.Http;
+using System.Security.Cryptography;
 using System.Text.Json;
 using System.Windows;
 using System.Windows.Automation;
@@ -12,6 +15,12 @@ namespace DesktopNook.App;
 
 internal static class TaskbarAppearanceVerification
 {
+    private sealed class ArchiveHandler(Func<HttpRequestMessage, HttpResponseMessage> response) : HttpMessageHandler
+    {
+        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken token) =>
+            Task.FromResult(response(request));
+    }
+
     private sealed class ProbeBackend : ITaskbarAppearanceBackend
     {
         public TaskbarAppearanceSettings? LastAppearance { get; private set; }
@@ -117,7 +126,40 @@ internal static class TaskbarAppearanceVerification
                     catch (IOException) { checks.Add("兼容组件入口拒绝将原版 ZIP 误作修复版"); }
                     await compatibility.PrepareAsync(allowDownload: false);
                 }
+
+                const string expectedPath = "/fangmingzhao69-glitch/desktop-nook-releases/releases/download/v0.17.0/TranslucentTB-2026.2-26340.zip";
+                var download = new TaskbarAppearancePackage(Path.Combine(root, "compatibility-download"), useCompatibilityPackage: true);
+                using var transport = new HttpClient(new ArchiveHandler(request =>
+                {
+                    Check(request.RequestUri?.Host == "github.com" && request.RequestUri.AbsolutePath == expectedPath,
+                        "兼容组件从固定的 0.17.0 发行地址请求");
+                    return new HttpResponseMessage(HttpStatusCode.OK) { Content = new StreamContent(File.OpenRead(compatibilityArchive)) };
+                }));
+                try { await download.PrepareAsync(allowDownload: false); throw new InvalidOperationException("启动阶段自动下载安装组件"); }
+                catch (IOException) { checks.Add("启动阶段保留显式下载授权"); }
+                await download.DownloadAsync(transport);
+                await download.PrepareAsync(allowDownload: false);
+                Check(SHA256.HashData(File.ReadAllBytes(download.ArchivePath)).SequenceEqual(SHA256.HashData(File.ReadAllBytes(compatibilityArchive))),
+                    "兼容组件下载按固定版本校验并可离线复用");
+                var damagedPackage = File.ReadAllBytes(compatibilityArchive);
+                damagedPackage[^1] ^= 1;
+                var damaged = new TaskbarAppearancePackage(Path.Combine(root, "compatibility-damaged"), useCompatibilityPackage: true);
+                using var wrongBytes = new HttpClient(new ArchiveHandler(_ =>
+                    new HttpResponseMessage(HttpStatusCode.OK) { Content = new ByteArrayContent(damagedPackage) }));
+                try { await damaged.DownloadAsync(wrongBytes); throw new InvalidOperationException("损坏下载未拒绝"); }
+                catch (IOException)
+                {
+                    Check(!damaged.HasArchive && !Directory.EnumerateFiles(Path.GetDirectoryName(damaged.ArchivePath)!).Any(),
+                        "下载文件长度相同但摘要错误时拒绝并移除半成品");
+                }
             }
+
+            var minimum = new Version(8, 2501, 31001, 0);
+            Check(TaskbarAppearanceDependencies.MeetsMinimum("Microsoft.UI.Xaml.2.8_8.2501.31001.0_x64__8wekyb3d8bbwe", minimum) &&
+                !TaskbarAppearanceDependencies.MeetsMinimum("Microsoft.UI.Xaml.2.8_8.2501.31001.0_x86__8wekyb3d8bbwe", minimum) &&
+                !TaskbarAppearanceDependencies.MeetsMinimum("Microsoft.UI.Xaml.2.8_8.2401.31001.0_x64__8wekyb3d8bbwe", minimum),
+                "依赖检查接受满足版本的 x64 包，并拒绝 x86 和过旧版本");
+            Check(MainWindow.CurrentVersionLabel == "v0.17.0", "正式候选在更新菜单显示完整版本");
 
             var originalExe = Environment.ProcessPath!;
             var target = Path.Combine(root, "update-target.exe");
