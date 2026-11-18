@@ -36,10 +36,13 @@ internal static class NotesSplitVerification
         try
         {
             window.Activate();
+            window.FinishPanelMotion();
             source.BringIntoView();
             await window.Dispatcher.InvokeAsync(window.UpdateLayout, DispatcherPriority.ContextIdle);
             var from = source.PointToScreen(new Point(source.ActualWidth * horizontalStart, source.ActualHeight / 2));
             SetCursorPos((int)from.X, (int)from.Y);
+            await Task.Delay(45);
+            if (!source.IsMouseOver) throw new Exception("模拟点击前，鼠标未命中沙箱中的目标控件。");
             mouse_event(2, 0, 0, 0, UIntPtr.Zero);
             pressed = true;
             await Task.Delay(80);
