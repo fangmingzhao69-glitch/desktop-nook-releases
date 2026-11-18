@@ -20,12 +20,13 @@ public sealed record TaskbarAppearanceSettings : TaskbarAppearanceProfile
     });
 
     public int Format { get; init; } = 1;
+    public bool FollowScenes { get; init; } = true;
     public IReadOnlyDictionary<string, TaskbarAppearanceProfile>? Profiles { get; init; }
     public JsonElement? IgnoredWindows { get; init; }
 
     [JsonIgnore]
     public bool UsesComponent => Enabled && (Style != "normal" || ShowLine.HasValue || ShowPeek.HasValue ||
-        Profiles?.Values.Any(profile => profile.Enabled) == true);
+        FollowScenes && Profiles?.Values.Any(profile => profile.Enabled) == true);
 
     public TaskbarAppearanceSettings Validate()
     {
@@ -61,11 +62,14 @@ public sealed record TaskbarAppearanceSettings : TaskbarAppearanceProfile
         return this with { Profiles = updated };
     }
 
-    public TaskbarAppearanceSettings ForPreview(string scene)
+    public TaskbarAppearanceSettings ForUniformAppearance(string scene)
     {
         var style = ProfileFor(scene) with { Rules = null };
-        return WithProfile(DesktopScene, style) with { Profiles = null, IgnoredWindows = null };
+        return WithProfile(DesktopScene, style) with { FollowScenes = false };
     }
+
+    public TaskbarAppearanceSettings ForPreview(string scene) =>
+        ForUniformAppearance(scene) with { Profiles = null, IgnoredWindows = null };
 
     public static TaskbarAppearanceSettings Import(string source)
     {
@@ -122,7 +126,12 @@ public sealed class TaskbarAppearanceStore(string dataRoot)
             ["verbosity"] = "off"
         };
         foreach (var scene in TaskbarAppearanceSettings.Scenes)
-            output[scene.Key] = settings.ProfileFor(scene.Key).ToEngine(scene.Key != TaskbarAppearanceSettings.DesktopScene);
+        {
+            bool dynamic = scene.Key != TaskbarAppearanceSettings.DesktopScene;
+            var appearance = settings.ProfileFor(scene.Key);
+            if (dynamic && !settings.FollowScenes) appearance = appearance with { Enabled = false };
+            output[scene.Key] = appearance.ToEngine(dynamic);
+        }
         if (settings.IgnoredWindows is { } ignored) output["ignored_windows"] = ignored;
         Write(path, output);
     }

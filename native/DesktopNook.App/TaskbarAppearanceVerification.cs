@@ -138,6 +138,25 @@ internal static class TaskbarAppearanceVerification
             Check(selectedPreview.Style == "blur" && selectedPreview.BlurRadius == 22.5 && selectedPreview.Profiles is null &&
                 full.ProfileFor("visible_window_appearance").Rules is not null,
                 "所选场景可单独预览，已配置的动态规则保持");
+            var reproduction = (clear with { Style = "blur", BlurRadius = 9 })
+                .WithProfile("maximized_window_appearance", new TaskbarAppearanceProfile { Enabled = true, Style = "clear" });
+            var uniform = reproduction.ForUniformAppearance(TaskbarAppearanceSettings.DesktopScene);
+            TaskbarAppearanceStore.WriteComponentSettings(launchSettings, uniform);
+            using (var document = JsonDocument.Parse(File.ReadAllText(launchSettings)))
+            {
+                Check(document.RootElement.GetProperty("desktop_appearance").GetProperty("accent").GetString() == "blur" &&
+                    TaskbarAppearanceSettings.Scenes.Skip(1).All(scene =>
+                        !document.RootElement.GetProperty(scene.Key).GetProperty("enabled").GetBoolean()) &&
+                    uniform.ProfileFor("maximized_window_appearance").Enabled,
+                    "统一模糊在组件侧关闭场景覆盖，最大化透明仍保存在轻匣设置");
+            }
+            TaskbarAppearanceStore.WriteComponentSettings(launchSettings, uniform with { FollowScenes = true });
+            using (var document = JsonDocument.Parse(File.ReadAllText(launchSettings)))
+            {
+                var max = document.RootElement.GetProperty("maximized_window_appearance");
+                Check(max.GetProperty("enabled").GetBoolean() && max.GetProperty("accent").GetString() == "clear",
+                    "重新启用场景切换后恢复原最大化透明规则");
+            }
             try { _ = full.WithProfile("maximized_window_appearance", maximized with { BlurRadius = 751 });
                 throw new InvalidOperationException("超限模糊数值被接受"); }
             catch (IOException) { checks.Add("超出引擎范围的模糊数值被拒绝"); }
@@ -212,7 +231,7 @@ internal static class TaskbarAppearanceVerification
                 !TaskbarAppearanceDependencies.MeetsMinimum("Microsoft.UI.Xaml.2.8_8.2501.31001.0_x86__8wekyb3d8bbwe", minimum) &&
                 !TaskbarAppearanceDependencies.MeetsMinimum("Microsoft.UI.Xaml.2.8_8.2401.31001.0_x64__8wekyb3d8bbwe", minimum),
                 "依赖检查接受满足版本的 x64 包，并拒绝 x86 和过旧版本");
-            Check(MainWindow.CurrentVersionLabel == "v0.17.1", "正式候选在更新菜单显示完整版本");
+            Check(MainWindow.CurrentVersionLabel == "v0.17.2", "正式候选在更新菜单显示完整版本");
 
             var originalExe = Environment.ProcessPath!;
             var target = Path.Combine(root, "update-target.exe");
@@ -245,7 +264,7 @@ internal static class TaskbarAppearanceVerification
                     scenes.SelectedIndex = 2;
                     styles.SelectedIndex = 3;
                     blur.Value = 34;
-                    enabled.IsChecked = true;
+                    Check(enabled.IsChecked == true, "直接选择未启用场景的外观会启用该场景");
                     scenes.SelectedIndex = 0;
                     Check(styles.SelectedIndex == 1, "修改最大化场景后，桌面样式独立保持");
                     scenes.SelectedIndex = 2;
@@ -263,6 +282,31 @@ internal static class TaskbarAppearanceVerification
                 finally { dialog?.Close(); }
             }, DispatcherPriority.ContextIdle);
             entry.RaiseEvent(new RoutedEventArgs(MenuItem.ClickEvent));
+            if (dialogFailure is not null) throw dialogFailure;
+
+            var uniformStore = new TaskbarAppearanceStore(Path.Combine(root, "uniform-ui"));
+            uniformStore.Save(reproduction);
+            var uniformProbe = new ProbeBackend();
+            var uniformSession = new TaskbarAppearanceSession(uniformStore, uniformProbe);
+            var uniformDialog = new TaskbarAppearanceWindow(window, uniformSession);
+            _ = window.Dispatcher.BeginInvoke(() =>
+            {
+                try
+                {
+                    uniformDialog.UpdateLayout();
+                    Check(Find<TextBlock>(uniformDialog).Any(text => text.Text.Contains("窗口最大化") &&
+                        text.Text.Contains("替代桌面外观")), "桌面页面明确提示可能覆盖桌面的场景");
+                    var button = Find<Button>(uniformDialog).Single(item => AutomationProperties.GetAutomationId(item) == "AppearanceUniform");
+                    button.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+                    var saved = uniformStore.Load();
+                    Check(!saved.FollowScenes && saved.Style == "blur" && saved.ProfileFor("maximized_window_appearance").Enabled &&
+                        uniformProbe.LastAppearance?.FollowScenes == false,
+                        "界面一键应用统一模糊并保存，原最大化场景保持可恢复");
+                }
+                catch (Exception ex) { dialogFailure = ex; }
+                finally { uniformDialog.Close(); }
+            }, DispatcherPriority.ContextIdle);
+            uniformDialog.ShowDialog();
             if (dialogFailure is not null) throw dialogFailure;
         }
         catch (Exception ex) { failure = ex.ToString(); }

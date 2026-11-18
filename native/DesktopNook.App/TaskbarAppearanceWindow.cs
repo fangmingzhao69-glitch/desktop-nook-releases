@@ -15,8 +15,10 @@ internal sealed class TaskbarAppearanceWindow : Window
     private readonly TaskbarAppearanceSession _session;
     private readonly DispatcherTimer _previewTimer = new() { Interval = TimeSpan.FromSeconds(12) };
     private readonly CheckBox _enabled = new() { Content = "启用任务栏外观" };
+    private readonly CheckBox _followScenes = new() { Content = "按场景自动切换外观", Margin = new Thickness(0, 7, 0, 0) };
     private readonly ComboBox _scene = new() { Margin = new Thickness(0, 4, 0, 8), DisplayMemberPath = "Name" };
     private readonly CheckBox _sceneEnabled = new() { Content = "为此场景启用单独的外观", Margin = new Thickness(0, 0, 0, 10) };
+    private readonly TextBlock _sceneHint = new() { TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 0, 0, 4) };
     private readonly ComboBox _style = new() { Margin = new Thickness(0, 4, 0, 12) };
     private readonly TextBox _color = new() { Margin = new Thickness(0, 4, 0, 12) };
     private readonly Slider _opacity = new() { Minimum = 0, Maximum = 255, TickFrequency = 1, IsSnapToTickEnabled = true };
@@ -56,10 +58,12 @@ internal sealed class TaskbarAppearanceWindow : Window
         _style.Items.Add(new ComboBoxItem { Content = "亚克力", Tag = "acrylic" });
 
         _body.Children.Add(_enabled);
+        _body.Children.Add(_followScenes);
         _body.Children.Add(new TextBlock { Text = "适用场景", Margin = new Thickness(0, 10, 0, 0) });
         _scene.ItemsSource = TaskbarAppearanceSettings.Scenes;
         _body.Children.Add(_scene);
         _body.Children.Add(_sceneEnabled);
+        _body.Children.Add(_sceneHint);
         _body.Children.Add(new TextBlock { Text = "样式", Margin = new Thickness(0, 10, 0, 0) });
         _body.Children.Add(_style);
         _body.Children.Add(new TextBlock { Text = "颜色（#RRGGBB）" });
@@ -100,6 +104,9 @@ internal sealed class TaskbarAppearanceWindow : Window
         cancel.IsCancel = true;
         actions.Children.Add(cancel);
         actions.Children.Add(MakeButton("预览", () => _ = RunAsync(PreviewAsync)));
+        var uniform = MakeButton("设为统一外观", () => _ = RunAsync(ApplyUniformAsync));
+        uniform.ToolTip = "立即对所有场景使用当前样式。保存的动态场景仍可重新启用。";
+        actions.Children.Add(uniform);
         actions.Children.Add(MakeButton("应用", () => _ = RunAsync(ApplyAsync), primary: true));
         _footer.Children.Add(actions);
         var layout = new DockPanel();
@@ -110,13 +117,26 @@ internal sealed class TaskbarAppearanceWindow : Window
         UiDialogs.Chrome(this);
         AutomationProperties.SetAutomationId(_scene, "AppearanceScene");
         AutomationProperties.SetAutomationId(_sceneEnabled, "AppearanceSceneEnabled");
+        AutomationProperties.SetAutomationId(_followScenes, "AppearanceFollowScenes");
+        AutomationProperties.SetAutomationId(uniform, "AppearanceUniform");
         AutomationProperties.SetAutomationId(_style, "AppearanceStyle");
         AutomationProperties.SetAutomationId(_radius, "AppearanceBlurRadius");
         AutomationProperties.SetAutomationId(_line, "AppearanceTopLine");
         _scene.SelectionChanged += (_, _) => SwitchScene();
         _opacity.ValueChanged += (_, _) => UpdateOpacity();
         _radius.ValueChanged += (_, _) => UpdateOpacity();
-        _style.SelectionChanged += (_, _) => UpdateOpacity();
+        _style.SelectionChanged += (_, _) =>
+        {
+            if (!_loading && _activeScene.Key != TaskbarAppearanceSettings.DesktopScene && _style.SelectedItem is ComboBoxItem)
+                _sceneEnabled.IsChecked = true;
+            UpdateOpacity();
+        };
+        _followScenes.Checked += (_, _) => UpdateSceneHint();
+        _followScenes.Unchecked += (_, _) => UpdateSceneHint();
+        _enabled.Checked += (_, _) => UpdateSceneHint();
+        _enabled.Unchecked += (_, _) => UpdateSceneHint();
+        _sceneEnabled.Checked += (_, _) => UpdateSceneHint();
+        _sceneEnabled.Unchecked += (_, _) => UpdateSceneHint();
         _previewTimer.Tick += (_, _) =>
         {
             if (_busy) return;
@@ -165,6 +185,7 @@ internal sealed class TaskbarAppearanceWindow : Window
     {
         _draft = settings;
         _enabled.IsChecked = settings.Enabled;
+        _followScenes.IsChecked = settings.FollowScenes;
         LoadScene(TaskbarAppearanceSettings.Scenes[0]);
     }
 
@@ -185,6 +206,33 @@ internal sealed class TaskbarAppearanceWindow : Window
         _rules.IsEnabled = scene.AllowsRules;
         _loading = false;
         UpdateOpacity();
+        UpdateSceneHint();
+    }
+
+    private void UpdateSceneHint()
+    {
+        if (_loading) return;
+        if (_enabled.IsChecked != true)
+        {
+            _sceneHint.Text = "任务栏外观已停用。勾选启用后可预览，或直接使用「设为统一外观」。";
+            return;
+        }
+        if (_followScenes.IsChecked != true)
+        {
+            _sceneHint.Text = "各场景统一使用桌面外观。重新开启按场景切换可恢复各场景的单独设置。";
+            return;
+        }
+        if (_activeScene.Key != TaskbarAppearanceSettings.DesktopScene)
+        {
+            _sceneHint.Text = _sceneEnabled.IsChecked == true
+                ? "此设置在该场景触发时显示。可用「预览」立即查看。"
+                : "此场景未启用，应用只保存它的设置。";
+            return;
+        }
+        var overrides = TaskbarAppearanceSettings.Scenes.Skip(1)
+            .Where(scene => _draft.ProfileFor(scene.Key).Enabled).Select(scene => scene.Name).ToArray();
+        _sceneHint.Text = overrides.Length == 0 ? ""
+            : $"已启用「{string.Join("、", overrides)}」的独立外观，触发时会替代桌面外观。";
     }
 
     private void SwitchScene()
@@ -230,7 +278,11 @@ internal sealed class TaskbarAppearanceWindow : Window
             ShowPeek = (_peek.SelectedItem as ComboBoxItem)?.Tag as bool?,
             Rules = selected.Rules
         };
-        return (_draft.WithProfile(_activeScene.Key, profile) with { Enabled = _enabled.IsChecked == true }).Validate();
+        return (_draft.WithProfile(_activeScene.Key, profile) with
+        {
+            Enabled = _enabled.IsChecked == true,
+            FollowScenes = _followScenes.IsChecked == true
+        }).Validate();
     }
 
     private void Import()
@@ -358,7 +410,22 @@ internal sealed class TaskbarAppearanceWindow : Window
         await _session.ApplyAsync(appearance, _downloadApproved);
         _draft = _session.Saved;
         _previewTimer.Stop();
-        _message.Text = appearance.UsesComponent ? "外观设置已保存。" : "已保存，轻匣的任务栏外观已关闭。";
+        _message.Text = !appearance.Enabled ? "已保存，轻匣的任务栏外观已关闭。"
+            : _activeScene.Key != TaskbarAppearanceSettings.DesktopScene &&
+                (!appearance.FollowScenes || !appearance.ProfileFor(_activeScene.Key).Enabled)
+                ? "已保存此场景的设置。启用场景切换与此场景后，触发时才会显示。"
+                : appearance.UsesComponent ? "外观设置已应用，可在「预览」查看当前所选样式。" : "已恢复系统默认外观。";
+        UpdateSceneHint();
+    }
+
+    private async Task ApplyUniformAsync()
+    {
+        var appearance = Fields().ForUniformAppearance(_activeScene.Key) with { Enabled = true };
+        if (!CanApply(appearance)) return;
+        await _session.ApplyAsync(appearance, _downloadApproved);
+        _previewTimer.Stop();
+        LoadFields(_session.Saved);
+        _message.Text = "已将所选样式用于所有场景。原来的动态场景设置已保留。";
     }
 
     private async Task RestoreSystemAsync()
