@@ -1,5 +1,4 @@
 using System.IO;
-using System.Text.Json;
 using System.Windows;
 using System.Windows.Automation;
 using System.Windows.Controls;
@@ -18,14 +17,14 @@ public partial class MainWindow
     private readonly DispatcherTimer _notesSave = new() { Interval = TimeSpan.FromMilliseconds(500) };
     private readonly DispatcherTimer _notesDeadline = new() { Interval = TimeSpan.FromSeconds(2) };
     private readonly DispatcherTimer _notesSearch = new() { Interval = TimeSpan.FromMilliseconds(350) };
-    private bool _notesDirty, _notesComposing, _renderingNotes, _notesTrash;
+    private bool _notesDirty, _notesComposing, _renderingNotes;
     private StackPanel _projectTabs = null!, _noteCards = null!;
     private TextBox _noteSearch = null!;
     private TextBlock _notesSearchHint = null!;
     private TextBlock _notesStatus = null!, _notesCounts = null!;
     private Button _addNote = null!;
     private ScrollViewer _notesScroll = null!;
-    private NoteProject? NoteProject => NotesDraft?.Projects.FirstOrDefault(p => p.Id == NotesDraft.ActiveProject && p.DeletedUtc is null);
+    private NoteProject? NoteProject => NotesDraft?.Projects.FirstOrDefault(p => p.Id == NotesDraft.ActiveProject);
     private static TextBlock NotesText(string text, double size = 12) => new() { Text = text, FontSize = size, Foreground = Brush("#35566E"), TextWrapping = TextWrapping.Wrap, VerticalAlignment = VerticalAlignment.Center };
     private Button NotesButton(string text, Action<Button> action, bool primary = false)
     {
@@ -48,9 +47,9 @@ public partial class MainWindow
         _addNote = NotesButton("＋ 记一条", _ => AddProjectNote(), true);
         AutomationProperties.SetAutomationId(_addNote,"AddProjectNote");
         DockPanel.SetDock(_addNote,Dock.Right); title.Children.Add(_addNote);
-        title.Children.Add(NotesText("标签",17)); NotesHost.Children.Add(title);
+        title.Children.Add(NotesText("便签",17)); NotesHost.Children.Add(title);
         var projects = new DockPanel { Margin = new Thickness(14,0,12,0) }; Grid.SetRow(projects,1);
-        var manage = NotesButton("⋯",b=>ProjectManagement(b));manage.ToolTip="分类管理、归档与回收站"; DockPanel.SetDock(manage,Dock.Right); projects.Children.Add(manage);
+        var manage = NotesButton("⋯",b=>ProjectManagement(b));manage.ToolTip="分类管理与归档"; DockPanel.SetDock(manage,Dock.Right); projects.Children.Add(manage);
         var add = NotesButton("＋ 新建分类",_=>NewNoteProject()); add.ToolTip="新建分类"; AutomationProperties.SetName(add,"新建分类"); DockPanel.SetDock(add,Dock.Right); projects.Children.Add(add);
         _projectTabs = new StackPanel { Orientation=Orientation.Horizontal };
         var projectScroll = new ScrollViewer { Content=_projectTabs, HorizontalScrollBarVisibility=ScrollBarVisibility.Auto,VerticalScrollBarVisibility=ScrollBarVisibility.Disabled };
@@ -90,7 +89,7 @@ public partial class MainWindow
         if(_renderingNotes)return;
         _notesDirty=true;_shutter.InvalidateSnapshot();
         if(body&&note is not null)note.ModifiedUtc=DateTime.UtcNow;
-        _notesStatus.Text=(NoteProject?.Name??"标签")+" · 保存中…";
+        _notesStatus.Text=(NoteProject?.Name??"便签")+" · 保存中…";
         _notesSave.Stop();_notesSave.Start();if(!_notesDeadline.IsEnabled)_notesDeadline.Start();
     }
     internal bool FlushNotes(bool showError=true)
@@ -99,30 +98,30 @@ public partial class MainWindow
         if(_notesComposing){_notesStatus.Text="请先确认输入法文字，再完成操作";return false;}
         if(!_notesDirty)return true;
         _notesSave.Stop();_notesDeadline.Stop();
-        try{NotesStore.Commit(NotesDraft);_notesDirty=false;_notesStatus.Text=(NoteProject?.Name??"标签")+" · 已保存";_notesStatus.ToolTip=null;return true;}
+        try{NotesStore.Commit(NotesDraft);_notesDirty=false;_notesStatus.Text=(NoteProject?.Name??"便签")+" · 已保存";_notesStatus.ToolTip=null;return true;}
         catch(Exception ex){_notesStatus.Text="保存失败 · 草稿已保留，请重试或导出";_notesStatus.ToolTip=ex.Message;
-            if(showError){_interactions++;try{UiDialogs.Show(this,"标签保存失败，草稿仍保留在当前窗口。请重试或导出后再操作。\n"+ex.Message,"标签保存失败");}finally{_interactions--;}}return false;}
+            if(showError){_interactions++;try{UiDialogs.Show(this,"便签保存失败，草稿仍保留在当前窗口。请重试或导出后再操作。\n"+ex.Message,"便签保存失败");}finally{_interactions--;}}return false;}
     }
     private void ChangeNotes(Action action)
     {
         if(!FlushNotes())return;
         var before=NotesStore.Draft();
         try{action();NotesChanged();if(!FlushNotes()){NotesDraft=before;_notesDirty=false;}RenderNotes();}
-        catch(Exception ex){NotesDraft=before;_notesDirty=false;RenderNotes();_interactions++;try{UiDialogs.Show(this,ex.Message,"标签");}finally{_interactions--;}}
+        catch(Exception ex){NotesDraft=before;_notesDirty=false;RenderNotes();_interactions++;try{UiDialogs.Show(this,ex.Message,"便签");}finally{_interactions--;}}
     }
     private void NewNoteProject()
     {
         if(!FlushNotes())return;var name=Ask("新建分类","分类名称","");if(name is null)return;
-        ChangeNotes(()=>{NotesStore.AddProject(NotesDraft,name);_notesTrash=false;});
+        ChangeNotes(()=>{NotesStore.AddProject(NotesDraft,name);});
     }
     internal void SelectNoteProject(string id)
     {
         if(!FlushNotes())return;
-        ChangeNotes(()=>{NotesDraft.ActiveProject=id;_notesTrash=false;});
+        ChangeNotes(()=>{NotesDraft.ActiveProject=id;});
     }
     internal void AddProjectNote()
     {
-        if(NoteProject is null||NoteProject.Archived||_notesTrash)return;
+        if(NoteProject is null||NoteProject.Archived)return;
         ChangeNotes(()=>{
             var note=new ProjectNote{ProjectId=NoteProject.Id,Kind="todo",Title="待办清单"};
             note.Tasks.Add(new());NotesDraft.Notes.Add(note);NoteProject.Search="";NoteProject.SelectedNote=note.Id;
@@ -135,21 +134,21 @@ public partial class MainWindow
         _renderingNotes=true;
         try
         {
-            if(NoteProject is null)NotesDraft.ActiveProject=NotesDraft.Projects.FirstOrDefault(p=>p.DeletedUtc is null&&!p.Archived)?.Id;
+            if(NoteProject is null)NotesDraft.ActiveProject=NotesDraft.Projects.FirstOrDefault(p=>!p.Archived)?.Id;
             _projectTabs.Children.Clear();
-            foreach(var project in NotesDraft.Projects.Where(p=>p.DeletedUtc is null&&!p.Archived || p.Id==NotesDraft.ActiveProject&&p.DeletedUtc is null))
+            foreach(var project in NotesDraft.Projects.Where(p=>!p.Archived || p.Id==NotesDraft.ActiveProject))
             {
                 var b=NotesButton(project.Name+(project.Archived?"（归档）":""),_=>SelectNoteProject(project.Id));b.Content=new TextBlock{Text=project.Name+(project.Archived?"（归档）":""),TextTrimming=TextTrimming.CharacterEllipsis};b.MaxWidth=140;b.ToolTip=project.Name+" · 右键管理分类";
-                b.Background=project.Id==NotesDraft.ActiveProject&&!_notesTrash?Brush("#DDF2FF"):Brushes.Transparent;
+                b.Background=project.Id==NotesDraft.ActiveProject?Brush("#DDF2FF"):Brushes.Transparent;
                 b.Foreground=Brush("#0877BE");b.Margin=new Thickness(0,0,4,0);
                 AutomationProperties.SetAutomationId(b,"Project-"+project.Id);
                 b.MouseRightButtonUp+=(_,e)=>{e.Handled=true;NoteProjectMenu(b,project);};_projectTabs.Children.Add(b);
             }
-            _addNote.IsEnabled=NoteProject is {Archived:false}&&!_notesTrash;
-            _noteSearch.IsEnabled=NoteProject is not null&&!_notesTrash;
+            _addNote.IsEnabled=NoteProject is {Archived:false};
+            _noteSearch.IsEnabled=NoteProject is not null;
             _noteSearch.Text=NoteProject?.Search??"";_notesSearchHint.Text="搜索"+(NoteProject?.Name??"当前分类")+"的记录…";_notesSearchHint.Visibility=_noteSearch.Text.Length==0?Visibility.Visible:Visibility.Collapsed;_noteSearch.ToolTip="搜索"+(NoteProject?.Name??"当前分类")+"的记录";
             RenderNoteCards();UpdateNotesColumns();
-            _notesStatus.Text=(NoteProject?.Name??"标签")+(_notesDirty?" · 保存中…":" · 已保存");
+            _notesStatus.Text=(NoteProject?.Name??"便签")+(_notesDirty?" · 保存中…":" · 已保存");
         }
         finally{_renderingNotes=false;}
         var offset=NoteProject?.Scroll??0;
@@ -157,8 +156,7 @@ public partial class MainWindow
     }
     private void UpdateNoteCounts()
     {
-        if(_notesTrash){_notesCounts.Text="回收站 · 通过分类管理恢复分类或记录";return;}
-        var notes=NotesDraft.Notes.Where(n=>n.ProjectId==NoteProject?.Id&&n.DeletedUtc is null).ToList();
+        var notes=NotesDraft.Notes.Where(n=>n.ProjectId==NoteProject?.Id&&!n.Archived).ToList();
         var tasks=notes.SelectMany(n=>n.Tasks).Where(t=>!string.IsNullOrWhiteSpace(t.Text)).ToList();
         var search=NoteProject?.Search??"";
         _notesCounts.Text=$"{notes.Count} 条记录 · 待完成 {tasks.Count(t=>!t.Done)} · 已完成 {tasks.Count(t=>t.Done)}"+(search.Length>0?$" · 匹配 {notes.Count(MatchesNote)} 条":"");
@@ -172,20 +170,28 @@ public partial class MainWindow
     {
         if(_notesComposing)return;
         _shutter.InvalidateSnapshot();_noteCards.Children.Clear();UpdateNoteCounts();
-        var notes=NotesDraft.Notes.Where(n=>_notesTrash?n.DeletedUtc is not null:n.ProjectId==NoteProject?.Id&&n.DeletedUtc is null&&MatchesNote(n)).OrderByDescending(n=>n.Favorite).ThenBy(n=>n.CreatedUtc).ToList();
+        var notes=NotesDraft.Notes.Where(n=>n.ProjectId==NoteProject?.Id&&!n.Archived&&MatchesNote(n)).OrderByDescending(n=>n.Favorite).ThenBy(n=>n.CreatedUtc).ToList();
         foreach(var note in notes)AddNoteCard(note);
         if(notes.Count==0)
         {
-            var empty=NotesText(_notesTrash?"回收站为空":NoteProject is null?"先新建一个分类，再开始记录":!string.IsNullOrEmpty(NoteProject.Search)?"未找到匹配记录":NoteProject.Archived?"这个分类已归档":"这个分类还没有记录\n点击『记一条』开始",12);
+            var empty=NotesText(NoteProject is null?"先新建一个分类，再开始记录":!string.IsNullOrEmpty(NoteProject.Search)?"未找到匹配记录":NoteProject.Archived?"这个分类已归档":"这个分类还没有记录\n点击『记一条』开始",12);
             empty.Margin=new Thickness(8,36,8,20);_noteCards.Children.Add(empty);
-            if(NoteProject is null&&!_notesTrash)_noteCards.Children.Add(NotesButton("＋ 新建分类",_=>NewNoteProject(),true));
+            if(NoteProject is null)_noteCards.Children.Add(NotesButton("＋ 新建分类",_=>NewNoteProject(),true));
         }
     }
-    private TextBox NoteEditor(string text,ProjectNote note,Action<string> changed,bool multiline=false,string key="title")
+    private TextBox NoteEditor(string text,ProjectNote note,Action<string> changed,bool multiline=false,string key="title",Action? delete=null)
     {
         var editor=new TextBox{Text=text,FontSize=12,Padding=new Thickness(4),BorderThickness=new Thickness(0),Background=Brushes.Transparent,
-            AcceptsReturn=multiline,TextWrapping=TextWrapping.Wrap,IsReadOnly=_notesTrash||NoteProject?.Archived==true,MinHeight=26};
+            AcceptsReturn=multiline,TextWrapping=TextWrapping.Wrap,IsReadOnly=NoteProject?.Archived==true,MinHeight=26};
         editor.Tag=note.Id+":"+key;
+        editor.ContextMenu=new ContextMenu();
+        editor.ContextMenuOpening+=(_,e)=>{
+            e.Handled=true;
+            Popup(editor,[Menu("剪切",()=>editor.Cut(),!editor.IsReadOnly&&editor.SelectionLength>0),
+                Menu("复制",()=>editor.Copy(),editor.SelectionLength>0),
+                Menu("粘贴",()=>editor.Paste(),!editor.IsReadOnly&&Clipboard.ContainsText()),new Separator(),
+                Menu(delete is null?"删除清单…":"删除此项",delete??(()=>DeleteNote(note)),!editor.IsReadOnly)]);
+        };
         TrackComposition(editor);
         editor.SelectionChanged+=(_,_)=>{if(_renderingNotes||!editor.IsKeyboardFocused||NoteProject is null)return;NoteProject.EditorKey=key;NoteProject.Caret=editor.SelectionStart;NoteProject.SelectionLength=editor.SelectionLength;NotesChanged();};
         editor.TextChanged+=(_,_)=>{changed(editor.Text);NotesChanged(true,note);UpdateNoteCounts();};
@@ -197,8 +203,8 @@ public partial class MainWindow
         var content=new StackPanel();
         var border=new Border { CornerRadius=new CornerRadius(10),BorderBrush=Brush("#CDE5F6"),BorderThickness=new Thickness(1),Padding=new Thickness(10),Margin=new Thickness(0,0,0,10),Background=Brush("#F5FAFE"),Child=content };
         var header=new DockPanel();var menu=NotesButton("···",b=>NoteCardMenu(b,note));DockPanel.SetDock(menu,Dock.Right);header.Children.Add(menu);
-        var title=NoteEditor(note.Title,note,t=>note.Title=t);title.FontWeight=FontWeights.SemiBold;title.FontSize=14;AutomationProperties.SetName(title,"记录标题");header.Children.Add(title);content.Children.Add(header);
-        content.Children.Add(NotesText((_notesTrash?NotesDraft.Projects.Single(p=>p.Id==note.ProjectId).Name+" · ":"")+note.ModifiedUtc.ToLocalTime().ToString("MM月dd日 HH:mm")+(note.Favorite?" · 常用":""),10));
+        var title=NoteEditor(note.Title,note,t=>note.Title=t);title.FontWeight=FontWeights.SemiBold;title.FontSize=14;AutomationProperties.SetName(title,"记录标题");title.ToolTip="点击编辑清单名称";header.Children.Add(title);content.Children.Add(header);
+        content.Children.Add(NotesText(note.ModifiedUtc.ToLocalTime().ToString("MM月dd日 HH:mm")+(note.Favorite?" · 常用":""),10));
         if(note.Kind=="text")
         {
             var body=NoteEditor(note.Text,note,t=>note.Text=t,true,"body");body.MinHeight=65;AutomationProperties.SetName(body,"文字记录正文");content.Children.Add(body);
@@ -212,9 +218,9 @@ public partial class MainWindow
                 foreach(var task in note.Tasks)
                 {
                     var row=new DockPanel{Margin=new Thickness(0,3,0,0)};
-                    var check=new CheckBox{IsChecked=task.Done,VerticalAlignment=VerticalAlignment.Top,Margin=new Thickness(2,7,6,0),IsEnabled=!_notesTrash&&NoteProject?.Archived!=true};
+                    var check=new CheckBox{IsChecked=task.Done,VerticalAlignment=VerticalAlignment.Top,Margin=new Thickness(2,7,6,0),IsEnabled=NoteProject?.Archived!=true};
                     AutomationProperties.SetName(check,"完成待办");DockPanel.SetDock(check,Dock.Left);row.Children.Add(check);
-                    var input=NoteEditor(task.Text,note,t=>task.Text=t,key:"task-"+note.Tasks.IndexOf(task));input.TextDecorations=task.Done?TextDecorations.Strikethrough:null;input.Foreground=Brush(task.Done?"#8998A6":"#35566E");
+                    var input=NoteEditor(task.Text,note,t=>task.Text=t,key:"task-"+note.Tasks.IndexOf(task),delete:()=>ChangeNotes(()=>{note.Tasks.Remove(task);note.ModifiedUtc=DateTime.UtcNow;}));input.TextDecorations=task.Done?TextDecorations.Strikethrough:null;input.Foreground=Brush(task.Done?"#8998A6":"#35566E");
                     check.Click+=(_,_)=>{task.Done=check.IsChecked==true;input.TextDecorations=task.Done?TextDecorations.Strikethrough:null;input.Foreground=Brush(task.Done?"#8998A6":"#35566E");NotesChanged(true,note);UpdateNoteCounts();};
                     input.PreviewKeyDown+=(_,e)=>{
                         if(_notesComposing||input.IsReadOnly||e.Key==Key.ImeProcessed)return;
@@ -227,26 +233,27 @@ public partial class MainWindow
                 if(focus>=0)Dispatcher.BeginInvoke(()=>{var box=FindVisualChildren<TextBox>(rows).ElementAtOrDefault(focus);box?.Focus();box?.BringIntoView();});
             }
             BuildRows();
-            if(!_notesTrash&&NoteProject?.Archived!=true)content.Children.Add(NotesButton("＋ 添加待办",_=>{if(_notesComposing)return;note.Tasks.Add(new());NotesChanged(true,note);BuildRows(note.Tasks.Count-1);}));
+            if(NoteProject?.Archived!=true)content.Children.Add(NotesButton("＋ 添加待办",_=>{if(_notesComposing)return;note.Tasks.Add(new());NotesChanged(true,note);BuildRows(note.Tasks.Count-1);}));
         }
+        border.ContextMenu=new ContextMenu();
+        border.ContextMenuOpening+=(_,e)=>{e.Handled=true;NoteCardMenu(border,note);};
         _noteCards.Children.Add(border);
     }
     private bool ConfirmNotes(string message)
-    {_interactions++;try{return UiDialogs.Show(this,message,"标签",MessageBoxButton.OKCancel)==MessageBoxResult.OK;}finally{_interactions--;}}
-    private void NoteCardMenu(Button owner,ProjectNote note)
+    {_interactions++;try{return UiDialogs.Show(this,message,"便签",MessageBoxButton.OKCancel)==MessageBoxResult.OK;}finally{_interactions--;}}
+    private void DeleteNote(ProjectNote note)
     {
-        if(_notesTrash)
-        {
-            var items=new List<object>();var project=NotesDraft.Projects.Single(p=>p.Id==note.ProjectId);
-            if(project.DeletedUtc is null&&!project.Archived)items.Add(Menu("恢复到原分类",()=>ChangeNotes(()=>{note.DeletedUtc=null;note.DeleteBatch=null;})));
-            var restore=new MenuItem{Header="恢复到其他分类"};foreach(var p in NotesDraft.Projects.Where(p=>p.DeletedUtc is null&&!p.Archived))restore.Items.Add(Menu(p.Name,()=>ChangeNotes(()=>{note.ProjectId=p.Id;note.DeletedUtc=null;note.DeleteBatch=null;})));items.Add(restore);
-            items.Add(Menu("导出记录…",()=>ExportNotes(note)));
-            items.Add(Menu("永久删除…",()=>{if(ConfirmNotes("永久删除这条记录？此操作无法撤销。"))ChangeNotes(()=>NotesDraft.Notes.Remove(note));}));Popup(owner,items);return;
-        }
+        if(ConfirmNotes($"删除清单“{note.Title}”及全部明细？此操作无法撤销。"))
+            ChangeNotes(()=>NotesDraft.Notes.Remove(note));
+    }
+    private void NoteCardMenu(FrameworkElement owner,ProjectNote note)
+    {
         var move=new MenuItem{Header="移动到其他分类",IsEnabled=NoteProject?.Archived!=true};
-        foreach(var p in NotesDraft.Projects.Where(p=>p.Id!=note.ProjectId&&p.DeletedUtc is null&&!p.Archived))move.Items.Add(Menu(p.Name,()=>ChangeNotes(()=>{note.ProjectId=p.Id;note.ModifiedUtc=DateTime.UtcNow;})));
-        Popup(owner,[Menu(note.Favorite?"取消常用":"设为常用",()=>ChangeNotes(()=>note.Favorite=!note.Favorite),NoteProject?.Archived!=true),move,
-            Menu("导出记录…",()=>ExportNotes(note)),Menu("移到回收站",()=>ChangeNotes(()=>{note.DeletedUtc=DateTime.UtcNow;note.DeleteBatch=null;}),NoteProject?.Archived!=true)]);
+        foreach(var p in NotesDraft.Projects.Where(p=>p.Id!=note.ProjectId&&!p.Archived))move.Items.Add(Menu(p.Name,()=>ChangeNotes(()=>{note.ProjectId=p.Id;note.ModifiedUtc=DateTime.UtcNow;})));
+        Popup(owner,[Menu("重命名清单…",()=>{var name=Ask("重命名清单","清单名称",note.Title);if(!string.IsNullOrWhiteSpace(name))ChangeNotes(()=>{note.Title=name.Trim();note.ModifiedUtc=DateTime.UtcNow;});},NoteProject?.Archived!=true),
+            Menu(note.Favorite?"取消常用":"设为常用",()=>ChangeNotes(()=>note.Favorite=!note.Favorite),NoteProject?.Archived!=true),move,
+            Menu(note.Archived?"取消归档":"归档清单",()=>ChangeNotes(()=>note.Archived=!note.Archived),NoteProject?.Archived!=true),
+            Menu("导出记录…",()=>ExportNotes(note)),new Separator(),Menu("删除清单…",()=>DeleteNote(note))]);
     }
     private void NoteProjectMenu(Button owner,NoteProject project)
     {
@@ -259,36 +266,46 @@ public partial class MainWindow
     }
     private void DeleteNoteProject(Button owner,NoteProject project)
     {
-        var count=NotesDraft.Notes.Count(n=>n.ProjectId==project.Id&&n.DeletedUtc is null);
+        var count=NotesDraft.Notes.Count(n=>n.ProjectId==project.Id);
         var move=new MenuItem{Header=$"将 {count} 条记录移到其他分类后删除"};
-        foreach(var p in NotesDraft.Projects.Where(p=>p.Id!=project.Id&&p.DeletedUtc is null&&!p.Archived))move.Items.Add(Menu(p.Name,()=>{if(ConfirmNotes($"删除分类“{project.Name}”，并将 {count} 条记录移至“{p.Name}”？"))ChangeNotes(()=>NotesStore.DeleteProject(NotesDraft,project,p.Id));}));
-        Popup(owner,[move,Menu($"分类及 {count} 条记录移入回收站…",()=>{if(ConfirmNotes($"将分类“{project.Name}”及其 {count} 条记录移入回收站？可恢复。"))ChangeNotes(()=>NotesStore.DeleteProject(NotesDraft,project));})]);
+        foreach(var p in NotesDraft.Projects.Where(p=>p.Id!=project.Id&&!p.Archived))move.Items.Add(Menu(p.Name,()=>{if(ConfirmNotes($"删除分类“{project.Name}”，并将 {count} 条记录移至“{p.Name}”？"))ChangeNotes(()=>NotesStore.DeleteProject(NotesDraft,project,p.Id));}));
+        Popup(owner,[move,Menu($"删除分类及 {count} 条记录…",()=>{if(ConfirmNotes($"删除分类“{project.Name}”及其 {count} 条记录？此操作无法撤销。"))ChangeNotes(()=>NotesStore.DeleteProject(NotesDraft,project));})]);
     }
     private void ProjectManagement(Button owner)
     {
         var archived=new MenuItem{Header="已归档分类"};
-        foreach(var p in NotesDraft.Projects.Where(p=>p.DeletedUtc is null&&p.Archived))archived.Items.Add(Menu(p.Name,()=>SelectNoteProject(p.Id)));
-        var deleted=new MenuItem{Header="恢复已删除分类"};
-        foreach(var p in NotesDraft.Projects.Where(p=>p.DeletedUtc is not null))deleted.Items.Add(Menu(p.Name,()=>{var name=Ask("恢复分类","分类名称（重名时请改名）",p.Name);if(name is not null)ChangeNotes(()=>{NotesStore.RestoreProject(NotesDraft,p,name);NotesDraft.ActiveProject=p.Id;_notesTrash=false;});}));
-        Popup(owner,[Menu("新建分类…",NewNoteProject),archived,deleted,Menu("标签回收站",()=>{if(FlushNotes()){_notesTrash=true;RenderNotes();}}),Menu("返回活动分类",()=>{if(FlushNotes()){_notesTrash=false;NotesDraft.ActiveProject=null;RenderNotes();}}),Menu("导出全部草稿…",()=>ExportNotes())]);
+        foreach(var p in NotesDraft.Projects.Where(p=>p.Archived))archived.Items.Add(Menu(p.Name,()=>SelectNoteProject(p.Id)));
+        var records=new MenuItem{Header="已归档清单"};
+        foreach(var p in NotesDraft.Projects)
+        {
+            var group=new MenuItem{Header=p.Name};
+            foreach(var n in NotesDraft.Notes.Where(n=>n.ProjectId==p.Id&&n.Archived))
+            {
+                var item=new MenuItem{Header=n.Title};
+                item.Items.Add(Menu("取消归档",()=>ChangeNotes(()=>{n.Archived=false;p.Archived=false;NotesDraft.ActiveProject=p.Id;})));
+                item.Items.Add(Menu("导出记录…",()=>ExportNotes(n)));
+                item.Items.Add(Menu("删除清单…",()=>DeleteNote(n)));group.Items.Add(item);
+            }
+            if(group.Items.Count>0)records.Items.Add(group);
+        }
+        Popup(owner,[Menu("新建分类…",NewNoteProject),archived,records,Menu("返回活动分类",()=>{if(FlushNotes()){NotesDraft.ActiveProject=null;RenderNotes();}}),Menu("导出全部便签…",()=>ExportNotes())]);
     }
     private void ExportNotes(ProjectNote? note=null,NoteProject? project=null)
     {
         _interactions++;
         try
         {
-            var picker=new Microsoft.Win32.SaveFileDialog{Title="导出标签",Filter=note is null?"JSON 文件 (*.json)|*.json":"文字文件 (*.txt)|*.txt",FileName=note is null?"标签导出.json":"标签记录.txt"};
+            var picker=new Microsoft.Win32.SaveFileDialog{Title="导出便签",Filter="Markdown 文件 (*.md)|*.md",DefaultExt=".md",AddExtension=true,FileName="便签导出.md"};
             if(picker.ShowDialog(this)!=true)return;
-            var text=note is null?JsonSerializer.Serialize(new{format=1,projects=NotesDraft.Projects.Where(p=>project is null||p.Id==project.Id),notes=NotesDraft.Notes.Where(n=>project is null||n.ProjectId==project.Id)},new JsonSerializerOptions{WriteIndented=true}):
-                note.Title+"\n\n"+(note.Kind=="text"?note.Text:string.Join("\n",note.Tasks.Select(t=>(t.Done?"[x] ":"[ ] ")+t.Text)));
+            var text=NotesMarkdown.Export(NotesDraft,note,project);
             File.WriteAllText(picker.FileName,text);_notesStatus.Text="已导出当前内容";
         }
-        catch(Exception ex){UiDialogs.Show(this,"导出失败："+ex.Message,"标签");}
+        catch(Exception ex){UiDialogs.Show(this,"导出失败："+ex.Message,"便签");}
         finally{_interactions--;}
     }
     private async Task<(string Helper,string Plan,string Version)> StageUpdateWithNotesAsync(string source,string target)
     {
-        if(!FlushNotes())throw new IOException("标签尚未保存，更新已停止。");
+        if(!FlushNotes())throw new IOException("便签尚未保存，更新已停止。");
         IsEnabled=false;
         try{return await Task.Run(()=>LocalUpdater.Stage(source,target,Store.DataDirectory,App.IsSandbox?App.SandboxRoot:null,options:App.Options,state:Store.State));}
         finally{IsEnabled=true;}

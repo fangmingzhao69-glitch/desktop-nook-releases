@@ -246,16 +246,41 @@ Test("Installation data cannot collect itself or copy recursively into itself",r
     Assert(VerifiedContent.Equal(before,VerifiedContent.Snapshot(data))&&!Directory.Exists(Path.Combine(data,"nested")),"self operations rejected before mutation");
 });
 
-Test("Notes projects are isolated and atomic moves/deletes restore original membership", root=>{
+Test("Notes category moves and permanent deletes persist without archive", root=>{
     var store=new NotesStore(root);var draft=store.Draft();var a=NotesStore.AddProject(draft,"项目A");var b=NotesStore.AddProject(draft,"项目B");
-    var first=new ProjectNote{ProjectId=a.Id,Text="中文正文",Tasks=[new(){Text="待办",Done=true}]};var earlierDeleted=new ProjectNote{ProjectId=a.Id,Text="早已删除",DeletedUtc=DateTime.UtcNow};
-    draft.Notes.AddRange([first,earlierDeleted]);store.Commit(draft);
+    var first=new ProjectNote{ProjectId=a.Id,Kind="todo",Title="自定义清单",Tasks=[new(){Text="待办",Done=true},new(){Text="待删细项"}]};
+    draft.Notes.Add(first);store.Commit(draft);
+    first.Tasks.RemoveAt(1);store.Commit(draft);
+    Assert(new NotesStore(root).State.Notes.Single().Tasks.Count==1,"task permanently removed");
     NotesStore.RenameProject(draft,a,"改名项目");Assert(first.ProjectId==a.Id,"rename uses stable IDs");
-    NotesStore.DeleteProject(draft,a);store.Commit(draft);Assert(draft.Notes.All(n=>n.DeletedUtc is not null),"batch deleted");
-    NotesStore.RestoreProject(draft,a,"已恢复");store.Commit(draft);
-    Assert(first.DeletedUtc is null&&earlierDeleted.DeletedUtc is not null,"restore batch never resurrects older deleted notes");
     NotesStore.DeleteProject(draft,a,b.Id);store.Commit(draft);var loaded=new NotesStore(root).State;
-    Assert(loaded.Notes.Single(n=>n.Id==first.Id).ProjectId==b.Id&&loaded.Notes.Single(n=>n.Id==first.Id).Tasks[0].Done,"atomic move persists text and checklist");
+    Assert(!loaded.Projects.Any(p=>p.Id==a.Id)&&loaded.Notes.Single().ProjectId==b.Id&&loaded.Notes.Single().Tasks[0].Done,"move keeps content and deletes category");
+    NotesStore.DeleteProject(draft,b);store.Commit(draft);loaded=new NotesStore(root).State;
+    Assert(loaded.Projects.Count==0&&loaded.Notes.Count==0,"category and records removed instead of archived");
+    var disk=File.ReadAllText(store.FilePath);Assert(!disk.Contains(first.Id)&&!disk.Contains(a.Id),"deleted content absent in current snapshot");
+});
+Test("Notes format one migrates into grouped categories and preserves legacy archive",root=>{
+    var old=new NotesState{Format=1};var p=NotesStore.AddProject(old,"旧分类");
+    old.Notes.Add(new(){ProjectId=p.Id,Kind="todo",Title="原清单",Tasks=[new(){Text="旧任务",Done=true}]});
+    var trash=NotesStore.AddProject(old,"原回收分类");trash.DeletedUtc=DateTime.UtcNow;
+    old.Notes.Add(new(){ProjectId=trash.Id,Title="旧删除内容",DeletedUtc=DateTime.UtcNow});
+    var dir=Path.Combine(root,"Notes");Directory.CreateDirectory(dir);File.WriteAllText(Path.Combine(dir,"notes.json"),JsonSerializer.Serialize(old));
+    var store=new NotesStore(root);var draft=store.Draft();
+    Assert(draft.Format==2&&draft.Projects.Last().Archived&&draft.Notes.Last().Archived,"legacy trash preserved as archive");
+    Assert(draft.Projects.All(p=>p.DeletedUtc is null)&&draft.Notes.All(n=>n.DeletedUtc is null),"no live trash markers remain");
+    store.Commit(draft);using var disk=JsonDocument.Parse(File.ReadAllText(store.FilePath));
+    Assert(disk.RootElement.GetProperty("Categories").GetArrayLength()==2&&!disk.RootElement.TryGetProperty("Notes",out _),"disk groups records by category");
+    var loaded=new NotesStore(root).State;Assert(loaded.Notes.First().Tasks.Single().Done&&loaded.Notes.First().Id==old.Notes.First().Id,"migration preserves IDs and completion");
+    var moved=NotesStore.AddProject(draft,"迁移目标");draft.Notes.First().ProjectId=moved.Id;store.Commit(draft);
+    loaded=new NotesStore(root).State;Assert(loaded.Notes.First(n=>n.Id==old.Notes.First().Id).ProjectId==moved.Id,"category grouping follows moves");
+});
+Test("Markdown exports names, categories, text and standard task checkboxes",root=>{
+    var state=new NotesState();var p=NotesStore.AddProject(state,"工作分类");var other=NotesStore.AddProject(state,"其他分类");
+    var n=new ProjectNote{ProjectId=p.Id,Kind="todo",Title="自定义清单",Tasks=[new(){Text="完成任务",Done=true},new(){Text="后续任务"}]};state.Notes.Add(n);
+    state.Notes.Add(new(){ProjectId=other.Id,Title="正文",Text="多行文字\n继续记录"});
+    var all=NotesMarkdown.Export(state);Assert(all.Contains("## 工作分类")&&all.Contains("## 其他分类")&&all.Contains("- [x] 完成任务")&&all.Contains("- [ ] 后续任务")&&all.Contains("多行文字"),"all data exported as markdown");
+    var category=NotesMarkdown.Export(state,project:p);Assert(!category.Contains("其他分类"),"category export is scoped");
+    var single=NotesMarkdown.Export(state,n);Assert(single.StartsWith("# 自定义清单")&&!single.Contains("工作分类"),"single record uses custom title");
 });
 Test("Notes duplicate names, dangling references and stale revisions are rejected",root=>{
     var store=new NotesStore(root);var draft=store.Draft();var a=NotesStore.AddProject(draft," 项目A ");store.Commit(draft);var stale=store.Draft();
@@ -272,7 +297,7 @@ Test("Notes recover valid backup and preserve damaged bytes without rotating cor
     Assert(Directory.GetFiles(store.DirectoryPath,"*.damaged-*").Any(),"broken original preserved");
     draft=store.Draft();draft.Notes[0].Text="恢复后继续";store.Commit(draft);
     Assert(new NotesStore(root).State.Notes.Single().Text=="恢复后继续","recovery can safely commit");
-    Assert(JsonSerializer.Deserialize<NotesState>(File.ReadAllText(store.FilePath+".bak"))!.Notes.Count==1,"backup stays valid");
+    using(var backup=JsonDocument.Parse(File.ReadAllText(store.FilePath+".bak"))) Assert(backup.RootElement.GetProperty("Categories")[0].GetProperty("Records").GetArrayLength()==1,"backup stays valid");
     File.WriteAllText(store.FilePath,"bad");File.WriteAllText(store.FilePath+".bak","bad backup");store=new(root);
     draft=store.Draft();NotesStore.AddProject(draft,"不可覆盖");try{store.Commit(draft);throw new Exception("overwritten");}catch(IOException){}
     Assert(File.ReadAllText(store.FilePath)=="bad"&&File.ReadAllText(store.FilePath+".bak")=="bad backup","double corruption blocks all writes");

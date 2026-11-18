@@ -31,6 +31,7 @@ public sealed class ProjectNote
     public string Kind { get; set; } = "text";
     public string Text { get; set; } = "";
     public List<NoteTask> Tasks { get; set; } = [];
+    public bool Archived { get; set; }
     public bool Favorite { get; set; }
     public DateTime CreatedUtc { get; set; } = DateTime.UtcNow;
     public DateTime ModifiedUtc { get; set; } = DateTime.UtcNow;
@@ -39,7 +40,7 @@ public sealed class ProjectNote
 }
 public sealed class NotesState
 {
-    public int Format { get; set; } = 1;
+    public int Format { get; set; } = 2;
     public long Revision { get; set; }
     public List<NoteProject> Projects { get; set; } = [];
     public List<ProjectNote> Notes { get; set; } = [];
@@ -51,7 +52,7 @@ public sealed class NotesState
 // This store never touches launcher metadata. UI drafts live separately until Commit succeeds.
 public sealed class NotesStore
 {
-    private static readonly JsonSerializerOptions Json = new() { WriteIndented = true };
+    private static readonly JsonSerializerOptions Json = new() { WriteIndented = true, DefaultIgnoreCondition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull };
     public string DirectoryPath { get; }
     public string FilePath => Path.Combine(DirectoryPath, "notes.json");
     public NotesState State { get; private set; } = new();
@@ -75,9 +76,52 @@ public sealed class NotesStore
             { _blocked = true; RecoveryMessage = "便签文件及备份无法读取，已停止写入。请从数据目录保留原文件后恢复备份。"; }
         }
     }
+    // One atomic document groups each category with its records, preserving stable IDs.
+    private sealed class CategoryData
+    {
+        public NoteProject Project { get; set; } = new();
+        public List<ProjectNote> Records { get; set; } = [];
+    }
+    private sealed class Document
+    {
+        public int Format { get; set; } = 2;
+        public long Revision { get; set; }
+        public string? ActiveProject { get; set; }
+        public double LeftFraction { get; set; }
+        public List<CategoryData> Categories { get; set; } = [];
+    }
+    private static Document Snapshot(NotesState state) => new()
+    {
+        Revision = state.Revision, ActiveProject = state.ActiveProject, LeftFraction = state.LeftFraction,
+        Categories = state.Projects.Select(p => new CategoryData { Project = p, Records = state.Notes.Where(n => n.ProjectId == p.Id).ToList() }).ToList()
+    };
     private static NotesState Read(string path)
     {
-        var state = JsonSerializer.Deserialize<NotesState>(File.ReadAllText(path), Json) ?? throw new IOException("便签为空。");
+        var text = File.ReadAllText(path);
+        using var json = JsonDocument.Parse(text);
+        if (json.RootElement.ValueKind != JsonValueKind.Object || !json.RootElement.TryGetProperty("Format", out var version) || version.ValueKind != JsonValueKind.Number || !version.TryGetInt32(out var format)) throw new IOException("便签格式无效。");
+        NotesState state;
+        if (format == 1)
+        {
+            state = JsonSerializer.Deserialize<NotesState>(text, Json) ?? throw new IOException("便签为空。");
+            Validate(state);
+            // Preserve legacy trash in archive; all new deletes remove records outright.
+            foreach (var p in state.Projects)
+            { if (p.DeletedUtc is not null) p.Archived = true; p.DeletedUtc = null; p.DeleteBatch = null; }
+            foreach (var n in state.Notes)
+            { if (n.DeletedUtc is not null) n.Archived = true; n.DeletedUtc = null; n.DeleteBatch = null; }
+            state.Format = 2;
+        }
+        else if (format == 2)
+        {
+            if (!json.RootElement.TryGetProperty("Categories", out var categories) || categories.ValueKind != JsonValueKind.Array) throw new IOException("缺少便签分类数据。");
+            var doc = JsonSerializer.Deserialize<Document>(text, Json) ?? throw new IOException("便签为空。");
+            if (doc.Categories is null || doc.Categories.Any(c => c is null || c.Project is null || c.Records is null || c.Records.Any(n => n is null || n.ProjectId != c.Project.Id)))
+                throw new IOException("便签分类存储无效。");
+            state = new() { Revision = doc.Revision, ActiveProject = doc.ActiveProject, LeftFraction = doc.LeftFraction,
+                Projects = doc.Categories.Select(c => c.Project).ToList(), Notes = doc.Categories.SelectMany(c => c.Records).ToList() };
+        }
+        else throw new IOException("便签版本暂不支持。");
         Validate(state); return state;
     }
     public NotesState Draft() => JsonSerializer.Deserialize<NotesState>(JsonSerializer.Serialize(State, Json), Json)!;
@@ -85,6 +129,7 @@ public sealed class NotesStore
     {
         if (_blocked) throw new IOException(RecoveryMessage);
         Validate(draft);
+        if (draft.Format != 2) throw new IOException("请先迁移旧版便签格式。");
         if (draft.Revision != State.Revision) throw new IOException("便签版本已变化，请保留草稿后重试。");
         var next = JsonSerializer.Deserialize<NotesState>(JsonSerializer.Serialize(draft, Json), Json)!;
         next.Revision++;
@@ -93,13 +138,13 @@ public sealed class NotesStore
         try
         {
             using (var stream = new FileStream(temp, FileMode.CreateNew, FileAccess.Write, FileShare.None))
-            { JsonSerializer.Serialize(stream, next, Json); stream.Flush(true); }
+            { JsonSerializer.Serialize(stream, Snapshot(next), Json); stream.Flush(true); }
             // Always back up validated in-memory state, never rotate damaged disk bytes over a good backup.
             var backup = FilePath + ".bak.tmp-" + Guid.NewGuid().ToString("N");
             try
             {
                 using (var stream = new FileStream(backup, FileMode.CreateNew, FileAccess.Write, FileShare.None))
-                { JsonSerializer.Serialize(stream, State.Revision == 0 ? next : State, Json); stream.Flush(true); }
+                { JsonSerializer.Serialize(stream, Snapshot(State.Revision == 0 ? next : State), Json); stream.Flush(true); }
                 File.Move(backup, FilePath + ".bak", true);
             }
             finally { if (File.Exists(backup)) File.Delete(backup); }
@@ -110,16 +155,16 @@ public sealed class NotesStore
     }
     public static void Validate(NotesState state)
     {
-        if (state.Format != 1 || state.Revision < 0 || state.Projects is null || state.Notes is null ||
+        if (state.Format is not (1 or 2) || state.Revision < 0 || state.Projects is null || state.Notes is null ||
             !double.IsFinite(state.LeftFraction) || state.LeftFraction < .2 || state.LeftFraction > .8)
             throw new IOException("便签格式无效或版本暂不支持。");
         var ids = new HashSet<string>();
         foreach (var p in state.Projects)
-            if (p is null || !Guid.TryParseExact(p.Id, "N", out _) || !ids.Add(p.Id) || string.IsNullOrWhiteSpace(p.Name) || p.Search is null || p.EditorKey is null || p.Caret < 0 || p.SelectionLength < 0 || !double.IsFinite(p.Scroll) || p.Scroll < 0)
-                throw new IOException("标签分类无效。");
+            if (p is null || (state.Format == 2 && (p.DeletedUtc is not null || p.DeleteBatch is not null)) || !Guid.TryParseExact(p.Id, "N", out _) || !ids.Add(p.Id) || string.IsNullOrWhiteSpace(p.Name) || p.Search is null || p.EditorKey is null || p.Caret < 0 || p.SelectionLength < 0 || !double.IsFinite(p.Scroll) || p.Scroll < 0)
+                throw new IOException("便签分类无效。");
         var noteIds = new HashSet<string>();
         foreach (var n in state.Notes)
-            if (n is null || !Guid.TryParseExact(n.Id, "N", out _) || !noteIds.Add(n.Id) || !ids.Contains(n.ProjectId) ||
+            if (n is null || (state.Format == 2 && (n.DeletedUtc is not null || n.DeleteBatch is not null)) || !Guid.TryParseExact(n.Id, "N", out _) || !noteIds.Add(n.Id) || !ids.Contains(n.ProjectId) ||
                 n.Kind is not ("text" or "todo") || n.Title is null || n.Text is null || n.Tasks is null || n.Tasks.Any(t => t is null || t.Text is null) ||
                 (n.DeletedUtc is null && state.Projects.Single(p => p.Id == n.ProjectId).DeletedUtc is not null))
                 throw new IOException("便签记录或分类归属无效。");
@@ -145,17 +190,10 @@ public sealed class NotesStore
     {
         if (destination is not null && !state.Projects.Any(p => p.Id == destination && p.Id != project.Id && !p.Archived && p.DeletedUtc is null))
             throw new ArgumentException("请选择其他活动分类。");
-        var batch = Guid.NewGuid().ToString("N");
-        foreach (var note in state.Notes.Where(n => n.ProjectId == project.Id && n.DeletedUtc is null))
-            if (destination is not null) note.ProjectId = destination;
-            else { note.DeletedUtc = DateTime.UtcNow; note.DeleteBatch = batch; }
-        project.DeletedUtc = DateTime.UtcNow; project.DeleteBatch = batch;
-    }
-    public static void RestoreProject(NotesState state, NoteProject project, string name)
-    {
-        RenameProject(state, project, name); project.DeletedUtc = null; project.Archived = false;
-        foreach (var note in state.Notes.Where(n => n.ProjectId == project.Id && project.DeleteBatch is not null && n.DeleteBatch == project.DeleteBatch))
-        { note.DeletedUtc = null; note.DeleteBatch = null; }
-        project.DeleteBatch = null;
+        if (destination is not null)
+            foreach (var note in state.Notes.Where(n => n.ProjectId == project.Id)) note.ProjectId = destination;
+        else state.Notes.RemoveAll(n => n.ProjectId == project.Id);
+        state.Projects.Remove(project);
+        if (state.ActiveProject == project.Id) state.ActiveProject = state.Projects.FirstOrDefault(p => !p.Archived)?.Id;
     }
 }
