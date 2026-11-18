@@ -43,7 +43,7 @@ public partial class MainWindow : Window
     private void OnLoaded(object sender,RoutedEventArgs e)
     {
         if(_loadedOnce){if(WindowState==WindowState.Normal){Place();int revision=_hideRevision;Dispatcher.BeginInvoke(()=>{if(WindowState==WindowState.Normal&&revision==_hideRevision)OpenPanelMotion();},System.Windows.Threading.DispatcherPriority.Loaded);if(!App.IsSandbox&&DateTime.UtcNow-_lastUpdateCheck>TimeSpan.FromMinutes(15))_=CheckOnlineUpdateAsync(false);}return;}
-        _loadedOnce=true;TaskbarPlacement.EnableToggle(this);Place();if(WindowState==WindowState.Normal)OpenPanelMotion();if(Store.RecoveryMessages.Count>0)SetStatus(Store.RecoveryMessages.Last());if(!App.IsSandbox){_updateTimer.Start();_=CheckOnlineUpdateAsync(false);}
+        _loadedOnce=true;TaskbarPlacement.EnableToggle(this);Place();if(WindowState==WindowState.Normal)OpenPanelMotion();if(Store.RecoveryMessages.Count>0)SetStatus(Store.RecoveryMessages.Last());if(!App.IsSandbox){_updateTimer.Start();_=CheckOnlineUpdateAsync(false);InitializeTaskbarAppearance();}
     }
     internal void SetAvailableRelease(OnlineRelease? release)
     {
@@ -75,15 +75,15 @@ public partial class MainWindow : Window
         if(_allowExit)return;e.Cancel=true;
         if(!FlushNotes())return;
         if(_dragging||_interactions>0)return;
-        if(App.Options.CloseEndsProcess){if(!StopBilliards())return;_allowExit=true;e.Cancel=false;Dispatcher.BeginInvoke(()=>Application.Current.Shutdown());}else BeginHidePanel();
+        if(App.Options.CloseEndsProcess){if(!StopBilliards()||!StopTaskbarAppearance())return;_allowExit=true;e.Cancel=false;Dispatcher.BeginInvoke(()=>Application.Current.Shutdown());}else BeginHidePanel();
     }
     private void OnCloseButton(object sender,RoutedEventArgs e)=>Close();
     private void OnMinimizeButton(object sender,RoutedEventArgs e)=>BeginHidePanel();
-    public void Quit() { if(!FlushNotes()||!StopBilliards())return;_idleRelease.Stop();FinishPanelMotion();_shutter.ReleaseBuffer();UiMotion.CancelAll();_allowExit=true; Application.Current.Shutdown(); }
+    public void Quit() { if(!FlushNotes()||!StopBilliards()||!StopTaskbarAppearance())return;_idleRelease.Stop();FinishPanelMotion();_shutter.ReleaseBuffer();UiMotion.CancelAll();_allowExit=true; Application.Current.Shutdown(); }
     internal void QuitForMaintenance(){if(!_dragging&&_interactions==0)Quit();}
     private bool _storageMoving;
-    internal bool TryBeginStorageMove(){if(_dragging||_interactions>0||_menus>0||_onlineBusy||!FlushNotes()||!StopBilliards())return false;_storageMoving=true;_interactions++;IsEnabled=false;return true;}
-    internal void EndStorageMove(){_storageMoving=false;_interactions--;IsEnabled=true;if(!NotesStore.DirectoryPath.Equals(System.IO.Path.Combine(Store.DataDirectory,"Notes"),StringComparison.OrdinalIgnoreCase)){NotesStore=new(Store.DataDirectory);NotesDraft=NotesStore.Draft();RenderNotes();}Render();}
+    internal bool TryBeginStorageMove(){if(_dragging||_interactions>0||_menus>0||_onlineBusy||!FlushNotes()||!StopBilliards()||!StopTaskbarAppearance())return false;_storageMoving=true;_interactions++;IsEnabled=false;return true;}
+    internal void EndStorageMove(){_storageMoving=false;_interactions--;IsEnabled=true;if(!NotesStore.DirectoryPath.Equals(System.IO.Path.Combine(Store.DataDirectory,"Notes"),StringComparison.OrdinalIgnoreCase)){NotesStore=new(Store.DataDirectory);NotesDraft=NotesStore.Draft();RenderNotes();}_taskbarAppearance=null;Render();_=RestoreSavedTaskbarAppearanceAsync();}
     public void SetStatus(string message) { _shutter.InvalidateSnapshot();Status.Text=message;Status.ToolTip=message; }
     public void Render()
     {
@@ -196,7 +196,7 @@ public partial class MainWindow : Window
             var choice=Menu(name,()=>Run(()=>{options.MotionMode=mode;UiMotion.Configure(mode);},"动画效果已更新"));choice.IsCheckable=true;choice.IsChecked=options.MotionMode==mode;motion.Items.Add(choice);
         }
         Popup((FrameworkElement)sender,[
-        startup,closing,WindowSizeMenu(),motion,GamesMenu(),new Separator(),
+        startup,closing,WindowSizeMenu(),motion,Menu("任务栏外观…",OpenTaskbarAppearance),GamesMenu(),new Separator(),
         Menu(UpdateMenuText,()=>_ = CheckOnlineUpdateAsync(true)),
         Menu("从本地文件更新…",()=>_ = SelectUpdateAsync()),
         Menu("全部移回桌面",RestoreAll,Store.State.Items.Count>0),

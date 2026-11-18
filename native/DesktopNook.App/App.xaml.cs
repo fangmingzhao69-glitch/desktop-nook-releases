@@ -88,6 +88,13 @@ public partial class App : Application
             DispatcherUnhandledException += (_, args) => { args.Handled = true; window.ShowFailure(args.Exception); };
             if(e.Args.Contains("--brand-self-test"))Dispatcher.BeginInvoke(async()=>{var checks=new List<string>();string failure="";try{window.KeepOpenForVerification=true;await BrandVerification.Run(window,root,checks);}catch(Exception ex){failure=ex.ToString();}File.WriteAllText(Path.Combine(root,"brand-verification.json"),System.Text.Json.JsonSerializer.Serialize(new{passed=checks.Count,failure,checks}));Shutdown(failure.Length==0?0:1);},System.Windows.Threading.DispatcherPriority.Loaded);
             if (IsSandbox && e.Args.Contains("--notes-self-test")) Dispatcher.BeginInvoke(async () => await NotesVerification.Run(window, root), System.Windows.Threading.DispatcherPriority.Loaded);
+            var taskbarTest = Array.IndexOf(e.Args, "--taskbar-appearance-self-test");
+            if (IsSandbox && taskbarTest >= 0)
+            {
+                var archive = taskbarTest + 1 < e.Args.Length ? Path.GetFullPath(e.Args[taskbarTest + 1]) : null;
+                var compatibility = taskbarTest + 2 < e.Args.Length ? Path.GetFullPath(e.Args[taskbarTest + 2]) : null;
+                Dispatcher.BeginInvoke(async () => await TaskbarAppearanceVerification.Run(window, root, archive, compatibility), System.Windows.Threading.DispatcherPriority.Loaded);
+            }
             if (e.Args.Contains("--ui-self-test")) Dispatcher.BeginInvoke(async () => await NativeVerification.Run(window, root), System.Windows.Threading.DispatcherPriority.Loaded);
             if (e.Args.Contains("--friend-self-test")) Dispatcher.BeginInvoke(async () => await FriendVerification.Run(window, root), System.Windows.Threading.DispatcherPriority.Loaded);
             if (e.Args.Contains("--billiards-self-test")) Dispatcher.BeginInvoke(async () => await BilliardsVerification.Run(window, root), System.Windows.Threading.DispatcherPriority.Loaded);

@@ -423,8 +423,10 @@ public partial class MainWindow
     private async Task<(string Helper,string Plan,string Version)> StageUpdateWithNotesAsync(string source,string target)
     {
         if(!FlushNotes())throw new IOException("便签尚未保存，更新已停止。");
+        if(!StopTaskbarAppearance())throw new IOException("任务栏外观组件尚未退出，更新已停止。");
         IsEnabled=false;
         try{return await Task.Run(()=>LocalUpdater.Stage(source,target,Store.DataDirectory,App.IsSandbox?App.SandboxRoot:null,options:App.Options,state:Store.State));}
+        catch{_=RestoreSavedTaskbarAppearanceAsync();throw;}
         finally{IsEnabled=true;}
     }
     private bool _notesVisualsParked;
