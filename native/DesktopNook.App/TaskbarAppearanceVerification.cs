@@ -75,8 +75,9 @@ internal static class TaskbarAppearanceVerification
                 var properties = json.RootElement;
                 Check(properties.GetProperty("desktop_appearance").GetProperty("color").GetString() == "#123456FF" &&
                     !properties.GetProperty("maximized_window_appearance").GetProperty("enabled").GetBoolean() &&
-                    properties.GetProperty("disable_saving").GetBoolean() && properties.GetProperty("hide_tray").GetBoolean(),
-                    "纯色编码与上游格式一致，关闭动态规则和重复托盘设置");
+                    properties.GetProperty("disable_saving").GetBoolean() && properties.GetProperty("hide_tray").GetBoolean() &&
+                    !properties.GetProperty("copy_dlls").GetBoolean(),
+                    "纯色编码与上游格式一致，使用已校验的独立组件目录");
             }
             var original = Path.Combine(root, "import.json");
             const string import = "{ /* comment */ \"desktop_appearance\":{\"accent\":\"clear\",\"color\":\"#1234\",},}";

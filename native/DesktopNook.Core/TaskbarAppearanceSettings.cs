@@ -92,6 +92,7 @@ public sealed class TaskbarAppearanceStore(string dataRoot)
             battery_saver_appearance = disabled,
             hide_tray = true,
             disable_saving = true,
+            copy_dlls = false,
             verbosity = "off"
         });
     }
