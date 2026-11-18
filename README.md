@@ -1,44 +1,41 @@
-# 轻匣 · DesktopNook
+# 轻匣
 
-依赖 .NET 10 Windows Desktop Runtime（Windows x64）的桌面收纳工具，当前版本 **0.15.1**。支持桌面快捷方式、文件、文件夹和回收站入口收纳，分类、拖拽排序、任务栏开关、开机自启与确认后在线更新。
+轻匣是 Windows 桌面收纳工具。用一个任务栏入口打开收纳面板，左侧整理软件、文件和文件夹，右侧记录便签和待办。
 
-[项目交接](docs/项目交接.md) · [使用说明](docs/使用说明.md) · [开发与构建](docs/开发与构建.md) · [架构与数据](docs/架构与数据.md) · [界面规范](docs/界面与交互规范.md) · [清理记录](docs/清理记录.md)
+[下载 0.16.5 安装包](https://github.com/fangmingzhao69-glitch/desktop-nook-releases/releases/download/v0.16.5/DesktopNook-Setup.exe) · [最新正式版](https://github.com/fangmingzhao69-glitch/desktop-nook-releases/releases/latest) · [使用说明](docs/使用说明.md)
 
-![轻匣主界面](docs/images/overview.png)
+![轻匣收纳与便签双栏界面](docs/images/overview-0.16.png)
 
-截图使用隔离演示数据，不代表用户的实际分类与收纳内容。
+## 当前功能
 
-## 下载与更新
+| 功能 | 能做什么 |
+| --- | --- |
+| 桌面收纳 | 批量添加桌面快捷方式、文件和文件夹，也可直接拖入面板。按分类显示，支持拖拽排序、移动分类、右键操作和移回桌面。系统回收站入口可收纳，回收站内容由 Windows 管理。 |
+| 便签与待办 | 按分类管理文字和待办，支持搜索、自动保存、重命名和勾选。拖动分类标签或便签顶部排序栏即可调整顺序。可归档便签或整个分类，细项、清单和分类可直接删除。单条、分类及全部便签均可导出为 Markdown（`.md`）。 |
+| 面板与任务栏 | 固定到任务栏后单击打开或收起。支持开机自启、窗口尺寸、左右分栏比例、动画开关和关闭行为设置。 |
+| 图标台球 | 支持单人练习、本机双人和好友邀请房间。可选中八、斯诺克、九球追分和十五球追分球组，支持辅助线、音效及成绩记录。 |
+| 本地存储和更新 | 收纳内容、便签与设置均保存在本机。支持软件内检查更新、确认后下载安装，以及从本地文件更新。 |
 
-[最新正式版](https://github.com/fangmingzhao69-glitch/desktop-nook-releases/releases/latest) · [0.15.1 发行说明](https://github.com/fangmingzhao69-glitch/desktop-nook-releases/releases/tag/v0.15.1)
+正式版功能以上表为准。图标台球好友联机的验证范围见[联机使用与验收](docs/好友联机使用与验收.md)。
 
-- 使用安装包可自动补装缺少的 .NET 10 桌面运行时；免安装 EXE 仍需先具备运行时。
-- `DesktopNook-Setup.exe`：安装或覆盖升级，无需先卸载；缺少运行时时确认下载并安装必要组件后继续；取消或失败保留原程序。
-- `DesktopNook-win-x64.exe`：依赖共享桌面运行时的免安装版，放在固定目录运行。
-- `SHA256SUMS.txt`：发行包校验值。
+## 下载与安装
 
-本机仅保留一套正式包，位于 `发布/轻匣-v0.15.1/`，不提交二进制到 Git。历史原型、旧包、候选稿、测试沙箱和构建缓存已清理，结果见[清理记录](docs/清理记录.md)。日常安装和用户数据位于项目之外，未被清理。
+支持 Windows x64，需要 .NET 10 Windows Desktop Runtime x64。
 
-## 目录
+| 文件 | 用途 |
+| --- | --- |
+| `DesktopNook-Setup.exe` | 首次安装或直接覆盖升级。缺少运行时时，安装器会提示补装。 |
+| `DesktopNook-win-x64.exe` | 免安装版。请先安装桌面运行时，再放到固定目录运行。 |
+| `SHA256SUMS.txt` | 安装包和免安装 EXE 的校验值。 |
 
-```text
-native/DesktopNook.App/    WPF 界面、Shell 集成、更新与图标
-native/DesktopNook.Core/   收纳、分类、恢复与数据保护
-native/DesktopNook.Tests/  核心回归检查
-native/DesktopNook.Games.Core/  台球物理与回合状态
-native/DesktopNook.Games.Tests/ 游戏物理检查
-native/scripts/           图标生成、构建、安装与发布脚本
-native/releases/          当前版本说明
- docs/                    当前交接、使用与开发文档、截图和验收摘要
-发布/轻匣-v0.15.1/        本机正式交付包
-```
+升级可在轻匣的「更多 → 检查在线更新」操作。完整迁移或备份请复制整个数据目录，可从「更多 → 打开数据目录」进入。
 
-## 构建
+## 任务栏外观预览
 
-需要 Windows、.NET 10 SDK、PowerShell，安装包另外需要 Unicode NSIS 3。
+[0.17.0 预览版](https://github.com/fangmingzhao69-glitch/desktop-nook-releases/releases/tag/v0.17.0-preview.1)在轻匣内提供透明、纯色、自定义颜色和定时预览设置。沙箱安装包供查看设置、核验并导入 26340 兼容组件。实际外观、多屏、自启及 Explorer 重建后的恢复仍待隔离 Windows 桌面验收。日常使用请选择最新正式版。
 
-```powershell
-pwsh -NoProfile -File native/scripts/Build.ps1
-```
+## 源码与构建
 
-开发运行必须使用独立 `--sandbox` 目录，参见[开发与构建](docs/开发与构建.md)。不要用普通启动或真实数据目录执行收纳/恢复测试。
+源码在 `native/`。构建需要 Windows、.NET 10 SDK 和 PowerShell，安装包另外需要 Unicode NSIS 3。开发时用独立 `--sandbox` 数据目录。
+
+[开发与构建](docs/开发与构建.md) · [架构与数据](docs/架构与数据.md) · [项目交接](docs/项目交接.md)
