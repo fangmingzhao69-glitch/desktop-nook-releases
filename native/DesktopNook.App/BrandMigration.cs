@@ -29,7 +29,7 @@ internal static class BrandMigration
         {
             // Icon identity changes with artwork, not every application release.
             var artwork=Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(bytes))[..16];
-            Directory.CreateDirectory(folder);var file=Path.Combine(folder,"Suishou-"+artwork+".ico");
+            Directory.CreateDirectory(folder);var file=Path.Combine(folder,"Zheye-"+artwork+".ico");
             if(!File.Exists(file)||!File.ReadAllBytes(file).SequenceEqual(bytes))File.WriteAllBytes(file,bytes);
             // Shell cache brokers need an unencrypted public icon. Do not decrypt or
             // relax protection on any folder/file; choose a different cache instead.
@@ -60,7 +60,7 @@ internal static class BrandMigration
                 try{return string.Equals((string)entry.TargetPath,program,StringComparison.OrdinalIgnoreCase);}
                 finally{Marshal.FinalReleaseComObject(entry);}
             }
-            var current=Path.Combine(startFolder,"随手.lnk");
+            var current=Path.Combine(startFolder,"折页.lnk");
             bool legacy = ShortcutInstaller.LegacyNames.Any(name => Owned(Path.Combine(startFolder, name)));
             if(refreshShortcuts&&(legacy||Owned(current))&&(!File.Exists(current)||Owned(current)))
             {
@@ -73,10 +73,10 @@ internal static class BrandMigration
                 dynamic entry=shell.CreateShortcut(link);
                 try
                 {
-                    if(string.Equals((string)entry.IconLocation,iconLocation,StringComparison.OrdinalIgnoreCase)&&(string)entry.Description=="随手")return;
+                    if(string.Equals((string)entry.IconLocation,iconLocation,StringComparison.OrdinalIgnoreCase)&&(string)entry.Description=="折页")return;
                     var arguments=(string)entry.Arguments;
                     // Preserve target, arguments, working directory, file name and pin order.
-                    entry.IconLocation=iconLocation;entry.Description="随手";entry.Save();
+                    entry.IconLocation=iconLocation;entry.Description="折页";entry.Save();
                     ShortcutInstaller.SetIdentity(link,iconLocation,program,arguments);
                     ShellIntegration.RefreshShortcut(link);
                     changed++;
@@ -89,8 +89,8 @@ internal static class BrandMigration
         {
             if(string.Equals(key?.GetValue("InstallLocation") as string,Path.GetDirectoryName(program),StringComparison.OrdinalIgnoreCase))
             {
-                if(key!.GetValue("DisplayName") as string!="随手"||key.GetValue("DisplayIcon") as string!=iconLocation)changed++;
-                key.SetValue("DisplayName","随手");key.SetValue("DisplayIcon",iconLocation);key.SetValue("DisplayVersion",version);
+                if(key!.GetValue("DisplayName") as string!="折页"||key.GetValue("DisplayIcon") as string!=iconLocation)changed++;
+                key.SetValue("DisplayName","折页");key.SetValue("DisplayIcon",iconLocation);key.SetValue("DisplayVersion",version);
             }
         }
         if(changed>0)ShellIntegration.RefreshDesktop();

@@ -105,7 +105,7 @@ public partial class MainWindow : Window
         foreach(var category in Store.State.Categories) AddTab(category.Name,category.Id);
         var visible=VisibleOrderedItems().Select(item=>new IconEntry(item,item.Kind=="recycle-bin"?"":Store.ManagedPath(item))).ToList();
         Icons.ItemsSource=visible; EmptyState.Visibility=visible.Count==0?Visibility.Visible:Visibility.Collapsed;
-        EmptyText.Text=_activeCategory is null?"把常用，放在随手":"此分类还没有图标";
+        EmptyText.Text=_activeCategory is null?"把常用，放在折页":"此分类还没有图标";
         TotalCount.Text=$"{Store.State.Items.Count} 个项目 · 单击启动";
         Summary.Text=(_activeCategory is null?"全部":Store.State.Categories.Single(c=>c.Id==_activeCategory).Name)+" · "+visible.Count+" 个图标";
     }
@@ -134,7 +134,7 @@ public partial class MainWindow : Window
     {
         try { App.ReloadStore();Render(); } catch(Exception recovery) { SetStatus("恢复未完成："+recovery.Message); }
         _interactions++;
-        try { UiDialogs.Show(this,exception.Message,"随手",MessageBoxButton.OK,MessageBoxImage.Information); }
+        try { UiDialogs.Show(this,exception.Message,"折页",MessageBoxButton.OK,MessageBoxImage.Information); }
         finally { _interactions--; }
     }
     private void OnCollect(object sender,RoutedEventArgs e)
@@ -210,7 +210,7 @@ public partial class MainWindow : Window
         _interactions++;
         try
         {
-            UiDialogs.Show(this, "右键任务栏上的随手图标，选择“固定到任务栏”。\n固定后点击同一个入口即可打开或收起面板。", "固定到任务栏");
+            UiDialogs.Show(this, "右键任务栏上的折页图标，选择“固定到任务栏”。\n固定后点击同一个入口即可打开或收起面板。", "固定到任务栏");
         }
         finally { _interactions--; }
     }
@@ -251,7 +251,7 @@ public partial class MainWindow : Window
                 ?? throw new InvalidOperationException("无法读取内置许可证。");
             using var reader = new System.IO.StreamReader(license);
             var result = UiDialogs.Show(this,
-                "随手及修改后的 TranslucentTB 任务栏引擎按 GNU GPL 第 3 版发布。\n" +
+                "折页及修改后的 TranslucentTB 任务栏引擎按 GNU GPL 第 3 版发布。\n" +
                 "TranslucentTB 版权归原作者所有。软件按现状提供，无担保。\n\n" +
                 "你可以按 GPLv3 的条款复制、修改和再发布。选择「确定」下载本版本的对应源码。\n\n" +
                 reader.ReadToEnd(),
@@ -271,9 +271,9 @@ public partial class MainWindow : Window
         _interactions++;
         try
         {
-            var picker=new Microsoft.Win32.OpenFileDialog{Title="选择随手新版本",Filter="随手程序或安装包 (*.exe)|*.exe",CheckFileExists=true};if(picker.ShowDialog(this)!=true)return;
+            var picker=new Microsoft.Win32.OpenFileDialog{Title="选择折页新版本",Filter="折页程序或安装包 (*.exe)|*.exe",CheckFileExists=true};if(picker.ShowDialog(this)!=true)return;
             var source=picker.FileName;var target=Environment.ProcessPath!;var candidate=await Task.Run(()=>LocalUpdater.Inspect(source));
-            if(UiDialogs.ShowUpdate(this,"当前版本："+CurrentVersionLabel+"\n更新到：v"+candidate.Version.ToString(3)+GameUpdateNotice+"\n\n程序会在原位置更新，保留分类、收纳内容和设置，完成后自动打开。","更新随手",MessageBoxButton.OKCancel)!=MessageBoxResult.OK)return;
+            if(UiDialogs.ShowUpdate(this,"当前版本："+CurrentVersionLabel+"\n更新到：v"+candidate.Version.ToString(3)+GameUpdateNotice+"\n\n程序会在原位置更新，保留分类、收纳内容和设置，完成后自动打开。","更新折页",MessageBoxButton.OKCancel)!=MessageBoxResult.OK)return;
             if(!FlushNotes()||!StopBilliards())return;SetStatus("正在准备更新…");var staged=await StageUpdateWithNotesAsync(source,target);
             var helper=new ProcessStartInfo(staged.Helper){UseShellExecute=false,CreateNoWindow=true};helper.ArgumentList.Add("--apply-update");helper.ArgumentList.Add(staged.Plan);Process.Start(helper);Quit();
         }
@@ -317,11 +317,11 @@ public partial class MainWindow : Window
         _interactions++;
         try
         {
-            if(UiDialogs.Show(this,"将 "+Store.State.Items.Count+" 个图标全部移回桌面？","随手",MessageBoxButton.OKCancel)!=MessageBoxResult.OK)return;
+            if(UiDialogs.Show(this,"将 "+Store.State.Items.Count+" 个图标全部移回桌面？","折页",MessageBoxButton.OKCancel)!=MessageBoxResult.OK)return;
             var restored=0;var remaining=new List<string>();
             foreach(var item in Store.State.Items.ToArray()) {if(RestoreItem(item.Id))restored++;else remaining.Add(item.Name);}
             SetStatus("已移回 "+restored+" 个，剩余 "+remaining.Count+" 个");
-            if(remaining.Count>0)UiDialogs.Show(this,"这些图标仍保留在随手，可稍后重试：\n"+string.Join("\n",remaining),"恢复结果",MessageBoxButton.OK,MessageBoxImage.Information);
+            if(remaining.Count>0)UiDialogs.Show(this,"这些图标仍保留在折页，可稍后重试：\n"+string.Join("\n",remaining),"恢复结果",MessageBoxButton.OK,MessageBoxImage.Information);
         }
         finally{_interactions--;}
     }
@@ -330,7 +330,7 @@ public partial class MainWindow : Window
         try {Store.Restore(id);ShellIntegration.RefreshDesktop();Render();SetStatus("已移回桌面");return true;}
         catch(NameConflictException)
         {
-            _interactions++;try{if(UiDialogs.Show(this,"桌面已有同名文件。是否使用新名称恢复？原文件不会被覆盖。","随手",MessageBoxButton.OKCancel)!=MessageBoxResult.OK)return false;return Run(()=>Store.Restore(id,true),"已改名移回桌面");}finally{_interactions--;}
+            _interactions++;try{if(UiDialogs.Show(this,"桌面已有同名文件。是否使用新名称恢复？原文件不会被覆盖。","折页",MessageBoxButton.OKCancel)!=MessageBoxResult.OK)return false;return Run(()=>Store.Restore(id,true),"已改名移回桌面");}finally{_interactions--;}
         }
         catch(Exception ex){ShowFailure(ex);return false;}
     }
@@ -349,7 +349,7 @@ public partial class MainWindow : Window
         var siblings=Store.State.Items.Where(i=>i.CategoryId==item.CategoryId).ToList();var index=siblings.FindIndex(i=>i.Id==item.Id);
         var move=new MenuItem{Header="移动到分类"};foreach(var cat in Store.State.Categories)move.Items.Add(Menu(cat.Name,()=>Run(()=>Store.MoveItem(item.Id,cat.Id),"已移动分类")));
         var own=new List<object>{Menu("移回桌面",()=>RestoreItem(item.Id)),move,Menu("修改显示名称",()=>Rename()),Menu("前移",()=>Run(()=>Store.OrderItem(item.Id,-1)),index>0),Menu("后移",()=>Run(()=>Store.OrderItem(item.Id,1)),index<siblings.Count-1),new Separator()};
-        void Rename(){var name=Ask("显示名称","图标在随手中的名称",item.Name);if(name is not null)Run(()=>Store.RenameItem(item.Id,name));}
+        void Rename(){var name=Ask("显示名称","图标在折页中的名称",item.Name);if(name is not null)Run(()=>Store.RenameItem(item.Id,name));}
         try
         {
             var shell=new ShellContextMenu(this,Store,item);
@@ -360,7 +360,7 @@ public partial class MainWindow : Window
                 {
                     if(verb.Equals("rename",StringComparison.OrdinalIgnoreCase))Rename();
                     else if(verb.Equals("delete",StringComparison.OrdinalIgnoreCase))
-                    {if(item.Kind=="recycle-bin")RestoreItem(item.Id);else if(UiDialogs.Show(this,"从随手移除这个入口？恢复副本会保留，软件不会卸载。","移除入口",MessageBoxButton.OKCancel)==MessageBoxResult.OK)Run(()=>Store.ArchiveItem(item.Id),"入口已移除，恢复副本保留");}
+                    {if(item.Kind=="recycle-bin")RestoreItem(item.Id);else if(UiDialogs.Show(this,"从折页移除这个入口？恢复副本会保留，软件不会卸载。","移除入口",MessageBoxButton.OKCancel)==MessageBoxResult.OK)Run(()=>Store.ArchiveItem(item.Id),"入口已移除，恢复副本保留");}
                     else if(verb.Equals("cut",StringComparison.OrdinalIgnoreCase))
                     {if(item.Kind=="recycle-bin"){RestoreItem(item.Id);return;}string? restored=null;if(Run(()=>restored=Store.Restore(item.Id),"已移回桌面并剪切")){var data=new DataObject(DataFormats.FileDrop,new[]{restored!});data.SetData("Preferred DropEffect",new MemoryStream(BitConverter.GetBytes(2)));Clipboard.SetDataObject(data,true);}}
                     else Run(invoke);
@@ -416,8 +416,8 @@ public partial class MainWindow : Window
             if(e.Data.GetDataPresent(ItemFormat) && e.Data.GetData(ItemFormat) is string id)Run(()=>Store.MoveItem(id,categoryId),"已移动分类");
             else
             {
-                if(e.Data.GetDataPresent(DataFormats.FileDrop) && e.Data.GetData(DataFormats.FileDrop) is string[] files)foreach(var path in files){if(!Run(()=>Store.Collect(path,categoryId),"已收进随手"))break;}
-                if(ShellIntegration.ContainsRecycleBin(e.Data) && !Store.State.Items.Any(i=>i.Kind=="recycle-bin"))Run(()=>Store.CollectRecycleBin(categoryId),"回收站已收进随手");
+                if(e.Data.GetDataPresent(DataFormats.FileDrop) && e.Data.GetData(DataFormats.FileDrop) is string[] files)foreach(var path in files){if(!Run(()=>Store.Collect(path,categoryId),"已收进折页"))break;}
+                if(ShellIntegration.ContainsRecycleBin(e.Data) && !Store.State.Items.Any(i=>i.Kind=="recycle-bin"))Run(()=>Store.CollectRecycleBin(categoryId),"回收站已收进折页");
             }
             _activeCategory=categoryId;Render();ShellIntegration.RefreshDesktop();e.Effects=e.Data.GetDataPresent(ItemFormat)?DragDropEffects.Move:DragDropEffects.Copy;
         }

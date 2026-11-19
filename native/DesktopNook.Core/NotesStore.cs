@@ -167,7 +167,7 @@ public sealed class NotesState
     public List<NoteProject> Projects { get; set; } = [];
     public List<ProjectNote> Notes { get; set; } = [];
     public string? ActiveProject { get; set; }
-    public double LeftFraction { get; set; } = .646;
+    public double LeftFraction { get; set; } = .61;
 
     // Copy mutable collections and records. Their string values can be shared.
     internal NotesState Copy()

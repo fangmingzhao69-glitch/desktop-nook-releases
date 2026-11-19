@@ -5,7 +5,7 @@ namespace DesktopNook.App;
 
 internal static class ShortcutInstaller
 {
-    internal static readonly string[] LegacyNames = ["一处.lnk", "轻匣.lnk", "桌面小筑.lnk"];
+    internal static readonly string[] LegacyNames = ["随手.lnk", "一处.lnk", "轻匣.lnk", "桌面小筑.lnk"];
     [StructLayout(LayoutKind.Sequential)]private struct PropertyKey {public Guid Format;public uint Id;}
     [StructLayout(LayoutKind.Explicit,Size=24)]private struct Variant {[FieldOffset(0)]public ushort Type;[FieldOffset(8)]public IntPtr Text;}
     [ComImport,Guid("886D8EEB-8CF2-4446-8D02-CDBA1DBDCF99"),InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
@@ -18,7 +18,7 @@ internal static class ShortcutInstaller
     {
         var program=Environment.ProcessPath??throw new IOException("无法确定程序位置。");
         var folder=folderOverride??Environment.GetFolderPath(Environment.SpecialFolder.Programs);Directory.CreateDirectory(folder);
-        var link=Path.Combine(folder,"随手.lnk");
+        var link=Path.Combine(folder,"折页.lnk");
         var type=Type.GetTypeFromProgID("WScript.Shell")??throw new IOException("无法创建 Windows 快捷方式。");
         dynamic shell=Activator.CreateInstance(type)!;
         try
@@ -36,7 +36,7 @@ internal static class ShortcutInstaller
                     shortcut.WorkingDirectory = Path.GetDirectoryName(program);
                 }
                 shortcut.IconLocation = program + ",0";
-                shortcut.Description = "随手";
+                shortcut.Description = "折页";
                 var arguments = (string)shortcut.Arguments;
                 shortcut.Save();
                 SetIdentity(link, program + ",0", program, arguments);
@@ -55,7 +55,7 @@ internal static class ShortcutInstaller
         dynamic shell = Activator.CreateInstance(type)!;
         try
         {
-            foreach (var name in LegacyNames.Prepend("随手.lnk"))
+            foreach (var name in LegacyNames.Prepend("折页.lnk"))
             {
                 var link = Path.Combine(folder, name);
                 if (Owned(shell, link, program)) File.Delete(link);
@@ -82,7 +82,7 @@ internal static class ShortcutInstaller
                 var value=new Variant{Type=31,Text=Marshal.StringToCoTaskMemUni(text)};
                 try{store.SetValue(ref key,ref value);}finally{Marshal.FreeCoTaskMem(value.Text);}
             }
-            Set(5,"DesktopNook.DesktopNook");Set(4,"随手");Set(3,icon);Set(2,"\""+program+"\""+(arguments.Length>0?" "+arguments:""));store.Commit();
+            Set(5,"DesktopNook.DesktopNook");Set(4,"折页");Set(3,icon);Set(2,"\""+program+"\""+(arguments.Length>0?" "+arguments:""));store.Commit();
         }
         finally{Marshal.FinalReleaseComObject(store);}
     }

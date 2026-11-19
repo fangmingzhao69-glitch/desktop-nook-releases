@@ -8,7 +8,7 @@ namespace DesktopNook.App;
 
 internal static class ThemePalette
 {
-    private static Dictionary<string, Color>? _light;
+    private static bool _initialized;
     private static readonly Dictionary<string, ColorSource> ColorsByKey = new();
 
     private sealed class ColorSource : DependencyObject
@@ -21,18 +21,7 @@ internal static class ThemePalette
             set => SetValue(ValueProperty, value);
         }
     }
-    private static readonly Dictionary<string, string> Dark = new()
-    {
-        ["CanvasBrush"] = "#1B2235", ["CanvasSubtleBrush"] = "#1E273C", ["SurfaceBrush"] = "#242D43",
-        ["SurfaceSubtleBrush"] = "#2E3A55", ["TextPrimaryBrush"] = "#F1F5FF", ["TextSecondaryBrush"] = "#B0BAD0",
-        ["TextFaintBrush"] = "#8996AF", ["LineBrush"] = "#3A4762", ["OutlineBrush"] = "#7F90B1",
-        ["PrimaryBrush"] = "#9DBBF7", ["PrimaryHoverBrush"] = "#AECAFF", ["PrimaryPressedBrush"] = "#87A7E8",
-        ["OnPrimaryBrush"] = "#17233B", ["AccentInkBrush"] = "#B9D2FF", ["SelectionBrush"] = "#314A73",
-        ["SelectionHoverBrush"] = "#293A5C", ["PeachBrush"] = "#FFAB98", ["PeachSoftBrush"] = "#553938",
-        ["SuccessBrush"] = "#8BDAB1", ["WarningBrush"] = "#FFD08B", ["DangerBrush"] = "#FF9FAE",
-        ["DangerSoftBrush"] = "#552E40", ["DisabledBrush"] = "#303B54", ["DisabledInkBrush"] = "#A4AEC3",
-        ["TooltipBrush"] = "#E8EFFF", ["OnTooltipBrush"] = "#17233B"
-    };
+    internal static FoldTheme Family { get; private set; } = FoldTheme.All[0];
     private static readonly Dictionary<string, string> Aliases = new()
     {
         ["PanelBrush"] = "CanvasBrush", ["HeaderBrush"] = "SurfaceBrush", ["SoftAccentBrush"] = "SelectionBrush",
@@ -44,12 +33,17 @@ internal static class ThemePalette
 
     internal static SolidColorBrush Brush(string key) => (SolidColorBrush)Application.Current.FindResource(key);
 
-    internal static void Apply(string mode)
+    internal static void Apply(string mode, string? family = null)
     {
-        if (_light is null)
+        var selection = family is null ? Family : FoldTheme.Find(family);
+        bool updateMark = !_initialized || Family != selection;
+        Family = selection;
+        Mode = mode;
+        IsDark = mode == "dark" || (mode == "system" && UsesDarkTheme());
+        var colors = Family.ColorsFor(IsDark);
+        if (!_initialized)
         {
-            _light = Dark.Keys.ToDictionary(key => key, key => Brush(key).Color);
-            foreach (var (key, color) in _light)
+            foreach (var (key, color) in colors)
             {
                 // WPF can freeze shared resources. The binding keeps each brush live
                 // for code-created controls as well as XAML DynamicResource references.
@@ -61,14 +55,14 @@ internal static class ThemePalette
                 Application.Current.Resources[key] = brush;
             }
             foreach (var (alias, key) in Aliases) Application.Current.Resources[alias] = Brush(key);
+            _initialized = true;
         }
-        Mode = mode;
-        IsDark = mode == "dark" || (mode == "system" && UsesDarkTheme());
+
+        if (updateMark) Application.Current.Resources["FoldMark"] = FoldTheme.Mark(Family);
         bool changed = false;
-        foreach (var (key, light) in _light)
+        foreach (var (key, themed) in colors)
         {
-            var color = SystemParameters.HighContrast ? AccessibleColor(key) :
-                IsDark ? (Color)ColorConverter.ConvertFromString(Dark[key]) : light;
+            var color = SystemParameters.HighContrast ? AccessibleColor(key) : themed;
             var source = ColorsByKey[key];
             if (source.Value == color) continue;
             changed = true;
@@ -128,11 +122,12 @@ internal static class ThemePalette
 
     private static Color AccessibleColor(string key) => key switch
     {
-        "PrimaryBrush" or "PrimaryHoverBrush" or "PrimaryPressedBrush" or "SelectionBrush" or "SelectionHoverBrush" => SystemColors.HighlightColor,
-        "OnPrimaryBrush" or "OnTooltipBrush" => SystemColors.HighlightTextColor,
+        "PrimaryBrush" or "PrimaryHoverBrush" or "PrimaryPressedBrush" or "SelectionBrush" or "SelectionHoverBrush" or "FoldMintBrush" or "FoldCoralBrush" => SystemColors.HighlightColor,
+        "OnPrimaryBrush" or "OnCoralBrush" or "OnMintBrush" or "OnTooltipBrush" => SystemColors.HighlightTextColor,
         "TextPrimaryBrush" or "TextSecondaryBrush" or "AccentInkBrush" or "LineBrush" or "OutlineBrush" or "DangerBrush" or "WarningBrush" or "SuccessBrush" => SystemColors.WindowTextColor,
         "DisabledInkBrush" or "TextFaintBrush" => SystemColors.GrayTextColor,
         "TooltipBrush" => SystemColors.HighlightColor,
+        "FoldCreaseShadeBrush" or "FoldCreaseLightBrush" => Colors.Transparent,
         _ => SystemColors.WindowColor
     };
 }

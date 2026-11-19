@@ -57,7 +57,7 @@ internal sealed class BilliardsController : IDisposable
         var pipe=new NamedPipeServerStream(name,PipeDirection.InOut,1,PipeTransmissionMode.Byte,PipeOptions.Asynchronous|PipeOptions.CurrentUserOnly);
         using var parent=Process.GetCurrentProcess();
         var info=new ProcessStartInfo(Environment.ProcessPath!){UseShellExecute=false,CreateNoWindow=true,WindowStyle=ProcessWindowStyle.Normal};
-        foreach(var arg in new[]{"--icon-billiards",name,nonce,parent.Id.ToString(),parent.StartTime.ToUniversalTime().Ticks.ToString(),"--theme",App.Options.ThemeMode})info.ArgumentList.Add(arg);
+        foreach(var arg in new[]{"--icon-billiards",name,nonce,parent.Id.ToString(),parent.StartTime.ToUniversalTime().Ticks.ToString(),"--theme",App.Options.ThemeMode,"--color-theme",App.Options.ColorTheme})info.ArgumentList.Add(arg);
         Session? session=null;
         try
         {

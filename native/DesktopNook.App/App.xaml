@@ -102,7 +102,7 @@
   <Grid Margin="6" UseLayoutRounding="True" SnapsToDevicePixels="True">
    <Border CornerRadius="12" Background="{TemplateBinding Background}" IsHitTestVisible="False"><Border.Effect><DropShadowEffect BlurRadius="14" ShadowDepth="3" Opacity=".13" Color="#233B6A" /></Border.Effect></Border>
    <Border Padding="8" CornerRadius="12" Background="{TemplateBinding Background}" BorderBrush="{DynamicResource LineBrush}" BorderThickness="1" RenderOptions.ClearTypeHint="Enabled">
-    <DockPanel LastChildFill="True"><Border DockPanel.Dock="Top" Background="{DynamicResource HeaderBrush}" CornerRadius="7" Margin="0,0,0,5" Height="32"><Grid Margin="8,0"><StackPanel Orientation="Horizontal" VerticalAlignment="Center"><Image Source="pack://application:,,,/Assets/AppIcon.png" Width="17" Height="17" Margin="0,0,7,0"/><TextBlock Text="随手" FontSize="11" FontWeight="SemiBold" Foreground="{DynamicResource TextPrimaryBrush}" VerticalAlignment="Center"/></StackPanel><TextBlock Text="操作" FontSize="10" Foreground="{DynamicResource TextSecondaryBrush}" HorizontalAlignment="Right" VerticalAlignment="Center"/></Grid></Border><ScrollViewer MaxHeight="{Binding Path=(local:MenuLayout.BodyHeight),RelativeSource={RelativeSource TemplatedParent}}" MaxWidth="{Binding Path=(local:MenuLayout.BodyWidth),RelativeSource={RelativeSource TemplatedParent}}" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" CanContentScroll="False"><ItemsPresenter KeyboardNavigation.DirectionalNavigation="Cycle" /></ScrollViewer></DockPanel>
+    <DockPanel LastChildFill="True"><Border DockPanel.Dock="Top" Background="{DynamicResource HeaderBrush}" CornerRadius="7" Margin="0,0,0,5" Height="32"><Grid Margin="8,0"><StackPanel Orientation="Horizontal" VerticalAlignment="Center"><Image Source="{DynamicResource FoldMark}" Width="17" Height="17" Margin="0,0,7,0"/><TextBlock Text="折页" FontSize="11" FontWeight="SemiBold" Foreground="{DynamicResource TextPrimaryBrush}" VerticalAlignment="Center"/></StackPanel><TextBlock Text="操作" FontSize="10" Foreground="{DynamicResource TextSecondaryBrush}" HorizontalAlignment="Right" VerticalAlignment="Center"/></Grid></Border><ScrollViewer MaxHeight="{Binding Path=(local:MenuLayout.BodyHeight),RelativeSource={RelativeSource TemplatedParent}}" MaxWidth="{Binding Path=(local:MenuLayout.BodyWidth),RelativeSource={RelativeSource TemplatedParent}}" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" CanContentScroll="False"><ItemsPresenter KeyboardNavigation.DirectionalNavigation="Cycle" /></ScrollViewer></DockPanel>
    </Border>
   </Grid>
  </ControlTemplate></Setter.Value></Setter>
@@ -134,7 +134,7 @@
    <Grid Margin="6" UseLayoutRounding="True" SnapsToDevicePixels="True" TextOptions.TextFormattingMode="Display" TextOptions.TextRenderingMode="Auto" TextOptions.TextHintingMode="Fixed">
     <Border CornerRadius="12" Background="{DynamicResource MenuSurfaceBrush}" IsHitTestVisible="False"><Border.Effect><DropShadowEffect BlurRadius="12" Opacity=".13" ShadowDepth="2" /></Border.Effect></Border>
     <Border Padding="8" CornerRadius="12" Background="{DynamicResource MenuSurfaceBrush}" BorderBrush="{DynamicResource LineBrush}" BorderThickness="1" RenderOptions.ClearTypeHint="Enabled">
-     <DockPanel LastChildFill="True"><Border DockPanel.Dock="Top" Background="{DynamicResource HeaderBrush}" CornerRadius="7" Margin="0,0,0,5" Height="32"><Grid Margin="8,0"><StackPanel Orientation="Horizontal" VerticalAlignment="Center"><Image Source="pack://application:,,,/Assets/AppIcon.png" Width="17" Height="17" Margin="0,0,7,0"/><TextBlock Text="随手" FontSize="11" FontWeight="SemiBold" Foreground="{DynamicResource TextPrimaryBrush}" VerticalAlignment="Center"/></StackPanel><TextBlock Text="操作" FontSize="10" Foreground="{DynamicResource TextSecondaryBrush}" HorizontalAlignment="Right" VerticalAlignment="Center"/></Grid></Border><ScrollViewer MaxHeight="{Binding Path=(local:MenuLayout.BodyHeight),RelativeSource={RelativeSource TemplatedParent}}" MaxWidth="{Binding Path=(local:MenuLayout.BodyWidth),RelativeSource={RelativeSource TemplatedParent}}" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" CanContentScroll="False"><ItemsPresenter KeyboardNavigation.DirectionalNavigation="Cycle" /></ScrollViewer></DockPanel>
+     <DockPanel LastChildFill="True"><Border DockPanel.Dock="Top" Background="{DynamicResource HeaderBrush}" CornerRadius="7" Margin="0,0,0,5" Height="32"><Grid Margin="8,0"><StackPanel Orientation="Horizontal" VerticalAlignment="Center"><Image Source="{DynamicResource FoldMark}" Width="17" Height="17" Margin="0,0,7,0"/><TextBlock Text="折页" FontSize="11" FontWeight="SemiBold" Foreground="{DynamicResource TextPrimaryBrush}" VerticalAlignment="Center"/></StackPanel><TextBlock Text="操作" FontSize="10" Foreground="{DynamicResource TextSecondaryBrush}" HorizontalAlignment="Right" VerticalAlignment="Center"/></Grid></Border><ScrollViewer MaxHeight="{Binding Path=(local:MenuLayout.BodyHeight),RelativeSource={RelativeSource TemplatedParent}}" MaxWidth="{Binding Path=(local:MenuLayout.BodyWidth),RelativeSource={RelativeSource TemplatedParent}}" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" CanContentScroll="False"><ItemsPresenter KeyboardNavigation.DirectionalNavigation="Cycle" /></ScrollViewer></DockPanel>
     </Border>
    </Grid>
   </Popup>
@@ -199,7 +199,7 @@
       <Setter Property="Template">
         <Setter.Value>
           <ControlTemplate TargetType="Button">
-            <Border x:Name="PrimaryChrome" Background="{TemplateBinding Background}" CornerRadius="8" BorderThickness="2" BorderBrush="Transparent">
+            <Border x:Name="PrimaryChrome" Background="{TemplateBinding Background}" CornerRadius="5" BorderThickness="2" BorderBrush="Transparent">
               <Grid><Border x:Name="MotionTint" Background="{DynamicResource PrimaryHoverBrush}" CornerRadius="8" Opacity="0" IsHitTestVisible="False"/><ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" Margin="{TemplateBinding Padding}"/></Grid>
             </Border>
             <ControlTemplate.Triggers>
@@ -269,6 +269,31 @@
         </ControlTemplate.Triggers>
       </ControlTemplate></Setter.Value></Setter>
     </Style>
+    <Style x:Key="FoldTaskCheckBox" TargetType="CheckBox" BasedOn="{StaticResource {x:Type CheckBox}}">
+      <Setter Property="Template">
+        <Setter.Value>
+          <ControlTemplate TargetType="CheckBox">
+            <Border x:Name="Hit" CornerRadius="5" Background="Transparent" Padding="{TemplateBinding Padding}">
+              <Border x:Name="Mark" Width="16" Height="16" CornerRadius="4"
+                      Background="{DynamicResource SurfaceBrush}" BorderBrush="{DynamicResource OutlineBrush}" BorderThickness="1">
+                <TextBlock x:Name="Tick" Text="✓" FontSize="12" Foreground="{DynamicResource OnMintBrush}"
+                           HorizontalAlignment="Center" VerticalAlignment="Center" Visibility="Collapsed" />
+              </Border>
+            </Border>
+            <ControlTemplate.Triggers>
+              <Trigger Property="IsChecked" Value="True">
+                <Setter TargetName="Mark" Property="Background" Value="{DynamicResource FoldMintBrush}" />
+                <Setter TargetName="Mark" Property="BorderBrush" Value="{DynamicResource FoldMintBrush}" />
+                <Setter TargetName="Tick" Property="Visibility" Value="Visible" />
+              </Trigger>
+              <Trigger Property="IsMouseOver" Value="True"><Setter TargetName="Hit" Property="Background" Value="{DynamicResource SelectionHoverBrush}" /></Trigger>
+              <Trigger Property="IsKeyboardFocused" Value="True"><Setter TargetName="Mark" Property="BorderBrush" Value="{DynamicResource AccentInkBrush}" /></Trigger>
+              <Trigger Property="IsEnabled" Value="False"><Setter Property="Opacity" Value=".65" /></Trigger>
+            </ControlTemplate.Triggers>
+          </ControlTemplate>
+        </Setter.Value>
+      </Setter>
+    </Style>
     <Style TargetType="ComboBoxItem"><Setter Property="Padding" Value="10,7"/><Setter Property="Foreground" Value="{DynamicResource Ink}"/><Setter Property="Template"><Setter.Value><ControlTemplate TargetType="ComboBoxItem"><Border x:Name="Row" Background="Transparent" CornerRadius="6" Padding="{TemplateBinding Padding}"><ContentPresenter/></Border><ControlTemplate.Triggers><Trigger Property="IsHighlighted" Value="True"><Setter TargetName="Row" Property="Background" Value="{DynamicResource SelectionHoverBrush}"/></Trigger><Trigger Property="IsSelected" Value="True"><Setter TargetName="Row" Property="Background" Value="{DynamicResource SelectionBrush}"/></Trigger></ControlTemplate.Triggers></ControlTemplate></Setter.Value></Setter></Style>
     <Style TargetType="ComboBox">
       <Setter Property="Foreground" Value="{DynamicResource Ink}"/><Setter Property="Background" Value="{DynamicResource SurfaceBrush}"/><Setter Property="BorderBrush" Value="{DynamicResource LineBrush}"/><Setter Property="Padding" Value="10,8"/>
@@ -278,6 +303,30 @@
         <TextBlock Text="⌄" HorizontalAlignment="Right" Margin="0,0,12,0" VerticalAlignment="Center" IsHitTestVisible="False" Foreground="{DynamicResource AccentInkBrush}"/>
         <Popup x:Name="PART_Popup" Placement="Bottom" AllowsTransparency="True" IsOpen="{TemplateBinding IsDropDownOpen}" Focusable="False" VerticalOffset="4"><Border Background="{DynamicResource SurfaceBrush}" BorderBrush="{DynamicResource OutlineBrush}" BorderThickness="1" CornerRadius="8" Padding="4" MinWidth="{TemplateBinding ActualWidth}"><ScrollViewer MaxHeight="240" CanContentScroll="True"><ItemsPresenter/></ScrollViewer></Border></Popup>
       </Grid><ControlTemplate.Triggers><Trigger Property="IsEnabled" Value="False"><Setter Property="Opacity" Value=".45"/></Trigger></ControlTemplate.Triggers></ControlTemplate></Setter.Value></Setter>
+    </Style>
+    <Style x:Key="FoldNewCategory" TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">
+      <Setter Property="MinHeight" Value="34" />
+      <Setter Property="Foreground" Value="{DynamicResource AccentInkBrush}" />
+      <Setter Property="Template">
+        <Setter.Value>
+          <ControlTemplate TargetType="Button">
+            <Grid Background="{TemplateBinding Background}">
+              <Rectangle x:Name="Outline" Stroke="{DynamicResource OutlineBrush}" StrokeThickness="1"
+                         StrokeDashArray="3 3" RadiusX="5" RadiusY="5" IsHitTestVisible="False" />
+              <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" />
+            </Grid>
+            <ControlTemplate.Triggers>
+              <Trigger Property="IsMouseOver" Value="True"><Setter TargetName="Outline" Property="Stroke" Value="{DynamicResource AccentInkBrush}" /></Trigger>
+              <Trigger Property="IsKeyboardFocused" Value="True"><Setter TargetName="Outline" Property="StrokeThickness" Value="2" /></Trigger>
+            </ControlTemplate.Triggers>
+          </ControlTemplate>
+        </Setter.Value>
+      </Setter>
+    </Style>
+    <Style x:Key="FoldNoteAction" TargetType="Button" BasedOn="{StaticResource PrimaryButton}">
+      <Setter Property="local:UiMotion.Feedback" Value="button" />
+      <Setter Property="Background" Value="{DynamicResource FoldCoralBrush}" />
+      <Setter Property="Foreground" Value="{DynamicResource OnCoralBrush}" />
     </Style>
     <Style x:Key="TaskbarAppearanceSlider" TargetType="Slider">
       <Setter Property="MinHeight" Value="24" />

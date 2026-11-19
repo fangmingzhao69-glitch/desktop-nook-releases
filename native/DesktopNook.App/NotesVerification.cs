@@ -134,11 +134,11 @@ internal static class NotesVerification
             var addButton=Find<Button>(window.NotesHost).Single(b=>AutomationProperties.GetAutomationId(b)=="AddProjectNote");addButton.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));await Layout();
             Check(window.NotesDraft.Notes.Last().Kind=="todo"&&window.LastMenu?.IsOpen!=true,"记一条直接新增待办，不弹出文字类型菜单");
             Check(Find<TextBlock>(window.NotesHost).Any(t=>t.Text=="便签与待办"),"右侧标题显示便签");
-            var launcherHeading = Find<TextBlock>(window).First(text => text.Text == "随手");
+            var launcherHeading = Find<TextBlock>(window).First(text => text.Text == "折页");
             var notesHeading = Find<TextBlock>(window.NotesHost).Single(text => text.Text == "便签与待办");
-            Check(notesHeading.FontFamily.Equals(launcherHeading.FontFamily) && notesHeading.FontWeight == launcherHeading.FontWeight &&
-                notesHeading.FontSize == 15 && launcherHeading.FontSize == 16 && Field("记录标题").FontFamily.Equals(launcherHeading.FontFamily),
-                "便签标题和编辑框共用随手字体，品牌和区域标题保持设计层级");
+            Check(notesHeading.FontFamily.Equals(launcherHeading.FontFamily) && notesHeading.FontWeight == FontWeights.SemiBold &&
+                launcherHeading.FontWeight == FontWeights.ExtraBold && notesHeading.FontSize == 15 && launcherHeading.FontSize == 16 && Field("记录标题").FontFamily.Equals(launcherHeading.FontFamily),
+                "便签标题和编辑框共用折页字体，品牌和区域标题保持设计层级");
             var customTitle=Find<TextBox>(window.NotesHost).Last(b=>AutomationProperties.GetName(b)=="记录标题");customTitle.Text="可编辑清单名称";
             Check(window.FlushNotes(false)&&new NotesStore(App.Store.DataDirectory).State.Notes.Last().Title=="可编辑清单名称","自定义清单名称持久保存");
             var checklist = window.NotesDraft.Notes.Last();
@@ -376,7 +376,7 @@ internal static class NotesVerification
             window.NotesStore.Commit(window.NotesDraft);
             window.RenderNotes();
             await Layout();
-            await NotesSplitVerification.Run(window,checks);window.NotesDraft.LeftFraction=.646;window.NotesStore.Commit(window.NotesDraft);window.RenderNotes();await Layout();Snapshot("notes-final-preview");
+            await NotesSplitVerification.Run(window,checks);window.NotesDraft.LeftFraction=.61;window.NotesStore.Commit(window.NotesDraft);window.RenderNotes();await Layout();Snapshot("notes-final-preview");
         }
         catch(Exception ex){failure=ex.ToString();}
         File.WriteAllText(Path.Combine(root,"notes-verification.json"),JsonSerializer.Serialize(new{passed=checks.Count,failure,checks},new JsonSerializerOptions{WriteIndented=true}));

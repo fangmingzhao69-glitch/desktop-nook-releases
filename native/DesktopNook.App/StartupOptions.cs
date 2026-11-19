@@ -6,7 +6,7 @@ using System.Text.Json.Serialization;
 namespace DesktopNook.App;
 internal sealed class StartupOptions(string runKey = @"Software\Microsoft\Windows\CurrentVersion\Run",string settingsKey = @"Software\DesktopNook\Settings",string? preferencesPath=null,bool fileOnly=false)
 {
-    private sealed class Preferences {public bool? CloseEndsProcess {get;set;} public WindowSizePreference? WindowSize {get;set;} [JsonIgnore(Condition=JsonIgnoreCondition.WhenWritingNull)]public string? CollectView {get;set;} [JsonIgnore(Condition=JsonIgnoreCondition.WhenWritingNull)]public string? MotionMode {get;set;} [JsonIgnore(Condition=JsonIgnoreCondition.WhenWritingNull)]public string? PanelStyle {get;set;} [JsonIgnore(Condition=JsonIgnoreCondition.WhenWritingNull)]public string? Theme {get;set;}}
+    private sealed class Preferences {public bool? CloseEndsProcess {get;set;} public WindowSizePreference? WindowSize {get;set;} [JsonIgnore(Condition=JsonIgnoreCondition.WhenWritingNull)]public string? CollectView {get;set;} [JsonIgnore(Condition=JsonIgnoreCondition.WhenWritingNull)]public string? MotionMode {get;set;} [JsonIgnore(Condition=JsonIgnoreCondition.WhenWritingNull)]public string? PanelStyle {get;set;} [JsonIgnore(Condition=JsonIgnoreCondition.WhenWritingNull)]public string? Theme {get;set;} [JsonIgnore(Condition=JsonIgnoreCondition.WhenWritingNull)]public string? ColorTheme {get;set;}}
     private Preferences? ReadPreferences()
     {
         if(preferencesPath is null)return null;
@@ -30,7 +30,26 @@ internal sealed class StartupOptions(string runKey = @"Software\Microsoft\Window
     }
     private string? SavedCollectView {get{var saved=ReadPreferences()?.CollectView;if(saved is "icons" or "details")return saved;if(fileOnly&&ReadPreferences() is not null)return null;using var key=Registry.CurrentUser.OpenSubKey(settingsKey);return key?.GetValue("CollectView") as string;}}
     private string? SavedMotionMode {get{var saved=ReadPreferences()?.MotionMode;if(saved is "system" or "on" or "off")return saved;if(fileOnly&&ReadPreferences() is not null)return null;using var key=Registry.CurrentUser.OpenSubKey(settingsKey);return key?.GetValue("MotionMode") as string;}}
-    private Preferences Snapshot()=>new(){CloseEndsProcess=CloseEndsProcess,WindowSize=ReadWindowSize(),CollectView=SavedCollectView,MotionMode=SavedMotionMode,PanelStyle=ReadPreferences()?.PanelStyle,Theme=ReadPreferences()?.Theme};
+    private Preferences Snapshot()
+    {
+        var current = ReadPreferences();
+        return new() { CloseEndsProcess=CloseEndsProcess, WindowSize=ReadWindowSize(),
+            CollectView=SavedCollectView, MotionMode=SavedMotionMode, PanelStyle=current?.PanelStyle,
+            Theme=current?.Theme, ColorTheme=current?.ColorTheme };
+    }
+
+    internal string ColorTheme
+    {
+        get => FoldTheme.Find(ReadPreferences()?.ColorTheme).Id;
+        set
+        {
+            var theme = FoldTheme.Find(value);
+            if (theme.Id != value) throw new ArgumentException("无效配色。", nameof(value));
+            var preferences = Snapshot();
+            preferences.ColorTheme = theme.Id == FoldTheme.All[0].Id ? null : theme.Id;
+            SavePreferences(preferences);
+        }
+    }
     internal string ThemeMode
     {
         get

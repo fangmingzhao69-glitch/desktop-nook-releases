@@ -52,7 +52,7 @@ internal sealed class TaskbarAppearanceSession(TaskbarAppearanceStore store, ITa
         {
             if (!backend.Stop()) throw;
             HasPreview = false;
-            throw new IOException("无法重新应用已保存的外观，已关闭随手的外观组件。", ex);
+            throw new IOException("无法重新应用已保存的外观，已关闭折页的外观组件。", ex);
         }
     }
 

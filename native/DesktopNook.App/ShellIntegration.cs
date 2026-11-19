@@ -154,9 +154,16 @@ internal static class ShellIntegration
     {
         const uint updateItem = 0x00002000;
         const uint unicodePath = 0x0005;
+        const uint flush = 0x1000;
+        const uint updateImage = 0x00008000;
+        const uint imageIndex = 0x4000;
+        const uint dword = 0x0003;
         var pointer = Marshal.StringToHGlobalUni(path);
-        try { SHChangeNotify(updateItem, unicodePath, pointer, IntPtr.Zero); }
+        try { SHChangeNotify(updateItem, unicodePath | flush, pointer, IntPtr.Zero); }
         finally { Marshal.FreeHGlobal(pointer); }
+        ShellFileInfo info = default;
+        if (SHGetFileInfo(path, 0, ref info, (uint)Marshal.SizeOf<ShellFileInfo>(), imageIndex) != IntPtr.Zero)
+            SHChangeNotify(updateImage, dword | flush, IntPtr.Zero, (IntPtr)info.Index);
     }
     public static bool ContainsRecycleBin(IDataObject data)
     {

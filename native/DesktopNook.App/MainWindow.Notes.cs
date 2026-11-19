@@ -43,6 +43,7 @@ public partial class MainWindow
         NotesHost.RowDefinitions.Add(new()); NotesHost.RowDefinitions.Add(new() { Height = new(36) });
         var title = new DockPanel { Margin = new Thickness(18,0,16,0), LastChildFill = true, VerticalAlignment = VerticalAlignment.Center };
         _addNote = NotesButton("＋ 记一条", _ => AddProjectNote(), true);
+        _addNote.Style = (Style)FindResource("FoldNoteAction");
         AutomationProperties.SetAutomationId(_addNote,"AddProjectNote");
         DockPanel.SetDock(_addNote,Dock.Right); title.Children.Add(_addNote);
         var heading = NotesText("便签与待办",15);
@@ -50,9 +51,6 @@ public partial class MainWindow
         heading.Foreground = (Brush)FindResource("Ink");
         var copy = new StackPanel { VerticalAlignment = VerticalAlignment.Center };
         copy.Children.Add(heading);
-        var caption = NotesText("想法，随手记",11);
-        caption.Foreground = Brush("TextSecondaryBrush");
-        copy.Children.Add(caption);
         title.Children.Add(copy);
         NotesHost.Children.Add(title);
         var projects = new DockPanel { Margin = new Thickness(14,0,12,0) }; Grid.SetRow(projects,1);
@@ -77,7 +75,7 @@ public partial class MainWindow
         projects.Children.Add(_projectScroll); NotesHost.Children.Add(projects);
         var body=new Grid { Margin=new Thickness(16,8,16,0) }; Grid.SetRow(body,2);
         body.RowDefinitions.Add(new(){Height=GridLength.Auto});body.RowDefinitions.Add(new(){Height=GridLength.Auto});body.RowDefinitions.Add(new());
-        _noteSearch=new TextBox { FontSize=13,Padding=new Thickness(9,7,9,7),Margin=new Thickness(0,0,0,8), Height=34 };
+        _noteSearch=new TextBox { FontSize=13,Padding=new Thickness(9,7,9,7),Margin=new Thickness(0,0,0,8), Height=36 };
         AutomationProperties.SetName(_noteSearch,"搜索当前分类的记录");
         TrackComposition(_noteSearch);
         _noteSearch.TextChanged+=(_,_)=>{if(_renderingNotes||NoteProject is null)return;NoteProject.Search=_noteSearch.Text;_notesSearchHint.Visibility=_noteSearch.Text.Length==0?Visibility.Visible:Visibility.Collapsed;NotesChanged();_notesSearch.Stop();_notesSearch.Start();};
@@ -254,7 +252,12 @@ public partial class MainWindow
         {
             var empty=NotesText(NoteProject is null?"先新建一个分类，再开始记录":!string.IsNullOrEmpty(NoteProject.Search)?"未找到匹配记录":NoteProject.Archived?"这个分类已归档":"这个分类还没有记录\n点击『记一条』开始",12);
             empty.Margin=new Thickness(8,36,8,20);_noteCards.Children.Add(empty);
-            if(NoteProject is null)_noteCards.Children.Add(NotesButton("＋ 新建分类",_=>NewNoteProject(),true));
+            if (NoteProject is null)
+            {
+                var create = NotesButton("＋ 新建分类", _ => NewNoteProject());
+                create.Style = (Style)FindResource("FoldNewCategory");
+                _noteCards.Children.Add(create);
+            }
         }
     }
     private TextBox NoteTitleEditor(ProjectNote note, bool readOnly)
@@ -339,7 +342,12 @@ public partial class MainWindow
     private void AddNoteCard(ProjectNote note, int number, bool readOnly)
     {
         var content=new StackPanel();
-        var border=new Border { Tag=note, CornerRadius=new CornerRadius(10),BorderBrush=Brush("LineBrush"),BorderThickness=new Thickness(1),Padding=new Thickness(12),Margin=new Thickness(0,0,0,10),Background=Brush("SurfaceBrush"),Child=content };
+        var border = new Border { Tag=note, CornerRadius=new CornerRadius(5), BorderBrush=Brush("LineBrush"),
+            BorderThickness=new Thickness(1), Margin=new Thickness(0,0,0,10), Background=Brush("SurfaceBrush") };
+        var inset = new Border { BorderThickness=new Thickness(3,0,0,0), CornerRadius=new CornerRadius(4),
+            BorderBrush=Brush(note.Kind == "text" ? "FoldCoralBrush" : "PrimaryBrush"),
+            Padding=new Thickness(10,10,12,10), Child=content };
+        border.Child = inset;
         var header=new DockPanel();var menu=NotesButton("···",b=>NoteCardMenu(b,note));AutomationProperties.SetName(menu,"便签操作");DockPanel.SetDock(menu,Dock.Right);header.Children.Add(menu);
         string metadata = note.ModifiedUtc.ToLocalTime().ToString("MM月dd日 HH:mm");
         if (note.Favorite) metadata += " · 常用";

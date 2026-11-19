@@ -1,10 +1,10 @@
-# 随手
+# 折页 / ZHEYE
 
-常用随手取，灵感随手记。随手是 Windows 桌面收纳工具。用一个任务栏入口打开收纳面板，左侧整理软件、文件和文件夹，右侧记录便签和待办。
+常用与灵感，折页之间。折页是 Windows 桌面收纳工具。用一个任务栏入口打开收纳面板，左侧整理软件、文件和文件夹，右侧记录便签和待办。
 
-[下载 0.19.3 安装包](https://github.com/fangmingzhao69-glitch/desktop-nook-releases/releases/download/v0.19.3/DesktopNook-Setup.exe) · [最新正式版](https://github.com/fangmingzhao69-glitch/desktop-nook-releases/releases/latest) · [使用说明](docs/使用说明.md)
+[下载 0.20.0 安装包](https://github.com/fangmingzhao69-glitch/desktop-nook-releases/releases/download/v0.20.0/DesktopNook-Setup.exe) · [最新正式版](https://github.com/fangmingzhao69-glitch/desktop-nook-releases/releases/latest) · [使用说明](docs/使用说明.md)
 
-![随手收纳与便签双栏界面](docs/images/suishou-overview.png)
+![折页收纳与便签双栏界面](docs/images/zheye-overview.png)
 
 ## 当前功能
 
@@ -27,14 +27,14 @@
 | --- | --- |
 | `DesktopNook-Setup.exe` | 首次安装或直接覆盖升级。缺少运行时时，安装器会提示补装。 |
 | `DesktopNook-win-x64.exe` | 免安装版。请先安装桌面运行时，再放到固定目录运行。 |
-| `DesktopNook-v0.19.3-source.zip` | 与本版对应的源码、构建脚本、源依赖和许可证。 |
+| `DesktopNook-v0.20.0-source.zip` | 与本版对应的源码、构建脚本、源依赖和许可证。 |
 | `SHA256SUMS.txt` | 所有发行文件的校验值。 |
 
-升级可在随手的「设置 → 关于与更新 → 检查在线更新」操作。完整迁移或备份请复制整个数据目录，可从「设置 → 数据与恢复 → 打开数据目录」进入。
+升级可在折页的「设置 → 关于与更新 → 检查在线更新」操作。完整迁移或备份请复制整个数据目录，可从「设置 → 数据与恢复 → 打开数据目录」进入。
 
 ## 任务栏外观
 
-从「设置 → 任务栏外观设置」配置外观。开关和场景集中在上方，下方可调整样式、颜色、不透明度和模糊半径。点击「设为统一外观」可将所选效果用于所有场景。启用「按场景自动切换外观」可在窗口最大化等场景使用单独配置。首次使用 0.17.6 的外观功能时，随手会提示下载并校验约 0.8 MB 的组件，然后在随手自身进程内运行。纯色、透明、取消预览及恢复系统外观已在 Windows 11 26H2 构建 26340.10013 单屏实测。各动态场景的独立实机验证、多屏和实际登录自启仍待覆盖。[0.17.6 发行说明](https://github.com/fangmingzhao69-glitch/desktop-nook-releases/releases/tag/v0.17.6)
+从「设置 → 任务栏外观设置」配置外观。开关和场景集中在上方，下方可调整样式、颜色、不透明度和模糊半径。点击「设为统一外观」可将所选效果用于所有场景。启用「按场景自动切换外观」可在窗口最大化等场景使用单独配置。首次使用 0.17.6 的外观功能时，折页会提示下载并校验约 0.8 MB 的组件，然后在折页自身进程内运行。纯色、透明、取消预览及恢复系统外观已在 Windows 11 26H2 构建 26340.10013 单屏实测。各动态场景的独立实机验证、多屏和实际登录自启仍待覆盖。[0.17.6 发行说明](https://github.com/fangmingzhao69-glitch/desktop-nook-releases/releases/tag/v0.17.6)
 
 ## 源码与构建
 
@@ -44,4 +44,4 @@
 
 ## 许可证
 
-随手单进程合并版按 [GNU GPLv3](LICENSE) 发布。其他第三方代码和素材的版权及许可见 [第三方许可说明](native/ThirdPartyNotices)。
+折页单进程合并版按 [GNU GPLv3](LICENSE) 发布。其他第三方代码和素材的版权及许可见 [第三方许可说明](native/ThirdPartyNotices)。

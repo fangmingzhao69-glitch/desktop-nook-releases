@@ -25,4 +25,29 @@
   <SolidColorBrush x:Key="DisabledInkBrush" Color="#647084"/>
   <SolidColorBrush x:Key="TooltipBrush" Color="#27334A"/>
   <SolidColorBrush x:Key="OnTooltipBrush" Color="#FFFFFF"/>
+  <SolidColorBrush x:Key="FoldGridLineBrush" Color="#E4E8F5"/>
+  <SolidColorBrush x:Key="FoldTitleBrush" Color="#CDD6EB"/>
+  <SolidColorBrush x:Key="FoldEdgeBrush" Color="#AEB9D8"/>
+  <SolidColorBrush x:Key="FoldCoralBrush" Color="#FF6B8A"/>
+  <SolidColorBrush x:Key="OnCoralBrush" Color="#101422"/>
+  <SolidColorBrush x:Key="FoldMintBrush" Color="#3AC47D"/>
+  <SolidColorBrush x:Key="OnMintBrush" Color="#102C24"/>
+  <SolidColorBrush x:Key="FoldCreaseShadeBrush" Color="#1C6C5CE7"/>
+  <SolidColorBrush x:Key="FoldCreaseLightBrush" Color="#B8FFFFFF"/>
+  <DrawingBrush x:Key="FoldGridPattern" Viewport="0,0,26,26" ViewportUnits="Absolute" TileMode="Tile" Stretch="None">
+    <DrawingBrush.Drawing>
+      <DrawingGroup>
+        <GeometryDrawing Brush="Transparent" Geometry="M0,0 H26 V26 H0 Z"/>
+        <GeometryDrawing Brush="{DynamicResource FoldGridLineBrush}" Geometry="M0,0 H26 V1 H1 V26 H0 Z"/>
+      </DrawingGroup>
+    </DrawingBrush.Drawing>
+  </DrawingBrush>
+  <DrawingBrush x:Key="FoldRulePattern" Viewport="0,0,32,32" ViewportUnits="Absolute" TileMode="Tile" Stretch="None">
+    <DrawingBrush.Drawing>
+      <DrawingGroup>
+        <GeometryDrawing Brush="Transparent" Geometry="M0,0 H32 V32 H0 Z"/>
+        <GeometryDrawing Brush="{DynamicResource FoldGridLineBrush}" Geometry="M0,31 H32 V32 H0 Z"/>
+      </DrawingGroup>
+    </DrawingBrush.Drawing>
+  </DrawingBrush>
 </ResourceDictionary>

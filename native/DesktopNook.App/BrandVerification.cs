@@ -22,17 +22,17 @@ internal static class BrandVerification
     internal static async Task Run(MainWindow owner,string root,List<string> checks)
     {
         if(!App.IsSandbox)throw new InvalidOperationException("Brand checks require isolated data.");
-        if(owner.Title!="随手")throw new Exception("窗口名称未更新。");
+        if(owner.Title!="折页")throw new Exception("窗口名称未更新。");
         var info=FileVersionInfo.GetVersionInfo(Environment.ProcessPath!);
-        if(info.ProductName!="DesktopNook"||!(info.FileDescription??"").Contains("随手"))throw new Exception("显示名称或旧版更新兼容标识异常。");
+        if(info.ProductName!="DesktopNook"||!(info.FileDescription??"").Contains("折页"))throw new Exception("显示名称或旧版更新兼容标识异常。");
         using(var resource=Application.GetResourceStream(new Uri("pack://application:,,,/Assets/AppIcon.ico")).Stream)
         {
             var decoder=new IconBitmapDecoder(resource,BitmapCreateOptions.None,BitmapCacheOption.OnLoad);
             if(!new[]{16,20,24,32,40,48,64,96,128,256}.SequenceEqual(decoder.Frames.Select(f=>f.PixelWidth)))throw new Exception("图标尺寸不完整。");
         }
-        checks.Add("Suishou display name preserves DesktopNook update identity and ten native icon sizes");
+        checks.Add("Zheye display name preserves DesktopNook update identity and ten native icon sizes");
         var folder=Path.Combine(root,"brand-shortcuts");Directory.CreateDirectory(folder);
-        var legacy=Path.Combine(folder,"一处.lnk");
+        var legacy=Path.Combine(folder,"随手.lnk");
         var type=Type.GetTypeFromProgID("WScript.Shell")!;dynamic shell=Activator.CreateInstance(type)!;
         try
         {
@@ -43,7 +43,7 @@ internal static class BrandVerification
             }
             Legacy(Environment.ProcessPath!);
             var renamed=ShortcutInstaller.Install(folder);
-            if(Path.GetFileName(renamed)!="随手.lnk"||!File.Exists(renamed)||File.Exists(legacy))throw new Exception("同目标快捷方式未迁移。");
+            if(Path.GetFileName(renamed)!="折页.lnk"||!File.Exists(renamed)||File.Exists(legacy))throw new Exception("同目标快捷方式未迁移。");
             dynamic startLink=shell.CreateShortcut(renamed);
             try
             {
@@ -66,7 +66,7 @@ internal static class BrandVerification
             {
                 using(var key=Microsoft.Win32.Registry.CurrentUser.CreateSubKey(reg))key.SetValue("InstallLocation",Path.GetDirectoryName(Environment.ProcessPath!)!);
                 var publicIcons=Path.Combine(root,"public-icon-cache");BrandMigration.Refresh(App.Store.DataDirectory,folder,pinned,reg,publicIcons);
-                string expectedIcon;using(var source=Application.GetResourceStream(new Uri("pack://application:,,,/Assets/AppIcon.ico")).Stream)expectedIcon=Path.Combine(publicIcons,"Suishou-"+Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(source))[..16]+".ico");
+                string expectedIcon;using(var source=Application.GetResourceStream(new Uri("pack://application:,,,/Assets/AppIcon.ico")).Stream)expectedIcon=Path.Combine(publicIcons,"Zheye-"+Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(source))[..16]+".ico");
                 if (!IconPixels(Environment.ProcessPath!).SequenceEqual(IconPixels(expectedIcon)))
                     throw new Exception("Windows 从 EXE 提取的图标与入口使用的 ICO 不一致。");
                 checks.Add("Executable shell icon and refreshed shortcut ICO contain the same artwork");
@@ -76,7 +76,7 @@ internal static class BrandVerification
                 for(int n=0;n<5;n++)BrandMigration.Refresh(App.Store.DataDirectory,folder,pinned,reg,publicIcons,refreshShortcuts:false);
                 if(pinBefore!=LocalUpdater.Hash(ownedPath)||pinTime!=File.GetLastWriteTimeUtc(ownedPath)||startBefore!=LocalUpdater.Hash(renamed))throw new Exception("日常启动改写了任务栏或开始菜单入口。");
                 checks.Add("Five startup refreshes preserve pinned shortcut bytes/timestamp and start-menu identity even with an older icon reference");
-                if((File.GetAttributes(expectedIcon)&FileAttributes.Encrypted)!=0)throw new Exception("公开图标仍被 EFS 加密。");using(var key=Microsoft.Win32.Registry.CurrentUser.OpenSubKey(reg))if(key?.GetValue("DisplayName") as string!="随手")throw new Exception("安装显示名未迁移。");
+                if((File.GetAttributes(expectedIcon)&FileAttributes.Encrypted)!=0)throw new Exception("公开图标仍被 EFS 加密。");using(var key=Microsoft.Win32.Registry.CurrentUser.OpenSubKey(reg))if(key?.GetValue("DisplayName") as string!="折页")throw new Exception("安装显示名未迁移。");
                 if(LocalUpdater.Hash(otherPath)!=otherHash||!File.Exists(legacy)||LocalUpdater.Hash(Path.Combine(App.Store.DataDirectory,"state.json"))!=stateHash)throw new Exception("迁移影响了其他入口或收纳配置。");
             }
             finally{Microsoft.Win32.Registry.CurrentUser.DeleteSubKeyTree(reg,false);}
@@ -84,7 +84,7 @@ internal static class BrandVerification
         }
         finally{Marshal.FinalReleaseComObject(shell);}
         checks.Add("Start-menu rename migrates only matching legacy target and preserves unrelated links");
-        File.WriteAllText(Path.Combine(App.Store.DesktopRoots[0],"随手收纳示例.txt"),"isolated fixture");
+        File.WriteAllText(Path.Combine(App.Store.DesktopRoots[0],"折页收纳示例.txt"),"isolated fixture");
         var hash=LocalUpdater.Hash(Path.Combine(App.Store.DataDirectory,"state.json"));
         var collect=new CollectWindow(App.Store,App.Store.DefaultCategoryId){Owner=owner};
         try

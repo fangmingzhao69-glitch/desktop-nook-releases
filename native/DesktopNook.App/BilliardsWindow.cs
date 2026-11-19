@@ -153,7 +153,7 @@ internal sealed class BilliardsSurface : FrameworkElement,IDisposable
             Text(dc,Round.Phase==RoundPhase.Finished?result:Peer is not null?"好友房间":"已暂停",new(800,345),38,Brushes.White,true);
             Text(dc,Round.Phase==RoundPhase.Finished?(Round.Match.Players==2?$"比分 {Round.Match.Scores[0]} : {Round.Match.Scores[1]}  ·  {Round.Shots} 杆":$"{(int)Round.Elapsed/60:00}:{(int)Round.Elapsed%60:00}  ·  {Round.Shots} 杆  ·  平均 {Round.Elapsed/Round.Total:0.00} 秒 / 图标"):Peer?.Status??"点击上方“继续”或按空格",new(800,420),20,Ink,true);
         }
-        double dpi=VisualTreeHelper.GetDpi(this).PixelsPerDip;if(_brand is null||_brand.PixelsPerDip!=dpi)_brand=new FormattedText("随手 · 图标台球",CultureInfo.CurrentCulture,FlowDirection.LeftToRight,TextFace,13,Trim,dpi);
+        double dpi=VisualTreeHelper.GetDpi(this).PixelsPerDip;if(_brand is null||_brand.PixelsPerDip!=dpi)_brand=new FormattedText("折页 · 图标台球",CultureInfo.CurrentCulture,FlowDirection.LeftToRight,TextFace,13,Trim,dpi);
         dc.DrawText(_brand,new(800-_brand.Width/2,882));dc.Pop();
     }
     public void Dispose(){if(_disposed)return;_disposed=true;StopFrames();Round.Sound=null;Audio.Dispose();_provider.Dispose();_images.Clear();_ballArt.Clear();}
@@ -177,7 +177,7 @@ internal sealed partial class BilliardsWindow : Window
     private bool _ready;
     internal BilliardsWindow(GameMessage start,Func<GameMessage,Task> send)
     {
-        _send=send;_onlineRequested=start.Online is not null;Title="随手 · 图标台球";Icon=new System.Windows.Media.Imaging.BitmapImage(new Uri("pack://application:,,,/Assets/AppIcon.ico"));
+        _send=send;_onlineRequested=start.Online is not null;Title="折页 · 图标台球";Icon=new System.Windows.Media.Imaging.BitmapImage(new Uri("pack://application:,,,/Assets/AppIcon.ico"));
         WindowStyle=WindowStyle.SingleBorderWindow;ResizeMode=ResizeMode.CanResize;Background=ThemePalette.Brush("CanvasBrush");
         var fallback=SystemParameters.WorkArea;var screen=double.IsFinite(start.Width)&&double.IsFinite(start.Height)&&double.IsFinite(start.Left)&&double.IsFinite(start.Top)&&start.Width>0&&start.Height>0?new Rect(start.Left,start.Top,start.Width,start.Height):fallback;
         var bounds=BilliardsPlacement.Initial(screen);Width=bounds.Width;Height=bounds.Height;MinWidth=Math.Min(560,Width);MinHeight=Math.Min(320,Height);Left=bounds.Left;Top=bounds.Top;WindowStartupLocation=WindowStartupLocation.Manual;

@@ -99,7 +99,8 @@ internal sealed class TaskbarAppearancePage : UserControl
         filters.Children.Add(_rules);
         filters.Children.Add(MakeButton("忽略窗口…", () => EditWindowConditions(isRules: false)));
         options.Children.Add(filters);
-        _body.Children.Add(Card(new Expander { Header = "细线与窗口规则", Content = options }));
+        _body.Children.Add(Card(new Expander { Header = "细线与窗口规则", Content = options,
+            Foreground = ThemePalette.Brush("TextPrimaryBrush") }));
         _message.Foreground = ThemePalette.Brush("TextSecondaryBrush");
         _footer.Children.Add(_message);
         var actionBar = new DockPanel();
@@ -451,7 +452,7 @@ internal sealed class TaskbarAppearancePage : UserControl
         if (!CanApply(appearance)) return;
         if (!appearance.UsesComponent && !_session.Running)
         {
-            _message.Text = "当前没有由随手应用的外观。";
+            _message.Text = "当前没有由折页应用的外观。";
             return;
         }
         await _session.PreviewAsync(appearance, _downloadApproved);
@@ -467,7 +468,7 @@ internal sealed class TaskbarAppearancePage : UserControl
         await _session.ApplyAsync(appearance, _downloadApproved);
         _draft = _session.Saved;
         _previewTimer.Stop();
-        _message.Text = !appearance.Enabled ? "已保存，随手的任务栏外观已关闭。"
+        _message.Text = !appearance.Enabled ? "已保存，折页的任务栏外观已关闭。"
             : _activeScene.Key != TaskbarAppearanceSettings.DesktopScene &&
                 (!appearance.FollowScenes || !appearance.ProfileFor(_activeScene.Key).Enabled)
                 ? "已保存此场景的设置。启用场景切换与此场景后，触发时才会显示。"
@@ -490,7 +491,7 @@ internal sealed class TaskbarAppearancePage : UserControl
         await _session.ApplyAsync(_session.Saved with { Enabled = false }, allowDownload: false);
         _previewTimer.Stop();
         LoadFields(_session.Saved);
-        _message.Text = "随手的任务栏外观已关闭。";
+        _message.Text = "折页的任务栏外观已关闭。";
     }
 
     private async Task RunAsync(Func<Task> operation)

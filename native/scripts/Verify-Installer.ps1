@@ -11,10 +11,10 @@ if(-not $app.WaitForInputIdle(15000)){throw 'Sandbox application did not become 
 Run-Setup
 if((Get-FileHash -LiteralPath (Join-Path $Profile 'Data\state.json')).Hash -ne $before){throw 'Upgrade changed user state'}
 if($preferenceHash -and (Get-FileHash -LiteralPath $preferences).Hash -ne $preferenceHash){throw 'Upgrade changed preferences'}
-if((Get-ItemProperty 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall\DesktopNookValidation').DisplayName -ne '随手'){throw 'Installer display name not updated'}
+if((Get-ItemProperty 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall\DesktopNookValidation').DisplayName -ne '折页'){throw 'Installer display name not updated'}
 $uninstaller=Join-Path $InstallDir '卸载桌面小筑.exe'
 $removal=Start-Process -FilePath $uninstaller -ArgumentList @('/S',('_?='+$InstallDir)) -WindowStyle Hidden -PassThru
 $removal.WaitForExit()
 $state=Get-Content -LiteralPath (Join-Path $Profile 'Data\state.json') -Raw|ConvertFrom-Json
 if($removal.ExitCode -ne 0 -or $state.Items.Count -ne 0 -or (Test-Path -LiteralPath $exe)){throw 'Uninstall recovery failed'}
-[pscustomobject]@{Installed=$true;Upgraded=$true;UserStateHashPreserved=$true;UserPreferencesHashPreserved=$true;DisplayName="随手";Uninstalled=$true;RemainingItems=$state.Items.Count;RecoveredFiles=@(Get-ChildItem -LiteralPath (Join-Path $Profile 'Desktop') -File).Count;LiveUserDataTouched=$false}|ConvertTo-Json|Set-Content -LiteralPath (Join-Path $PSScriptRoot '..\test-results\installer-verification.json') -Encoding utf8
+[pscustomobject]@{Installed=$true;Upgraded=$true;UserStateHashPreserved=$true;UserPreferencesHashPreserved=$true;DisplayName="折页";Uninstalled=$true;RemainingItems=$state.Items.Count;RecoveredFiles=@(Get-ChildItem -LiteralPath (Join-Path $Profile 'Desktop') -File).Count;LiveUserDataTouched=$false}|ConvertTo-Json|Set-Content -LiteralPath (Join-Path $PSScriptRoot '..\test-results\installer-verification.json') -Encoding utf8

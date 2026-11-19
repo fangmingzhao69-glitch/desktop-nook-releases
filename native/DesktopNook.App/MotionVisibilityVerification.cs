@@ -29,7 +29,7 @@ internal static class MotionVisibilityVerification
         {
             var cls=new WindowClass{Size=(uint)Marshal.SizeOf<WindowClass>(),Procedure=Marshal.GetFunctionPointerForDelegate(Proc),Instance=_instance,Background=_brush,Name=_name};
             if(RegisterClassEx(ref cls)==0){DeleteObject(_brush);throw new IOException("无法建立测试背景。");}
-            Handle=CreateWindowEx(0x08000088,_name,"随手测试背景",0x90000000,(int)(area.Left*dpi),(int)(area.Top*dpi),(int)(area.Width*dpi),(int)(area.Height*dpi),IntPtr.Zero,IntPtr.Zero,_instance,IntPtr.Zero);
+            Handle=CreateWindowEx(0x08000088,_name,"折页测试背景",0x90000000,(int)(area.Left*dpi),(int)(area.Top*dpi),(int)(area.Width*dpi),(int)(area.Height*dpi),IntPtr.Zero,IntPtr.Zero,_instance,IntPtr.Zero);
             if(Handle==IntPtr.Zero){UnregisterClass(_name,_instance);throw new IOException("无法显示测试背景。");}
         }
         public void Dispose(){DestroyWindow(Handle);UnregisterClass(_name,_instance);}

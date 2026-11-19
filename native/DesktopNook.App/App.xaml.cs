@@ -27,7 +27,8 @@ public partial class App : Application
                 int theme = Array.IndexOf(e.Args, "--theme");
                 string mode = theme >= 0 && theme + 1 < e.Args.Length && e.Args[theme + 1] is "dark" or "system"
                     ? e.Args[theme + 1] : "light";
-                ThemePalette.Apply(mode);
+                int color = Array.IndexOf(e.Args, "--color-theme");
+                ThemePalette.Apply(mode, color >= 0 && color + 1 < e.Args.Length ? e.Args[color + 1] : null);
                 ThemePalette.Watch(this);
                 _=BilliardsHost.Run(e.Args,game);return;
             }
@@ -106,7 +107,7 @@ public partial class App : Application
             Options.PersistForUpdate();
             Store = new NookStore(dataDirectory, desktops, Recycle,storeAllPayloads:!IsSandbox||File.Exists(Path.Combine(dataDirectory,"storage.json")));
             UiMotion.Configure(Options.MotionMode);
-            ThemePalette.Apply(Options.ThemeMode);
+            ThemePalette.Apply(Options.ThemeMode, Options.ColorTheme);
             ThemePalette.Watch(this);
             var window = new MainWindow(deferNoteVisuals: e.Args.Contains("--autostart")); MainWindow = window;
             if(!IsSandbox)Dispatcher.BeginInvoke(() =>
@@ -158,7 +159,7 @@ public partial class App : Application
             if (e.Args.Contains("--category-self-test")) Dispatcher.BeginInvoke(async () => await CategoryDeletionVerification.Run(window, root), System.Windows.Threading.DispatcherPriority.Loaded);
 #endif
         }
-        catch (Exception ex) { MessageBox.Show("随手暂时无法打开。原文件和数据均保留。\n\n" + ex.Message, "随手", MessageBoxButton.OK, MessageBoxImage.Error); Shutdown(1); }
+        catch (Exception ex) { MessageBox.Show("折页暂时无法打开。原文件和数据均保留。\n\n" + ex.Message, "折页", MessageBoxButton.OK, MessageBoxImage.Error); Shutdown(1); }
     }
     private static async Task RelocateAfterHandoff(MainWindow window,string plan)
     {

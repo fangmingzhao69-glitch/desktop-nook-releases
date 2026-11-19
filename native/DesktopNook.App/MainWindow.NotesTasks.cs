@@ -79,6 +79,7 @@ public partial class MainWindow
                 var check = new CheckBox
                 {
                     IsChecked = task.Done,
+                    Style = (Style)FindResource("FoldTaskCheckBox"),
                     VerticalAlignment = VerticalAlignment.Top,
                     Margin = new Thickness(2, 0, 6, 0),
                     Padding = new Thickness(6, 8, 6, 8),

@@ -49,6 +49,14 @@ $hashes=$payloadFiles|ForEach-Object{(Get-FileHash -LiteralPath $_ -Algorithm SH
 $checksum=Join-Path $stage 'SHA256SUMS.txt'
 [IO.File]::WriteAllLines($checksum,$hashes,[Text.UTF8Encoding]::new($false))
 $releaseFiles=$payloadFiles+@($checksum)
+function Get-TargetRelease {
+    # Project the required metadata in gh. Release descriptions may span lines
+    # and are irrelevant to checksum and publishing decisions.
+    $query = 'map(select(.tag_name == "{0}")) | first | if . == null then null else {{tag_name,draft,target_commitish,html_url,assets:[.assets[] | {{name,digest,size}}]}} end' -f $tag
+    $json = & gh api "repos/$Repository/releases?per_page=100" --jq $query
+    if ($LASTEXITCODE -ne 0) { throw '无法读取目标发行版。' }
+    if ($json) { return ($json -join "`n" | ConvertFrom-Json) }
+}
 $priorProxy=$env:HTTPS_PROXY
 try {
     if([string]::IsNullOrWhiteSpace($env:HTTPS_PROXY)) {
@@ -58,19 +66,18 @@ try {
     }
     $visibleRepository=& gh api "repos/$Repository" --jq .full_name
     if($LASTEXITCODE -ne 0 -or $visibleRepository -ne $Repository){throw "无法确认既有发布仓库 $Repository。请检查权限或网络后重试。"}
-    $releases=& gh api "repos/$Repository/releases?per_page=100" | ConvertFrom-Json
-    if($LASTEXITCODE -ne 0){throw '无法读取发行版列表。'}
+
     if(-not $VerifyOnly) {
         $branchRef=[Uri]::EscapeDataString($SourceBranch)
         $remoteCommit=& gh api "repos/$Repository/commits/$branchRef" --jq .sha
         if($LASTEXITCODE -ne 0 -or $remoteCommit.Trim() -ne $sourceCommit){throw "当前提交尚未推送到 GitHub $SourceBranch，或远程已有新提交。"}
     }
-    $existing=$releases|Where-Object tag_name -eq $tag
+    $existing=Get-TargetRelease
     if($VerifyOnly -and -not $existing){throw '待核验的发行版不存在。'}
     if($existing -and -not $existing.draft -and -not $VerifyOnly){throw '该版本已公开，请使用新版本号，不覆盖已发布文件。'}
     # Publish only the explicit files, after all uploads and hashes succeed.
     if(-not $existing) {
-        & gh release create $tag @releaseFiles --repo $Repository --target $sourceCommit --draft --title ('随手 '+$version) --notes-file $NotesFile
+        & gh release create $tag @releaseFiles --repo $Repository --target $sourceCommit --draft --title ('折页 '+$version) --notes-file $NotesFile
         if($LASTEXITCODE -ne 0){throw '发行包上传未完成，草稿保留，可再次运行本脚本续传。'}
     } elseif($existing.draft -and -not $VerifyOnly) {
         if($existing.target_commitish -ne $sourceCommit){throw '已有草稿绑定其他源码提交，请检查后使用新版本号。'}
@@ -81,8 +88,7 @@ try {
             }
         }
     }
-    $release=@(& gh api "repos/$Repository/releases" | ConvertFrom-Json)|Where-Object tag_name -eq $tag
-    if($LASTEXITCODE -ne 0){throw '无法核对上传文件。'}
+    $release=Get-TargetRelease
     if(!$release -or $release.assets.Count -ne $releaseFiles.Count){throw '发行资产数量与清单不一致。'}
     foreach($file in $releaseFiles) {
         $asset=$release.assets|Where-Object name -eq ([IO.Path]::GetFileName($file))

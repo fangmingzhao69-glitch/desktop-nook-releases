@@ -1,5 +1,12 @@
 <DrawingGroup xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation">
-  <GeometryDrawing Brush="#86A7F0"><GeometryDrawing.Geometry><RectangleGeometry Rect="32,32,960,960" RadiusX="240" RadiusY="240"/></GeometryDrawing.Geometry><GeometryDrawing.Pen><Pen Brush="#C5D6F7" Thickness="16"/></GeometryDrawing.Pen></GeometryDrawing>
-  <GeometryDrawing Brush="#F4F8FF"><GeometryDrawing.Geometry><GeometryGroup><RectangleGeometry Rect="176,192,288,288" RadiusX="64" RadiusY="64"/><RectangleGeometry Rect="560,192,288,288" RadiusX="64" RadiusY="64"/><RectangleGeometry Rect="176,576,288,288" RadiusX="64" RadiusY="64"/></GeometryGroup></GeometryDrawing.Geometry></GeometryDrawing>
-  <GeometryDrawing Brush="#FF927E"><GeometryDrawing.Geometry><RectangleGeometry Rect="560,576,288,288" RadiusX="64" RadiusY="64"/></GeometryDrawing.Geometry></GeometryDrawing>
+  <DrawingGroup.Transform><ScaleTransform ScaleX="10.24" ScaleY="10.24"/></DrawingGroup.Transform>
+  <GeometryDrawing>
+    <GeometryDrawing.Geometry><RectangleGeometry Rect="3,3,94,94" RadiusX="25" RadiusY="25"/></GeometryDrawing.Geometry>
+    <GeometryDrawing.Brush><LinearGradientBrush StartPoint="0,0" EndPoint="1,1"><GradientStop Offset="0" Color="#6C5CE7"/><GradientStop Offset="1" Color="#9A8BFF"/></LinearGradientBrush></GeometryDrawing.Brush>
+  </GeometryDrawing>
+  <GeometryDrawing Geometry="M16,27 L55,20 L55,80 L16,73 Z" Brush="#F5FFFFFF"/>
+  <GeometryDrawing Geometry="M59,20 L84,27 L84,73 L59,80 Z" Brush="#BBFFFFFF"/>
+  <GeometryDrawing Geometry="M57,20 V80"><GeometryDrawing.Pen><Pen Brush="#5421196B" Thickness="2"/></GeometryDrawing.Pen></GeometryDrawing>
+  <GeometryDrawing Geometry="M73,15 L87,29 L73,29 Z" Brush="#58FFFFFF"/>
+  <GeometryDrawing Geometry="M73,15 H87 V29 Z" Brush="#FFC93F"/>
 </DrawingGroup>

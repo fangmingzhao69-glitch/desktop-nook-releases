@@ -33,7 +33,7 @@ internal sealed class CollectWindow : Window
     private readonly ScrollViewer _scroll=new(){VerticalScrollBarVisibility=ScrollBarVisibility.Auto,HorizontalScrollBarVisibility=ScrollBarVisibility.Disabled};
     private readonly Button _icons=new(){Content="▦  图标",Padding=new Thickness(12,6,12,6)},_details=new(){Content="☷  详细列表",Padding=new Thickness(12,6,12,6)},_saveDefault=new(){Content="设为默认",Padding=new Thickness(10,6,10,6)};
     private readonly TextBlock _count=new(){FontSize=11,Foreground=ThemePalette.Brush("TextSecondaryBrush"),VerticalAlignment=VerticalAlignment.Center};
-    private readonly Button _accept=new(){Content="添加到随手",IsDefault=true,IsEnabled=false,FontSize=13};
+    private readonly Button _accept=new(){Content="添加到折页",IsDefault=true,IsEnabled=false,FontSize=13};
     internal string ViewMode {get;private set;}="icons";
     public string CategoryId => (string)(_categories.SelectedValue??_defaultCategory);
     public List<DesktopEntry> Selection => _checks.Where(c=>c.IsChecked==true).Select(c=>(DesktopEntry)c.Tag).ToList();

@@ -48,7 +48,7 @@ internal static class NativeTaskbarVerification
             }
             catch (IOException error)
             {
-                Require(error.Message.Contains("已有随手", StringComparison.Ordinal) &&
+                Require(error.Message.Contains("已有折页", StringComparison.Ordinal) &&
                     !conflicting.Running && session.Running, "A second backend cannot take over an active session.");
             }
             Require(session.Stop() && !session.Running, "Session shutdown stops the worker.");

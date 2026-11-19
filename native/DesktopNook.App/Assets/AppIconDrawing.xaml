@@ -1,18 +1,18 @@
 <DrawingGroup xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation">
-  <GeometryDrawing Geometry="M32,256 A224,224 0 0 1 256,32 H768 A224,224 0 0 1 992,256 V768 A224,224 0 0 1 768,992 H256 A224,224 0 0 1 32,768 Z">
-    <GeometryDrawing.Brush><LinearGradientBrush StartPoint=".05,0" EndPoint=".9,1"><GradientStop Offset="0" Color="#ADC9FF"/><GradientStop Offset="1" Color="#7D9CF3"/></LinearGradientBrush></GeometryDrawing.Brush>
+  <DrawingGroup.Transform><ScaleTransform ScaleX="10.24" ScaleY="10.24"/></DrawingGroup.Transform>
+  <GeometryDrawing>
+    <GeometryDrawing.Geometry><RectangleGeometry Rect="3,3,94,94" RadiusX="26" RadiusY="26"/></GeometryDrawing.Geometry>
+    <GeometryDrawing.Brush><LinearGradientBrush StartPoint="0,0" EndPoint="1,1"><GradientStop Offset="0" Color="#6C5CE7"/><GradientStop Offset="1" Color="#9A8BFF"/></LinearGradientBrush></GeometryDrawing.Brush>
   </GeometryDrawing>
-  <GeometryDrawing Geometry="M44,256 A212,212 0 0 1 256,44 H768 A212,212 0 0 1 980,256 V768 A212,212 0 0 1 768,980 H256 A212,212 0 0 1 44,768 Z">
-    <GeometryDrawing.Brush><LinearGradientBrush StartPoint="0,0" EndPoint="1,1"><GradientStop Offset="0" Color="#88FFFFFF"/><GradientStop Offset=".45" Color="#00FFFFFF"/><GradientStop Offset="1" Color="#3022345E"/></LinearGradientBrush></GeometryDrawing.Brush>
+  <GeometryDrawing Geometry="M16,29 L55,22 L57,22 L84,29 L84,76 L59,83 L55,83 L16,76 Z" Brush="#321E2340"/>
+  <GeometryDrawing Geometry="M16,27 L55,20 L55,80 L16,73 Z">
+    <GeometryDrawing.Brush><LinearGradientBrush StartPoint="0,0" EndPoint="1,1"><GradientStop Offset="0" Color="#FAFFFFFF"/><GradientStop Offset="1" Color="#D1FFFFFF"/></LinearGradientBrush></GeometryDrawing.Brush>
   </GeometryDrawing>
-  <GeometryDrawing Geometry="M54,257 A203,203 0 0 1 257,54 H767 A203,203 0 0 1 970,257 V767 A203,203 0 0 1 767,970 H257 A203,203 0 0 1 54,767 Z"><GeometryDrawing.Pen><Pen Brush="#63FFFFFF" Thickness="9"/></GeometryDrawing.Pen></GeometryDrawing>
-  <GeometryDrawing Geometry="M150,158 H874"><GeometryDrawing.Pen><Pen Brush="#4DFFFFFF" Thickness="10" StartLineCap="Round" EndLineCap="Round"/></GeometryDrawing.Pen></GeometryDrawing>
-  <GeometryDrawing Brush="#30314879"><GeometryDrawing.Geometry><GeometryGroup><RectangleGeometry Rect="218,268,264,264" RadiusX="66" RadiusY="66"/><RectangleGeometry Rect="542,268,264,264" RadiusX="66" RadiusY="66"/><RectangleGeometry Rect="218,594,264,264" RadiusX="66" RadiusY="66"/><RectangleGeometry Rect="542,562,264,264" RadiusX="66" RadiusY="66"/></GeometryGroup></GeometryDrawing.Geometry></GeometryDrawing>
-  <DrawingGroup>
-    <GeometryDrawing><GeometryDrawing.Geometry><RectangleGeometry Rect="218,248,264,264" RadiusX="66" RadiusY="66"/></GeometryDrawing.Geometry><GeometryDrawing.Brush><LinearGradientBrush><GradientStop Offset="0" Color="#FFFFFF"/><GradientStop Offset="1" Color="#E2ECFC"/></LinearGradientBrush></GeometryDrawing.Brush><GeometryDrawing.Pen><Pen Brush="#91FFFFFF" Thickness="7"/></GeometryDrawing.Pen></GeometryDrawing>
-    <GeometryDrawing><GeometryDrawing.Geometry><RectangleGeometry Rect="542,248,264,264" RadiusX="66" RadiusY="66"/></GeometryDrawing.Geometry><GeometryDrawing.Brush><LinearGradientBrush><GradientStop Offset="0" Color="#FFFFFF"/><GradientStop Offset="1" Color="#E2ECFC"/></LinearGradientBrush></GeometryDrawing.Brush><GeometryDrawing.Pen><Pen Brush="#91FFFFFF" Thickness="7"/></GeometryDrawing.Pen></GeometryDrawing>
-    <GeometryDrawing><GeometryDrawing.Geometry><RectangleGeometry Rect="218,574,264,264" RadiusX="66" RadiusY="66"/></GeometryDrawing.Geometry><GeometryDrawing.Brush><LinearGradientBrush><GradientStop Offset="0" Color="#FFFFFF"/><GradientStop Offset="1" Color="#E2ECFC"/></LinearGradientBrush></GeometryDrawing.Brush><GeometryDrawing.Pen><Pen Brush="#91FFFFFF" Thickness="7"/></GeometryDrawing.Pen></GeometryDrawing>
-    <GeometryDrawing><GeometryDrawing.Geometry><RectangleGeometry Rect="542,540,264,264" RadiusX="66" RadiusY="66"/></GeometryDrawing.Geometry><GeometryDrawing.Brush><LinearGradientBrush><GradientStop Offset="0" Color="#FFC4B3"/><GradientStop Offset="1" Color="#FF927E"/></LinearGradientBrush></GeometryDrawing.Brush><GeometryDrawing.Pen><Pen Brush="#75FFFFFF" Thickness="7"/></GeometryDrawing.Pen></GeometryDrawing>
-  </DrawingGroup>
-  <GeometryDrawing Geometry="M606,584 H738"><GeometryDrawing.Pen><Pen Brush="#7AFFFFFF" Thickness="11" StartLineCap="Round" EndLineCap="Round"/></GeometryDrawing.Pen></GeometryDrawing>
+  <GeometryDrawing Geometry="M59,20 L84,27 L84,73 L59,80 Z">
+    <GeometryDrawing.Brush><LinearGradientBrush StartPoint="0,0" EndPoint="1,1"><GradientStop Offset="0" Color="#D6FFFFFF"/><GradientStop Offset="1" Color="#9EFFFFFF"/></LinearGradientBrush></GeometryDrawing.Brush>
+  </GeometryDrawing>
+  <GeometryDrawing Geometry="M57,20 V80"><GeometryDrawing.Pen><Pen Brush="#382B1E72" Thickness="2"/></GeometryDrawing.Pen></GeometryDrawing>
+  <GeometryDrawing Geometry="M54.5,20 V80"><GeometryDrawing.Pen><Pen Brush="#8CFFFFFF" Thickness="1.2"/></GeometryDrawing.Pen></GeometryDrawing>
+  <GeometryDrawing Geometry="M73,15 L87,29 L73,29 Z" Brush="#47FFFFFF"/>
+  <GeometryDrawing Geometry="M73,15 H87 V29 Z" Brush="#FFC93F"><GeometryDrawing.Pen><Pen Brush="#24000000" Thickness=".8"/></GeometryDrawing.Pen></GeometryDrawing>
 </DrawingGroup>

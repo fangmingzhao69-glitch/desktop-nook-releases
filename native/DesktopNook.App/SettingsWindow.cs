@@ -46,9 +46,10 @@ internal sealed class SettingsWindow : Window
         root.ColumnDefinitions.Add(new());
         var sidebar = new StackPanel { Margin = new Thickness(12) };
         var brand = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(8, 8, 0, 16) };
-        brand.Children.Add(new Image { Width = 24, Height = 24, Margin = new Thickness(0, 0, 8, 0),
-            Source = new System.Windows.Media.Imaging.BitmapImage(new Uri("pack://application:,,,/Assets/AppIcon.png")) });
-        var brandName = Text("随手", 16);
+        var mark = new Image { Width = 24, Height = 24, Margin = new Thickness(0, 0, 8, 0) };
+        mark.SetResourceReference(Image.SourceProperty, "FoldMark");
+        brand.Children.Add(mark);
+        var brandName = Text("折页", 16);
         brandName.FontWeight = FontWeights.SemiBold;
         brand.Children.Add(brandName);
         sidebar.Children.Add(brand);
@@ -137,6 +138,7 @@ internal sealed class SettingsWindow : Window
                 ButtonRow("退出并结束进程", () => ContinueWith(ActionAfterClose.Quit));
                 break;
             case "外观":
+                ColorThemeCards();
                 ThemeCards();
                 var motionHeading = Text("面板与动效", 14);
                 motionHeading.FontWeight = FontWeights.SemiBold;
@@ -172,8 +174,8 @@ internal sealed class SettingsWindow : Window
                     foreground: "DangerBrush");
                 break;
             case "关于与更新":
-                Info($"随手  {MainWindow.CurrentVersionLabel}");
-                Info("常用随手取，灵感随手记。");
+                Info($"折页  {MainWindow.CurrentVersionLabel}");
+                Info("常用与灵感，折页之间。");
                 ButtonRow("检查在线更新", () => ContinueWith(ActionAfterClose.CheckUpdate), primary: true);
                 ButtonRow("从本地文件更新", () => ContinueWith(ActionAfterClose.LocalUpdate));
                 ButtonRow("打开官方发布页", () => ContinueWith(ActionAfterClose.Releases));
@@ -201,18 +203,54 @@ internal sealed class SettingsWindow : Window
         await Dispatcher.InvokeAsync(Close);
     }
 
+    private void ColorThemeCards()
+    {
+        var heading = Text("配色", 14);
+        heading.FontWeight = FontWeights.SemiBold;
+        heading.Margin = new Thickness(0, 0, 0, 8);
+        _content.Children.Add(heading);
+        var options = new WrapPanel { Margin = new Thickness(0, 0, 0, 12) };
+        foreach (var theme in FoldTheme.All)
+        {
+            bool current = _options.ColorTheme == theme.Id;
+            var stack = new StackPanel { Orientation = Orientation.Horizontal };
+            stack.Children.Add(new Image { Source = FoldTheme.Mark(theme), Width = 25, Height = 25, Margin = new Thickness(0, 0, 7, 0) });
+            stack.Children.Add(Text(theme.Name, 12));
+            var button = new Button
+            {
+                Content = stack, MinWidth = 106, Margin = new Thickness(0, 0, 6, 6), Padding = new Thickness(7),
+                Background = ThemePalette.Brush(current ? "SelectionBrush" : "SurfaceSubtleBrush")
+            };
+            AutomationProperties.SetName(button, theme.Name);
+            AutomationProperties.SetAutomationId(button, "Settings-Color-" + theme.Id);
+            if (current) AutomationProperties.SetItemStatus(button, "当前配色");
+            button.Click += (_, _) => Save(() =>
+            {
+                _options.ColorTheme = theme.Id;
+                _owner.FinishPanelMotion();
+                ThemePalette.Apply(_options.ThemeMode, theme.Id);
+                _owner.PanelMotion.InvalidateSnapshot();
+                SelectPage("外观");
+                _content.Children.OfType<WrapPanel>().First().Children.OfType<Button>()
+                    .Single(item => AutomationProperties.GetAutomationId(item) == "Settings-Color-" + theme.Id).Focus();
+            });
+            options.Children.Add(button);
+        }
+        _content.Children.Add(options);
+    }
+
     private void ThemeCards()
     {
-        var label = Text("面板主题", 14);
+        var label = Text("明暗模式", 14);
         label.FontWeight = FontWeights.SemiBold;
         label.Margin = new Thickness(0, 0, 0, 8);
         _content.Children.Add(label);
         var cards = new Grid();
         foreach (var (mode, caption, canvas, surface) in new[]
         {
-            ("light", "浅色", "#EFF4FC", "#FFFFFF"),
-            ("dark", "深色", "#1B2235", "#314A73"),
-            ("system", "跟随系统", "#D8E4F9", "#526385")
+            ("light", "浅色", ThemePalette.Family.Light.Canvas, ThemePalette.Family.Light.Accent),
+            ("dark", "深色", ThemePalette.Family.Dark.Canvas, ThemePalette.Family.Dark.Accent),
+            ("system", "跟随系统", ThemePalette.Family.Light.Canvas, ThemePalette.Family.Dark.Accent)
         })
         {
             int column = cards.ColumnDefinitions.Count;
