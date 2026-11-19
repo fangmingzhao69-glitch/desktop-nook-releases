@@ -2,6 +2,7 @@ using System.Windows;
 using System.Windows.Automation;
 using System.Windows.Controls;
 using System.Windows.Input;
+using System.Windows.Media;
 using System.Windows.Threading;
 using DesktopNook.Core;
 
@@ -13,6 +14,8 @@ public partial class MainWindow
     {
         var rows = new StackPanel();
         content.Children.Add(rows);
+        NoteTaskEditor? selectedEditor = null;
+        Button? strike = null;
         if (!readOnly)
         {
             var add = NotesButton("＋ 添加", _ => AddTask());
@@ -20,8 +23,32 @@ public partial class MainWindow
             add.ToolTip = "在清单第一行添加待办";
             DockPanel.SetDock(add, Dock.Right);
             header.Children.Insert(header.Children.Count - 1, add);
+
+            strike = NotesButton("S", _ =>
+            {
+                if (selectedEditor is not { Selection.IsEmpty: false } editor) return;
+                editor.Focus();
+                editor.ToggleStrike();
+                UpdateStrikeButton();
+            });
+            strike.Content = new TextBlock { Text = "S", TextDecorations = TextDecorations.Strikethrough };
+            AutomationProperties.SetAutomationId(strike, "NoteTaskStrike-" + note.Id);
+            ToolTipService.SetShowOnDisabled(strike, true);
+            DockPanel.SetDock(strike, Dock.Right);
+            header.Children.Insert(header.Children.Count - 1, strike);
         }
         BuildRows();
+
+        void UpdateStrikeButton()
+        {
+            if (strike is null) return;
+            strike.IsEnabled = selectedEditor is { Selection.IsEmpty: false };
+            bool remove = strike.IsEnabled && selectedEditor!.SelectionIsStruck();
+            string action = remove ? "取消删除线" : "添加删除线";
+            strike.Background = remove ? Brush("#DDF2FF") : Brushes.Transparent;
+            strike.ToolTip = strike.IsEnabled ? action : "选中待办文字后添加或取消删除线";
+            AutomationProperties.SetName(strike, action);
+        }
 
         void AddTask()
         {
@@ -37,10 +64,9 @@ public partial class MainWindow
                 NoteProject?.Id != note.ProjectId || !note.Tasks.Contains(target)) return;
 
             bool wasCompleted = note.IsCompletedChecklist();
-            if (string.IsNullOrWhiteSpace(target.Text) && !target.Done) note.Tasks.Remove(target);
+            if (target.Text.Length == 0 && !target.Done) note.Tasks.Remove(target);
             note.Tasks.InsertRange(0, tasks);
-            int firstPending = tasks.FindIndex(task => !task.Done);
-            RefreshRows(wasCompleted, Math.Max(0, firstPending));
+            RefreshRows(wasCompleted, 0);
         }
 
         void RefreshRows(bool wasCompleted, int focus = -1)
@@ -67,6 +93,8 @@ public partial class MainWindow
 
         void BuildRows()
         {
+            selectedEditor = null;
+            UpdateStrikeButton();
             rows.Children.Clear();
             foreach (var (task, index) in note.Tasks.Select((task, index) => (task, index)).OrderBy(entry => entry.task.Done))
             {
@@ -85,6 +113,7 @@ public partial class MainWindow
                 var editor = new NoteTaskEditor(task, batch => PasteTasks(task, batch))
                 {
                     IsReadOnly = readOnly,
+                    IsInactiveSelectionHighlightEnabled = !readOnly,
                     Foreground = Brush(task.Done ? "#8998A6" : "#35566E"),
                     ToolTip = readOnly ? null : "粘贴多行文字可自动拆成多条待办"
                 };
@@ -94,6 +123,15 @@ public partial class MainWindow
                     note.Tasks.Remove(task);
                     note.ModifiedUtc = DateTime.UtcNow;
                 }));
+                editor.GotKeyboardFocus += (_, _) =>
+                {
+                    selectedEditor = editor;
+                    UpdateStrikeButton();
+                };
+                editor.SelectionChanged += (_, _) =>
+                {
+                    if (selectedEditor == editor) UpdateStrikeButton();
+                };
                 editor.TextChanged += (_, _) =>
                 {
                     var (text, strikes) = editor.ReadContent();
@@ -102,6 +140,7 @@ public partial class MainWindow
                     task.Strikes = strikes;
                     NotesChanged(true, note);
                     UpdateNoteCounts();
+                    if (selectedEditor == editor) UpdateStrikeButton();
                 };
                 check.Click += (_, _) =>
                 {

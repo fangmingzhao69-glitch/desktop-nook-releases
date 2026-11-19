@@ -46,7 +46,8 @@ internal static class NotesVerification
         bool PasteText(NoteTaskEditor editor, string text)
         {
             var data = new DataObject(DataFormats.UnicodeText, text);
-            var args = new DataObjectPastingEventArgs(data, false, DataFormats.UnicodeText);
+            data.SetData(DataFormats.Rtf, @"{\rtf1\ansi\strike sample}");
+            var args = new DataObjectPastingEventArgs(data, false, DataFormats.Rtf);
             editor.RaiseEvent(args);
             return args.CommandCancelled;
         }
@@ -116,19 +117,18 @@ internal static class NotesVerification
             Check(window.FlushNotes(false)&&new NotesStore(App.Store.DataDirectory).State.Notes.Last().Title=="可编辑清单名称","自定义清单名称持久保存");
             var checklist = window.NotesDraft.Notes.Last();
             var taskBox = TaskEditors(checklist).Single();
-            var numbered = Enumerable.Range(1, 10).Select(i => i == 2 ? "2、~~已核对~~，继续处理" : $"{i}、事项 {i}");
-            Check(PasteText(taskBox, string.Join("\r\n", numbered)), "多行剪贴板走批量粘贴");
+            string[] pasted = ["1、事项一", "~~已核对~~，继续处理", "", "  保留尾部空格  ", "- [x] 原文符号"];
+            Check(PasteText(taskBox, string.Join("\r\n", pasted)), "多行剪贴板走批量粘贴");
             await Layout();
-            Check(TaskEditors(checklist).Length == 10 &&
-                checklist.Tasks.Select(task => task.Text).SequenceEqual(Enumerable.Range(1, 10)
-                    .Select(i => i == 2 ? "已核对，继续处理" : $"事项 {i}")) &&
-                checklist.Tasks[1].Strikes?.Single() == new NoteStrikeRange(0, 3), "十行编号按原顺序拆分并保留部分删除线");
+            Check(TaskEditors(checklist).Select(editor => editor.PlainText).SequenceEqual(pasted) &&
+                checklist.Tasks.All(task => !task.Done && task.Strikes is null),
+                "有编号和无编号原样拆分，空行、空格和标记符号均保留");
             Check(!PasteText(TaskEditors(checklist)[0], "追加几个字"), "单行仍走原来的文字粘贴");
             Check(PasteText(TaskEditors(checklist)[0], "- [ ] 补充一项\n- [x] 已核对一项"), "现有清单可以继续批量粘贴");
             await Layout();
-            Check(checklist.Tasks.Count == 12 && checklist.Tasks[0].Text == "补充一项" &&
-                checklist.Tasks[1].Done && checklist.Tasks[2].Text == "事项 1", "插入新批次后原有事项和完成状态保持");
-            Check(window.FlushNotes(false) && new NotesStore(App.Store.DataDirectory).State.Notes.Last().Tasks.Count == 12,
+            Check(checklist.Tasks.Count == pasted.Length + 2 && checklist.Tasks[0].Text == "- [ ] 补充一项" &&
+                !checklist.Tasks[1].Done && checklist.Tasks[2].Text == "1、事项一", "新增批次保留原符号及已有事项");
+            Check(window.FlushNotes(false) && new NotesStore(App.Store.DataDirectory).State.Notes.Last().Tasks.Count == pasted.Length + 2,
                 "批量拆分结果可以正常保存和重读");
             checklist.Tasks.Clear();
             checklist.Tasks.Add(new NoteTask());
@@ -138,15 +138,21 @@ internal static class NotesVerification
             taskBox = TaskEditors(checklist).Single();
             taskBox.Selection.Text = "确认设计方案";
             taskBox.Focus();
+            taskBox.SelectCharacters(0, 0);
+            var strike = Find<Button>(window.NotesHost).Single(button =>
+                AutomationProperties.GetAutomationId(button) == "NoteTaskStrike-" + checklist.Id);
+            Check(!strike.IsEnabled && ReferenceEquals(strike.Parent, Find<TextBox>(window.NotesHost).Last(b =>
+                    AutomationProperties.GetName(b) == "记录标题").Parent), "删除线按钮和清单标题同行");
             taskBox.SelectCharacters(2, 2);
-            var strike = OpenEditorMenu(taskBox).Items.OfType<MenuItem>().Single(item => Equals(item.Header, "添加删除线"));
-            ClickMenu(strike);
+            Check(strike.IsEnabled && AutomationProperties.GetName(strike) == "添加删除线", "选中文字可从标题栏加删除线");
+            strike.Focus();
+            strike.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
             Check(taskBox.ReadContent().Strikes?.SequenceEqual([new NoteStrikeRange(2, 2)]) == true &&
                 taskBox.PlainText == "确认设计方案" && !checklist.Tasks.Single().Done, "所选文字加删除线且待办仍未完成");
             taskBox.SelectCharacters(2, 2);
-            var removeStrike = OpenEditorMenu(taskBox).Items.OfType<MenuItem>().Single(item => Equals(item.Header, "取消删除线"));
-            ClickMenu(removeStrike);
-            Check(taskBox.ReadContent().Strikes is null, "已标记文字可从同一右键菜单取消删除线");
+            Check(AutomationProperties.GetName(strike) == "取消删除线", "标题栏显示当前操作");
+            strike.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            Check(taskBox.ReadContent().Strikes is null, "已标记文字可用同一个标题栏按钮取消删除线");
             taskBox.SelectCharacters(2, 2);
             ClickMenu(OpenEditorMenu(taskBox).Items.OfType<MenuItem>().Single(item => Equals(item.Header, "添加删除线")));
             Check(window.FlushNotes(false) && new NotesStore(App.Store.DataDirectory).State.Notes.Last().Tasks.Single()
