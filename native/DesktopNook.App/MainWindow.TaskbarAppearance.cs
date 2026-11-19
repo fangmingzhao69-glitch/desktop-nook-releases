@@ -24,8 +24,7 @@ public partial class MainWindow
     {
         if (_taskbarAppearance is not null) return _taskbarAppearance;
         var store = new TaskbarAppearanceStore(Store.DataDirectory);
-        var package = new TaskbarAppearancePackage(store.DirectoryPath, useCompatibilityPackage: Environment.OSVersion.Version.Build == 26340);
-        var backend = new TranslucentTaskbarBackend(package, App.IsSandbox);
+        var backend = new NativeTaskbarBackend(store.DirectoryPath, App.IsSandbox);
         return _taskbarAppearance = new TaskbarAppearanceSession(store, backend);
     }
 

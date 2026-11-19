@@ -214,9 +214,33 @@ public partial class MainWindow : Window
         Menu("创建开始菜单入口",()=>Run(()=>ShortcutInstaller.Install(),"已创建开始菜单入口，可右键固定到任务栏")),
         Menu("如何固定到任务栏",()=>{_interactions++;try{UiDialogs.Show(this,"右键任务栏上的“轻匣”图标，选择“固定到任务栏”。\n\n固定后点击同一个入口即可打开或收起轻匣。","轻匣");}finally{_interactions--;}}),
         Menu("打开数据目录",()=>Process.Start(new ProcessStartInfo("explorer.exe",Store.DataDirectory){UseShellExecute=true})),
-        new Separator(),Menu("退出并结束进程",Quit)
+        Menu("开源许可与源码…",ShowOpenSource),new Separator(),Menu("退出并结束进程",Quit)
     ]);
     }
+    private void ShowOpenSource()
+    {
+        _interactions++;
+        try
+        {
+            using var license = typeof(MainWindow).Assembly.GetManifestResourceStream("DesktopNook.GplLicense")
+                ?? throw new InvalidOperationException("无法读取内置许可证。");
+            using var reader = new System.IO.StreamReader(license);
+            var result = UiDialogs.Show(this,
+                "轻匣及修改后的 TranslucentTB 任务栏引擎按 GNU GPL 第 3 版发布。\n" +
+                "TranslucentTB 版权归原作者所有。软件按现状提供，无担保。\n\n" +
+                "你可以按 GPLv3 的条款复制、修改和再发布。选择「确定」下载本版本的对应源码。\n\n" +
+                reader.ReadToEnd(),
+                "开源许可与源码", MessageBoxButton.OKCancel);
+            if (result == MessageBoxResult.OK)
+            {
+                string url = $"https://github.com/{OnlineUpdater.Repository}/releases/tag/{CurrentVersionLabel}";
+                Process.Start(new ProcessStartInfo(url) { UseShellExecute = true });
+            }
+        }
+        catch (Exception error) { ShowFailure(error); }
+        finally { _interactions--; }
+    }
+
     private async Task SelectUpdateAsync()
     {
         _interactions++;

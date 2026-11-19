@@ -5,22 +5,22 @@ using System.Security.Cryptography;
 
 namespace DesktopNook.App;
 
-internal sealed class TaskbarAppearancePackage(string storePath, bool useCompatibilityPackage = false)
+internal sealed class TaskbarAppearancePackage(string storePath)
 {
-    internal const string Version = "2026.2";
-    private const int Size = 1_769_775;
-    private const string Sha256 = "0DBE8E0255C20E131CDE536DCD0AE490D45989A7D360E26D0150DFF1922AC420";
-    private const int CompatibilitySize = 1799291;
-    private const string CompatibilitySha256 = "1C91B81D1296842F4AF22D79A9E6EBE9FA084DCE2374C5CC1DB7C180207CC624";
-    private static readonly Uri Source = new("https://github.com/TranslucentTB/TranslucentTB/releases/download/2026.2/TranslucentTB-portable-x64.zip");
-    private const string CompatibilityFile = "TranslucentTB-2026.2-26340.zip";
-    private static readonly Uri CompatibilitySource = new($"https://github.com/{OnlineUpdater.Repository}/releases/download/v0.17.0/{CompatibilityFile}");
-    // Preserve the existing cache across application upgrades.
-    private string PackageName => "TranslucentTB-" + Version + (useCompatibilityPackage ? "-26340-preview" : "");
+    internal const string ReleaseTag = "v0.17.6";
+    internal const string PackageFile = "Qingxia-TaskbarCore-win-x64.zip";
+    private const int Size = 811773;
+    private const string Sha256 = "8315C4B8E00ACF04815A672BE9A671BDC242D38EAEE9B4F89A9A95F3A9FAD092";
+    private static readonly Uri Source = new($"https://github.com/{OnlineUpdater.Repository}/releases/download/{ReleaseTag}/{PackageFile}");
+    internal static readonly IReadOnlyList<string> Files = Array.AsReadOnly(new[]
+    {
+        "QingxiaTaskbarCore.dll", "ProgramLog.dll", "ExplorerTAP.dll", "ExplorerHooks.dll",
+        "LICENSE.txt", "THIRD-PARTY-NOTICES.txt"
+    });
+    private static string PackageName => Path.GetFileNameWithoutExtension(PackageFile) + "-" + ReleaseTag;
     internal string ArchivePath => Path.Combine(storePath, "components", PackageName + ".zip");
     private string ComponentDirectory => Path.Combine(storePath, "components", PackageName);
     internal bool HasArchive => File.Exists(ArchivePath);
-    internal bool UsesCompatibilityPackage => useCompatibilityPackage;
 
     internal async Task<string> PrepareAsync(bool allowDownload, CancellationToken token = default)
     {
@@ -32,7 +32,7 @@ internal sealed class TaskbarAppearancePackage(string storePath, bool useCompati
             using var client = OnlineUpdater.CreateClient();
             await DownloadAsync(client, token).ConfigureAwait(false);
         }
-        return await Task.Run(() => VerifyAndExtract(archive, ComponentDirectory, UsesCompatibilityPackage), token).ConfigureAwait(false);
+        return await Task.Run(() => VerifyAndExtract(archive, ComponentDirectory), token).ConfigureAwait(false);
     }
 
     private void PrepareCache()
@@ -47,8 +47,8 @@ internal sealed class TaskbarAppearancePackage(string storePath, bool useCompati
     {
         PrepareCache();
         string finalPath = ArchivePath;
-        int expectedSize = UsesCompatibilityPackage ? CompatibilitySize : Size;
-        var sourceUri = UsesCompatibilityPackage ? CompatibilitySource : Source;
+        const int expectedSize = Size;
+        var sourceUri = Source;
         var temp = finalPath + "." + Guid.NewGuid().ToString("N") + ".partial";
         using var timeout = CancellationTokenSource.CreateLinkedTokenSource(token);
         timeout.CancelAfter(TimeSpan.FromSeconds(45));
@@ -72,7 +72,7 @@ internal sealed class TaskbarAppearancePackage(string storePath, bool useCompati
                 }
                 destination.Flush(flushToDisk: true);
             }
-            using (var file = OpenVerifiedArchive(temp, UsesCompatibilityPackage)) { }
+            using (var file = OpenVerifiedArchive(temp)) { }
             File.Move(temp, finalPath, overwrite: false);
         }
         finally
@@ -81,10 +81,12 @@ internal sealed class TaskbarAppearancePackage(string storePath, bool useCompati
         }
     }
 
-    internal static string VerifyAndExtract(string archivePath, string destination, bool compatibility = false)
+    internal static string VerifyAndExtract(string archivePath, string destination)
     {
-        using var file = OpenVerifiedArchive(archivePath, compatibility);
+        using var file = OpenVerifiedArchive(archivePath);
         using var archive = new ZipArchive(file, ZipArchiveMode.Read);
+        if (archive.Entries.Count != Files.Count || Files.Any(name => archive.GetEntry(name) is null))
+            throw new IOException("任务栏外观组件内容清单不匹配。");
         if (Directory.Exists(destination))
         {
             CheckExtracted(archive, destination);
@@ -106,14 +108,14 @@ internal sealed class TaskbarAppearancePackage(string storePath, bool useCompati
         }
     }
 
-    private static FileStream OpenVerifiedArchive(string path, bool compatibility = false)
+    private static FileStream OpenVerifiedArchive(string path)
     {
         CheckRegularPath(path);
         var file = File.OpenRead(path);
         try
         {
-            int expectedSize = compatibility ? CompatibilitySize : Size;
-            string expectedHash = compatibility ? CompatibilitySha256 : Sha256;
+            const int expectedSize = Size;
+            const string expectedHash = Sha256;
             if (file.Length != expectedSize || Convert.ToHexString(SHA256.HashData(file)) != expectedHash)
                 throw new IOException("组件文件的 SHA-256 或大小未通过校验。");
             file.Position = 0;
@@ -141,16 +143,7 @@ internal sealed class TaskbarAppearancePackage(string storePath, bool useCompati
             if (file.Length != entry.Length || !SHA256.HashData(file).AsSpan().SequenceEqual(SHA256.HashData(content)))
                 throw new IOException("任务栏外观组件目录中的文件与已校验压缩包不一致。");
         }
-        var config = Path.Combine(root, "settings.json");
-        if (File.Exists(config))
-        {
-            CheckRegularPath(config);
-            allowed.Add(config);
-        }
-        string assets = Path.Combine(root, "Assets");
-        if (Directory.GetDirectories(root).Any(dir => !dir.Equals(assets, StringComparison.OrdinalIgnoreCase)) ||
-            Directory.GetDirectories(assets).Length != 0 ||
-            Directory.EnumerateFiles(root).Concat(Directory.EnumerateFiles(assets)).Any(path => !allowed.Contains(path)))
+        if (Directory.EnumerateFileSystemEntries(root).Any(path => !allowed.Contains(path)))
             throw new IOException("任务栏外观组件目录包含未验证的文件。");
     }
 

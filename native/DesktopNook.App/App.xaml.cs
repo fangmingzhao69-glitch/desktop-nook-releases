@@ -26,6 +26,19 @@ public partial class App : Application
                 || arg is "--billiards-parent-probe" or "--billiards-perf-test" or "--verification-marker");
 #if NOOK_UI_VERIFICATION
             if (interactiveVerification && !e.Args.Contains("--sandbox")) throw new IOException("界面自检必须使用沙箱。");
+            if (e.Args.Contains("--native-taskbar-self-test") || e.Args.Contains("--native-taskbar-live-self-test"))
+            {
+                var nativeSandbox = Array.IndexOf(e.Args, "--sandbox");
+                if (nativeSandbox < 0 || nativeSandbox + 1 >= e.Args.Length) { Shutdown(64); return; }
+                var rootPath = Path.GetFullPath(e.Args[nativeSandbox + 1]);
+                var nativeCore = Array.IndexOf(e.Args, "--native-core-archive");
+                string? archive = nativeCore >= 0 && nativeCore + 1 < e.Args.Length ? Path.GetFullPath(e.Args[nativeCore + 1]) : null;
+                bool live = e.Args.Contains("--native-taskbar-live-self-test");
+                Dispatcher.BeginInvoke(new Action(async () => Shutdown(await (live
+                    ? NativeTaskbarVerification.RunLive(rootPath, archive)
+                    : NativeTaskbarVerification.Run(rootPath, archive)))));
+                return;
+            }
             var storageTest=Array.IndexOf(e.Args,"--storage-self-test");if(storageTest>=0){Shutdown(StorageVerification.Run(Path.GetFullPath(e.Args[storageTest+1])));return;}
             var iconCheck=Array.IndexOf(e.Args,"--verify-icons");if(iconCheck>=0){Shutdown(IconVerification.Run(e.Args[iconCheck+1],e.Args.Skip(iconCheck+2)));return;}
 #else
@@ -109,8 +122,7 @@ public partial class App : Application
             if (IsSandbox && taskbarTest >= 0)
             {
                 var archive = taskbarTest + 1 < e.Args.Length ? Path.GetFullPath(e.Args[taskbarTest + 1]) : null;
-                var compatibility = taskbarTest + 2 < e.Args.Length ? Path.GetFullPath(e.Args[taskbarTest + 2]) : null;
-                Dispatcher.BeginInvoke(async () => await TaskbarAppearanceVerification.Run(window, root, archive, compatibility), System.Windows.Threading.DispatcherPriority.Loaded);
+                Dispatcher.BeginInvoke(async () => await TaskbarAppearanceVerification.Run(window, root, archive), System.Windows.Threading.DispatcherPriority.Loaded);
             }
             if (e.Args.Contains("--ui-self-test")) Dispatcher.BeginInvoke(async () => await NativeVerification.Run(window, root), System.Windows.Threading.DispatcherPriority.Loaded);
             if (e.Args.Contains("--friend-self-test")) Dispatcher.BeginInvoke(async () => await FriendVerification.Run(window, root), System.Windows.Threading.DispatcherPriority.Loaded);

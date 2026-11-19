@@ -1,0 +1,4 @@
+/upstream/packages/
+/upstream/taskbar-build-deps/
+/upstream/**/x64/
+/upstream/**/Generated Files/

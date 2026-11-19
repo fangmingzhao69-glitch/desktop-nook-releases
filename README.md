@@ -2,7 +2,7 @@
 
 轻匣是 Windows 桌面收纳工具。用一个任务栏入口打开收纳面板，左侧整理软件、文件和文件夹，右侧记录便签和待办。
 
-[下载 0.17.5 安装包](https://github.com/fangmingzhao69-glitch/desktop-nook-releases/releases/download/v0.17.5/DesktopNook-Setup.exe) · [最新正式版](https://github.com/fangmingzhao69-glitch/desktop-nook-releases/releases/latest) · [使用说明](docs/使用说明.md)
+[下载 0.17.6 安装包](https://github.com/fangmingzhao69-glitch/desktop-nook-releases/releases/download/v0.17.6/DesktopNook-Setup.exe) · [最新正式版](https://github.com/fangmingzhao69-glitch/desktop-nook-releases/releases/latest) · [使用说明](docs/使用说明.md)
 
 ![轻匣收纳与便签双栏界面](docs/images/overview-0.16.png)
 
@@ -27,16 +27,21 @@
 | --- | --- |
 | `DesktopNook-Setup.exe` | 首次安装或直接覆盖升级。缺少运行时时，安装器会提示补装。 |
 | `DesktopNook-win-x64.exe` | 免安装版。请先安装桌面运行时，再放到固定目录运行。 |
-| `SHA256SUMS.txt` | 安装包和免安装 EXE 的校验值。 |
+| `DesktopNook-v0.17.6-source.zip` | 与本版对应的源码、构建脚本、源依赖和许可证。 |
+| `SHA256SUMS.txt` | 所有发行文件的校验值。 |
 
 升级可在轻匣的「更多 → 检查在线更新」操作。完整迁移或备份请复制整个数据目录，可从「更多 → 打开数据目录」进入。
 
 ## 任务栏外观
 
-从「更多 → 任务栏外观」启用并直接设置样式。点击「设为统一外观」可将所选效果用于所有场景。启用「按场景自动切换外观」可在窗口最大化等场景使用单独配置。首次启用时，轻匣会提示下载并校验组件。当前正式版沿用在 Windows 11 26H2 构建 26340.9882 单屏验收过的组件。各动态场景的独立实机验证、多屏和实际登录自启仍待覆盖。[0.17.5 发行说明](https://github.com/fangmingzhao69-glitch/desktop-nook-releases/releases/tag/v0.17.5)
+从「更多 → 任务栏外观」启用并直接设置样式。点击「设为统一外观」可将所选效果用于所有场景。启用「按场景自动切换外观」可在窗口最大化等场景使用单独配置。首次使用 0.17.6 的外观功能时，轻匣会提示下载并校验约 0.8 MB 的组件，然后在轻匣自身进程内运行。纯色、透明、取消预览及恢复系统外观已在 Windows 11 26H2 构建 26340.10013 单屏实测。各动态场景的独立实机验证、多屏和实际登录自启仍待覆盖。[0.17.6 发行说明](https://github.com/fangmingzhao69-glitch/desktop-nook-releases/releases/tag/v0.17.6)
 
 ## 源码与构建
 
 源码在 `native/`。构建需要 Windows、.NET 10 SDK 和 PowerShell，安装包另外需要 Unicode NSIS 3。开发时用独立 `--sandbox` 数据目录。
 
 [开发与构建](docs/开发与构建.md) · [架构与数据](docs/架构与数据.md) · [项目交接](docs/项目交接.md)
+
+## 许可证
+
+轻匣单进程合并版按 [GNU GPLv3](LICENSE) 发布。其他第三方代码和素材的版权及许可见 [第三方许可说明](native/ThirdPartyNotices)。

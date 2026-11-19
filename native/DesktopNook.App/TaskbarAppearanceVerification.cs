@@ -27,7 +27,7 @@ internal static class TaskbarAppearanceVerification
         public string? Restriction => null;
         public bool NeedsDownload => false;
         public bool Running => LastAppearance?.UsesComponent == true;
-        public bool UsesCompatibilityPackage => false;
+
         public string? RejectStyle { get; set; }
         public Task ApplyAsync(TaskbarAppearanceSettings settings, bool allowDownload)
         {
@@ -38,7 +38,7 @@ internal static class TaskbarAppearanceVerification
         public bool Stop() { LastAppearance = null; return true; }
     }
 
-    internal static async Task Run(MainWindow window, string root, string? archivePath, string? compatibilityArchive)
+    internal static async Task Run(MainWindow window, string root, string? archivePath)
     {
         var checks = new List<string>();
         string failure = "";
@@ -169,61 +169,40 @@ internal static class TaskbarAppearanceVerification
             }
             store.Save(clear);
 
-            var sandboxBackend = new TranslucentTaskbarBackend(new TaskbarAppearancePackage(store.DirectoryPath), sandbox: true);
+            var sandboxBackend = new NativeTaskbarBackend(store.DirectoryPath, sandbox: true);
             try { await sandboxBackend.ApplyAsync(clear, true); throw new InvalidOperationException("沙箱未拦截实际组件"); }
             catch (IOException) { checks.Add("沙箱禁止下载和运行会话外观组件"); }
 
             if (archivePath is not null)
             {
                 var extracted = TaskbarAppearancePackage.VerifyAndExtract(archivePath, Path.Combine(root, "package"));
-                Check(File.Exists(Path.Combine(extracted, "TranslucentTB.exe")), "核验并解压真实官方 ZIP");
-                TaskbarAppearanceStore.WriteComponentSettings(Path.Combine(extracted, "settings.json"), clear);
+                var module = Path.Combine(extracted, "QingxiaTaskbarCore.dll");
+                Check(File.Exists(module) && !File.Exists(Path.Combine(extracted, "TranslucentTB.exe")),
+                    "发行组件只包含进程内使用的动态库");
                 TaskbarAppearancePackage.VerifyAndExtract(archivePath, extracted);
-                File.AppendAllText(Path.Combine(extracted, "TranslucentTB.exe"), "tamper");
+                File.AppendAllText(module, "tamper");
                 try { TaskbarAppearancePackage.VerifyAndExtract(archivePath, extracted); throw new InvalidOperationException("组件篡改未拒绝"); }
                 catch (IOException) { checks.Add("已解压组件有变化时拒绝运行"); }
-                var wrong = Path.Combine(root, "invalid.zip");
-                File.WriteAllText(wrong, "not an official package");
-                try { TaskbarAppearancePackage.VerifyAndExtract(wrong, Path.Combine(root, "invalid")); throw new InvalidOperationException("错误 ZIP 未拒绝"); }
-                catch (IOException) { checks.Add("不匹配发行摘要的 ZIP 在解压前被拒绝"); }
-            }
 
-            if (compatibilityArchive is not null)
-            {
-                var compatibility = new TaskbarAppearancePackage(store.DirectoryPath, useCompatibilityPackage: true);
-                Directory.CreateDirectory(Path.GetDirectoryName(compatibility.ArchivePath)!);
-                File.Copy(compatibilityArchive, compatibility.ArchivePath);
-                string directory = await compatibility.PrepareAsync(allowDownload: false);
-                Check(File.Exists(Path.Combine(directory, "ExplorerTAP.dll")), "已缓存的 26340 组件可离线校验与复用");
-                if (archivePath is not null)
-                {
-                    try
-                    {
-                        TaskbarAppearancePackage.VerifyAndExtract(archivePath, Path.Combine(root, "wrong-compatibility"), compatibility: true);
-                        throw new InvalidOperationException("误接受未修复 ZIP");
-                    }
-                    catch (IOException) { checks.Add("兼容组件校验拒绝将原版 ZIP 误作修复版"); }
-                }
-
-                const string expectedPath = "/fangmingzhao69-glitch/desktop-nook-releases/releases/download/v0.17.0/TranslucentTB-2026.2-26340.zip";
-                var download = new TaskbarAppearancePackage(Path.Combine(root, "compatibility-download"), useCompatibilityPackage: true);
+                var download = new TaskbarAppearancePackage(Path.Combine(root, "cache-download"));
                 using var transport = new HttpClient(new ArchiveHandler(request =>
                 {
+                    var expectedPath = $"/{OnlineUpdater.Repository}/releases/download/{TaskbarAppearancePackage.ReleaseTag}/{TaskbarAppearancePackage.PackageFile}";
                     Check(request.RequestUri?.Host == "github.com" && request.RequestUri.AbsolutePath == expectedPath,
-                        "兼容组件从固定的 0.17.0 发行地址请求");
-                    return new HttpResponseMessage(HttpStatusCode.OK) { Content = new StreamContent(File.OpenRead(compatibilityArchive)) };
+                        "从固定版本发行页下载任务栏组件");
+                    return new HttpResponseMessage(HttpStatusCode.OK) { Content = new StreamContent(File.OpenRead(archivePath)) };
                 }));
                 try { await download.PrepareAsync(allowDownload: false); throw new InvalidOperationException("启动阶段自动下载安装组件"); }
                 catch (IOException) { checks.Add("启动阶段保留显式下载授权"); }
                 await download.DownloadAsync(transport);
                 await download.PrepareAsync(allowDownload: false);
-                Check(SHA256.HashData(File.ReadAllBytes(download.ArchivePath)).SequenceEqual(SHA256.HashData(File.ReadAllBytes(compatibilityArchive))),
-                    "兼容组件下载按固定版本校验并可离线复用");
-                var damagedPackage = File.ReadAllBytes(compatibilityArchive);
-                damagedPackage[^1] ^= 1;
-                var damaged = new TaskbarAppearancePackage(Path.Combine(root, "compatibility-damaged"), useCompatibilityPackage: true);
+                Check(SHA256.HashData(File.ReadAllBytes(download.ArchivePath)).SequenceEqual(SHA256.HashData(File.ReadAllBytes(archivePath))),
+                    "通过摘要校验的组件可以离线复用");
+                var damagedBytes = File.ReadAllBytes(archivePath);
+                damagedBytes[^1] ^= 1;
+                var damaged = new TaskbarAppearancePackage(Path.Combine(root, "damaged-download"));
                 using var wrongBytes = new HttpClient(new ArchiveHandler(_ =>
-                    new HttpResponseMessage(HttpStatusCode.OK) { Content = new ByteArrayContent(damagedPackage) }));
+                    new HttpResponseMessage(HttpStatusCode.OK) { Content = new ByteArrayContent(damagedBytes) }));
                 try { await damaged.DownloadAsync(wrongBytes); throw new InvalidOperationException("损坏下载未拒绝"); }
                 catch (IOException)
                 {
@@ -232,12 +211,7 @@ internal static class TaskbarAppearanceVerification
                 }
             }
 
-            var minimum = new Version(8, 2501, 31001, 0);
-            Check(TaskbarAppearanceDependencies.MeetsMinimum("Microsoft.UI.Xaml.2.8_8.2501.31001.0_x64__8wekyb3d8bbwe", minimum) &&
-                !TaskbarAppearanceDependencies.MeetsMinimum("Microsoft.UI.Xaml.2.8_8.2501.31001.0_x86__8wekyb3d8bbwe", minimum) &&
-                !TaskbarAppearanceDependencies.MeetsMinimum("Microsoft.UI.Xaml.2.8_8.2401.31001.0_x64__8wekyb3d8bbwe", minimum),
-                "依赖检查接受满足版本的 x64 包，并拒绝 x86 和过旧版本");
-            Check(MainWindow.CurrentVersionLabel == "v0.17.5", "正式候选在更新菜单显示完整版本");
+            Check(MainWindow.CurrentVersionLabel == "v0.17.6", "正式候选在更新菜单显示完整版本");
 
             var originalExe = Environment.ProcessPath!;
             var target = Path.Combine(root, "update-target.exe");

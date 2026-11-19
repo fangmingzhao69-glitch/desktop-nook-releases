@@ -347,8 +347,7 @@ internal sealed class TaskbarAppearanceWindow : Window
         }
         if (_session.NeedsDownload && !_downloadApproved)
         {
-            string package = _session.UsesCompatibilityPackage ? "26340 兼容组件" : "TranslucentTB 2026.2 便携组件";
-            _downloadApproved = UiDialogs.Show(this, $"首次启用需从 GitHub 下载并校验 {package}（约 1.8 MB）。", Title,
+            _downloadApproved = UiDialogs.Show(this, "首次启用需从 GitHub 下载并校验任务栏组件（约 0.8 MB）。", Title,
                 MessageBoxButton.OKCancel) == MessageBoxResult.OK;
             return _downloadApproved;
         }
