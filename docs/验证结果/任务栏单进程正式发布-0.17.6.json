@@ -1,0 +1,69 @@
+{
+  "Version": "0.17.6",
+  "Date": "2026-11-19",
+  "SourceCommit": "6d625fc173e2a1c10edce92e65859731dd20859f",
+  "ReleaseUrl": "https://github.com/fangmingzhao69-glitch/desktop-nook-releases/releases/tag/v0.17.6",
+  "Latest": true,
+  "Assets": [
+    {
+      "Name": "DesktopNook-Setup.exe",
+      "Size": 514737,
+      "SHA256": "935d706d844669bf6011c8f9aa2b63058e9d5468c27329b8b414c55ccd1632ce"
+    },
+    {
+      "Name": "DesktopNook-v0.17.6-source.zip",
+      "Size": 9062214,
+      "SHA256": "ffcd528ed5de019a88cee9bbd048967563b0e50788519502a85366959a0d60d7"
+    },
+    {
+      "Name": "DesktopNook-win-x64.exe",
+      "Size": 1205834,
+      "SHA256": "473c3532459cdbfa2d57ee62b7e603afa92a502ff723fdad77afcb9ccc7094c2"
+    },
+    {
+      "Name": "Qingxia-TaskbarCore-win-x64.zip",
+      "Size": 811773,
+      "SHA256": "8315c4b8e00acf04815a672be9a671bdc242d38eaee9b4f89a9a95f3a9fad092"
+    },
+    {
+      "Name": "SHA256SUMS.txt",
+      "Size": 377,
+      "SHA256": "d49d642b0b9be3649863914d9ca081ad24d62c42c62c5c06da7034f93516f0a7"
+    }
+  ],
+  "Checks": {
+    "Core": 62,
+    "GameCore": 37,
+    "GameNetwork": 18,
+    "Notes": 65,
+    "Interface": 71,
+    "AppearanceSettings": 34,
+    "NativeWorker": 20,
+    "LiveTaskbar": 9,
+    "OnlineUpdateFromPreviousVersion": 13
+  },
+  "Upgrade": {
+    "success": true,
+    "helperExit": 0,
+    "oldVersion": "0.17.5.0",
+    "newVersion": "0.17.6.0",
+    "notesRetained": true,
+    "notesBackupRetained": true,
+    "deletedCategoryRetained": true,
+    "uncheckedPreferenceRetained": true,
+    "collectViewRetained": true,
+    "motionModeRetained": true,
+    "categoryOrdersRetained": true,
+    "orderedCategories": 3,
+    "configurationHashUnchanged": true,
+    "payloadUnchanged": true,
+    "newProcessConfirmed": true
+  },
+  "WindowsBuild": "26340.10013",
+  "Monitors": 1,
+  "PublishedDllsMatchLiveTest": true,
+  "CorrespondingSourceRebuilt": true,
+  "OriginalAppearanceRestored": true,
+  "ExplorerRestarted": false,
+  "InstalledAppUpdated": false
+}
