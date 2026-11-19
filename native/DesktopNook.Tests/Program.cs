@@ -315,6 +315,25 @@ Test("Partial task strike ranges persist independently and export in display ord
     catch (IOException) { }
     Assert(new NotesStore(root).State.Notes.Last().Tasks.Last().Strikes![0].Length == 2, "invalid range leaves saved text intact");
 });
+Test("Multiline checklist paste removes list prefixes and keeps partial formatting", _ =>
+{
+    string source = "1、检查更新\r\n2、~~准备材料，~~继续核对\r\n\r\n3、保留备注 --\n" +
+        "4、查看\\~\\~待核对\\~\\~的内容\n5、没有闭合的 ~~ 文字\n6) 登记进度\n7. 核对目录\n" +
+        "8、补齐字段 m\n9、复核结果\n10、交付接口";
+    var tasks = NotesTaskPaste.ParseMultiline(source);
+    Assert(tasks.Select(task => task.Text).SequenceEqual([
+        "检查更新", "准备材料，继续核对", "保留备注 --", "查看待核对的内容",
+        "没有闭合的 ~~ 文字", "登记进度", "核对目录", "补齐字段 m", "复核结果", "交付接口"
+    ]), "ten lines preserve order and unformatted details");
+    Assert(tasks.All(task => !task.Done) && tasks[1].Strikes?.Single() == new NoteStrikeRange(0, 5) &&
+        tasks[3].Strikes?.Single() == new NoteStrikeRange(2, 3), "literal and escaped delimiters become partial formatting");
+
+    var markdown = NotesTaskPaste.ParseMultiline("- [x] 已完成\n- [ ] 未完成\n1.5 GB 保留小数");
+    Assert(markdown.Select(task => task.Done).SequenceEqual([true, false, false]) &&
+        markdown[2].Text == "1.5 GB 保留小数", "checkboxes are read and decimal numbers remain intact");
+    Assert(NotesTaskPaste.ParseMultiline("1、单行内容").Count == 0 &&
+        NotesTaskPaste.ParseMultiline("   \r\n\r\n").Count == 0, "ordinary single-line and blank content use normal paste");
+});
 Test("Notes duplicate names, dangling references and stale revisions are rejected",root=>{
     var store=new NotesStore(root);var draft=store.Draft();var a=NotesStore.AddProject(draft," 项目A ");store.Commit(draft);var stale=store.Draft();
     try{NotesStore.AddProject(draft,"项目A");throw new Exception("duplicate accepted");}catch(ArgumentException){}

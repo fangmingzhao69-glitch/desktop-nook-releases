@@ -3,13 +3,14 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Documents;
 using System.Windows.Media;
+using System.Windows.Threading;
 using DesktopNook.Core;
 
 namespace DesktopNook.App;
 
 internal sealed class NoteTaskEditor : RichTextBox
 {
-    public NoteTaskEditor(NoteTask task)
+    public NoteTaskEditor(NoteTask task, Action<List<NoteTask>> pasteTasks)
     {
         FontSize = 12;
         Padding = new Thickness(4);
@@ -33,12 +34,21 @@ internal sealed class NoteTaskEditor : RichTextBox
         SetDone(task.Done);
         DataObject.AddPastingHandler(this, (_, args) =>
         {
-            if (args.DataObject.GetDataPresent(DataFormats.UnicodeText))
-                args.FormatToApply = DataFormats.UnicodeText;
-            else if (!args.DataObject.GetDataPresent(DataFormats.Text))
+            string format = args.DataObject.GetDataPresent(DataFormats.UnicodeText) ? DataFormats.UnicodeText : DataFormats.Text;
+            if (!args.DataObject.GetDataPresent(format))
+            {
                 args.CancelCommand();
-            else
-                args.FormatToApply = DataFormats.Text;
+                return;
+            }
+            if (!IsReadOnly && args.DataObject.GetData(format) is string text &&
+                NotesTaskPaste.ParseMultiline(text) is { Count: > 0 } batch)
+            {
+                args.CancelCommand();
+                // Let the paste command finish before moving or replacing editors in its route.
+                Dispatcher.BeginInvoke(() => pasteTasks(batch), DispatcherPriority.Input);
+                return;
+            }
+            args.FormatToApply = format;
         });
     }
 

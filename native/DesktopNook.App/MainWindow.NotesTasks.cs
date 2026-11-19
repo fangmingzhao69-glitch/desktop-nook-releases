@@ -31,6 +31,18 @@ public partial class MainWindow
             RefreshRows(wasCompleted, 0);
         }
 
+        void PasteTasks(NoteTask target, List<NoteTask> tasks)
+        {
+            if (_notesComposing || _showNotesArchive || !NotesDraft.Notes.Contains(note) ||
+                NoteProject?.Id != note.ProjectId || !note.Tasks.Contains(target)) return;
+
+            bool wasCompleted = note.IsCompletedChecklist();
+            if (string.IsNullOrWhiteSpace(target.Text) && !target.Done) note.Tasks.Remove(target);
+            note.Tasks.InsertRange(0, tasks);
+            int firstPending = tasks.FindIndex(task => !task.Done);
+            RefreshRows(wasCompleted, Math.Max(0, firstPending));
+        }
+
         void RefreshRows(bool wasCompleted, int focus = -1)
         {
             NotesChanged(true, note);
@@ -70,10 +82,11 @@ public partial class MainWindow
                 DockPanel.SetDock(check, Dock.Left);
                 row.Children.Add(check);
 
-                var editor = new NoteTaskEditor(task)
+                var editor = new NoteTaskEditor(task, batch => PasteTasks(task, batch))
                 {
                     IsReadOnly = readOnly,
-                    Foreground = Brush(task.Done ? "#8998A6" : "#35566E")
+                    Foreground = Brush(task.Done ? "#8998A6" : "#35566E"),
+                    ToolTip = readOnly ? null : "粘贴多行文字可自动拆成多条待办"
                 };
                 AutomationProperties.SetName(editor, "待办内容");
                 ConfigureNoteEditor(editor, note, $"task-{index}", () => ChangeNotes(() =>

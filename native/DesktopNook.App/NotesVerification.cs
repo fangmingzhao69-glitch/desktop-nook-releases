@@ -43,6 +43,13 @@ internal static class NotesVerification
                 new object[] { editor, true }, null)!);
             return window.LastMenu!;
         }
+        bool PasteText(NoteTaskEditor editor, string text)
+        {
+            var data = new DataObject(DataFormats.UnicodeText, text);
+            var args = new DataObjectPastingEventArgs(data, false, DataFormats.UnicodeText);
+            editor.RaiseEvent(args);
+            return args.CommandCancelled;
+        }
         void Snapshot(string name)
         {
             var bitmap=new RenderTargetBitmap((int)window.ActualWidth,(int)window.ActualHeight,96,96,PixelFormats.Pbgra32);bitmap.Render(window);
@@ -109,6 +116,26 @@ internal static class NotesVerification
             Check(window.FlushNotes(false)&&new NotesStore(App.Store.DataDirectory).State.Notes.Last().Title=="可编辑清单名称","自定义清单名称持久保存");
             var checklist = window.NotesDraft.Notes.Last();
             var taskBox = TaskEditors(checklist).Single();
+            var numbered = Enumerable.Range(1, 10).Select(i => i == 2 ? "2、~~已核对~~，继续处理" : $"{i}、事项 {i}");
+            Check(PasteText(taskBox, string.Join("\r\n", numbered)), "多行剪贴板走批量粘贴");
+            await Layout();
+            Check(TaskEditors(checklist).Length == 10 &&
+                checklist.Tasks.Select(task => task.Text).SequenceEqual(Enumerable.Range(1, 10)
+                    .Select(i => i == 2 ? "已核对，继续处理" : $"事项 {i}")) &&
+                checklist.Tasks[1].Strikes?.Single() == new NoteStrikeRange(0, 3), "十行编号按原顺序拆分并保留部分删除线");
+            Check(!PasteText(TaskEditors(checklist)[0], "追加几个字"), "单行仍走原来的文字粘贴");
+            Check(PasteText(TaskEditors(checklist)[0], "- [ ] 补充一项\n- [x] 已核对一项"), "现有清单可以继续批量粘贴");
+            await Layout();
+            Check(checklist.Tasks.Count == 12 && checklist.Tasks[0].Text == "补充一项" &&
+                checklist.Tasks[1].Done && checklist.Tasks[2].Text == "事项 1", "插入新批次后原有事项和完成状态保持");
+            Check(window.FlushNotes(false) && new NotesStore(App.Store.DataDirectory).State.Notes.Last().Tasks.Count == 12,
+                "批量拆分结果可以正常保存和重读");
+            checklist.Tasks.Clear();
+            checklist.Tasks.Add(new NoteTask());
+            window.NotesStore.Commit(window.NotesDraft);
+            window.RenderNotes();
+            await Layout();
+            taskBox = TaskEditors(checklist).Single();
             taskBox.Selection.Text = "确认设计方案";
             taskBox.Focus();
             taskBox.SelectCharacters(2, 2);
