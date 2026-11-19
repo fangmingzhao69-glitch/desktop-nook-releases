@@ -68,7 +68,7 @@ internal sealed class BilliardsController : IDisposable
             var reader=new StreamReader(pipe,System.Text.Encoding.UTF8,false,4096,true);session.Writer=new StreamWriter(pipe,new System.Text.UTF8Encoding(false),4096,true){AutoFlush=true};
             var hello=await GameWire.Read(reader,timeout.Token);
             if(hello?.Kind!="Hello"||hello.Nonce!=nonce||hello.Pid!=process.Id||hello.StartTicks!=session.StartTicks)throw new IOException("游戏会话认证失败。");
-            await Send(session,new(){Kind="Start",Icons=icons,Rule=settings.Rule,Count=settings.Count,Guide=settings.Guide,Sound=settings.Sound,Players=settings.Players,Left=work.Left,Top=work.Top,Width=work.Width,Height=work.Height,TestMode=test,QuietTest=test&&quietTest,Online=online},timeout.Token);
+            await Send(session,new(){Kind="Start",Icons=icons,Rule=settings.Rule,Count=settings.Count,Guide=settings.Guide,Sound=settings.Sound,OriginalIcons=settings.OriginalIcons,Players=settings.Players,Left=work.Left,Top=work.Top,Width=work.Width,Height=work.Height,TestMode=test,QuietTest=test&&quietTest,Online=online},timeout.Token);
             session.ReadTask=Task.Run(()=>ReadLoop(session,reader));
             await session.Ready.Task.WaitAsync(timeout.Token);
             if(!ReferenceEquals(_session,session))throw new OperationCanceledException();

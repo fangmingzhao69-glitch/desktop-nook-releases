@@ -12,8 +12,9 @@ internal static class BilliardsBallDrawing
     private static readonly Pen Rim=new(Brush("#95E9F8F4"),.8);
     private static readonly RadialGradientBrush Shine=new(new GradientStopCollection{new(Color.FromArgb(115,255,255,255),0),new(Colors.Transparent,.65),new(Color.FromArgb(90,0,0,0),1)}){GradientOrigin=new(.28,.22),Center=new(.45,.4),RadiusX=.75,RadiusY=.75};
     static BilliardsBallDrawing(){Shine.Freeze();Rim.Freeze();}
-    internal static DrawingGroup Create(Ball ball,ImageSource? icon,double dpi)
+    internal static DrawingGroup Create(Ball ball,ImageSource? icon,double dpi,bool originalIcon = false)
     {
+        if (originalIcon && icon is { Width: > 0, Height: > 0 }) return CreateOriginalIcon(ball, icon, dpi);
         double r=ball.Radius;var art=new DrawingGroup();using(var dc=art.Open())
         {
             dc.PushClip(new EllipseGeometry(new(0,0),r,r));var color=Brush(ball.Style.Color);
@@ -34,6 +35,31 @@ internal static class BilliardsBallDrawing
             dc.DrawEllipse(null,Rim,new(0,0),r-.4,r-.4);dc.Pop();
         }
         art.Freeze();return art;
+    }
+
+    private static DrawingGroup CreateOriginalIcon(Ball ball, ImageSource icon, double dpi)
+    {
+        double radius = ball.Radius;
+        double scale = 2 * radius / Math.Max(icon.Width, icon.Height);
+        double width = icon.Width * scale;
+        double height = icon.Height * scale;
+        var art = new DrawingGroup();
+        using (var dc = art.Open())
+        {
+            dc.DrawImage(icon, new Rect(-width / 2, -height / 2, width, height));
+            if (ball.Style.Number > 0)
+            {
+                var marker = new Point(radius * .88, radius * .88);
+                var rim = new Pen(Brush(ball.Style.Color), 1.6);
+                dc.DrawEllipse(Ivory, rim, marker, radius * .29, radius * .29);
+                var number = new FormattedText(ball.Style.Number.ToString(CultureInfo.InvariantCulture),
+                    CultureInfo.InvariantCulture, FlowDirection.LeftToRight, new Typeface("Segoe UI"),
+                    radius * .43, Ink, dpi) { TextAlignment = TextAlignment.Center };
+                dc.DrawText(number, new Point(marker.X, marker.Y - number.Height / 2));
+            }
+        }
+        art.Freeze();
+        return art;
     }
 }
 internal static class BilliardsPlacement

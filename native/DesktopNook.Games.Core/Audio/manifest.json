@@ -76,17 +76,32 @@
   },
   {
     "file": "pocket.pcm",
-    "source": "shots",
-    "startSeconds": 13.627,
-    "endSeconds": 13.867,
-    "trimmedLeadSeconds": 0.0198125,
-    "inputSha256": "0ca4915150197e66dc8771d73743cc2ff2cc418a67882633bd1e590d1b1bd6ef",
-    "lowpassHz": 2300,
+    "source": "outside-pool",
+    "startSeconds": 5.045,
+    "endSeconds": 5.389,
+    "trimmedLeadSeconds": 0.023166666666666665,
+    "inputSha256": "106139699e12f482b845d7042b58136eac2e9ded85817caad3d62eeca36b9f1f",
+    "lowpassHz": null,
     "sampleRate": 44100,
     "channels": 1,
     "bits": 16,
     "targetRms": 0.05,
-    "bytes": 19422,
-    "sha256": "5a11f4b0fecc7bfe3d8888ab8866e9fd3becc4e16cac0d0c81bbde65ec1e30d0"
+    "bytes": 28298,
+    "sha256": "3bd227b5b9af9d3267eafd4570050d53741cb84a6554327eac231608256a51df"
+  },
+  {
+    "file": "pocket-hard.pcm",
+    "source": "inside-pool",
+    "startSeconds": 4.71,
+    "endSeconds": 5.197,
+    "trimmedLeadSeconds": 0.030791666666666665,
+    "inputSha256": "b050607ed6837a7783785f75ea3f706deb8fc083ee29b2ec0114dfb30cec371f",
+    "lowpassHz": null,
+    "sampleRate": 44100,
+    "channels": 1,
+    "bits": 16,
+    "targetRms": 0.05,
+    "bytes": 40238,
+    "sha256": "b384bac127acdd847a9ae90fb143ab45479dfe2bb29a46785e5ece14f9584844"
   }
 ]

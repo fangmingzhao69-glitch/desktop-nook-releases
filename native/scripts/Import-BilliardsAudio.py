@@ -1,7 +1,8 @@
 """Prepare the CC0 recordings listed in BilliardsAudio-CC0.txt.
 
 Development only: requires PyAV, NumPy and SciPy; not used at build/runtime.
-Input directory: clack.mp3 (539854), shots.mp3 (350918), public HQ previews.
+Input directory: clack.mp3 (539854), shots.mp3 (350918), inside-pool.mp3
+(443057), outside-pool.mp3 (443067), all public HQ previews.
 """
 import argparse
 import hashlib
@@ -34,16 +35,17 @@ def main():
     parser.add_argument("input", type=Path)
     parser.add_argument("output", type=Path)
     args = parser.parse_args()
-    sources = {name: decode(args.input / (name + ".mp3")) for name in ("clack", "shots")}
+    sources = {name: decode(args.input / (name + ".mp3")) for name in ("clack", "shots", "inside-pool", "outside-pool")}
     # Keep the recorded attacks/tails; only trim, resample, remove DC, fade edges,
-    # and normalize. The two feedback variants explicitly use a low-pass filter.
+    # and normalize. The cushion adaptation uses a low-pass filter.
     cuts = [
         ("cue-soft", "shots", 7.073, 7.253, None),
         ("cue-hard", "shots", .244, .434, None),
         ("collision-a", "clack", 0, .239, None),
         ("collision-b", "shots", 3.910, 4.100, None),
         ("cushion", "shots", 7.578, 7.768, 1600),
-        ("pocket", "shots", 13.627, 13.867, 2300),
+        ("pocket", "outside-pool", 5.045, 5.389, None),
+        ("pocket-hard", "inside-pool", 4.710, 5.197, None),
     ]
     args.output.mkdir(parents=True, exist_ok=True)
     manifest = []

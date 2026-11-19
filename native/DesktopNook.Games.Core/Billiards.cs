@@ -121,7 +121,14 @@ public sealed partial class BilliardsRound
             {
                 if(b.Sunk)continue;
                 b.Position+=b.Velocity*h;
-                foreach(var pocket in Pockets){var d=pocket-b.Position;double range=PocketRadius+b.Radius*.35;if(Vec.Dot(d,d)>=range*range)continue;double impact=b.Velocity.Length;b.Sunk=true;b.ExitAge=0;b.ExitFrom=b.Position;b.Pocket=pocket;b.Velocity=new();b.PottedBy=Match.CurrentPlayer;_shotPockets.Add(b.Id);if(b.Id>0){_pocketOrder.Add(b.Id);TrayVersion++;}Sound?.Invoke(new(BallSoundKind.Pocket,Math.Clamp(impact/1400,.15,1)));break;}
+                foreach (var pocket in Pockets)
+                {
+                    var offset = pocket - b.Position;
+                    double range = PocketRadius + b.Radius * .35;
+                    if (Vec.Dot(offset, offset) >= range * range) continue;
+                    Sink(b, pocket, offset);
+                    break;
+                }
                 if(b.Sunk)continue;Walls(b);
             }
             _grid.Clear();int used=0;
@@ -145,6 +152,29 @@ public sealed partial class BilliardsRound
             Match.Begin(_balls);
         }
     }
+    private void Sink(Ball ball, Vec pocket, Vec offset)
+    {
+        double speed = ball.Velocity.Length;
+        double distance = offset.Length;
+        double alignment = speed < 1 ? 0 : distance < 1e-6 ? 1 :
+            Math.Clamp(Vec.Dot(ball.Velocity, offset) / (speed * distance), 0, 1);
+        double strength = .14 + .48 * alignment * alignment + .38 * Math.Min(1, speed / 1350);
+
+        ball.Sunk = true;
+        ball.ExitAge = 0;
+        ball.ExitFrom = ball.Position;
+        ball.Pocket = pocket;
+        ball.Velocity = new();
+        ball.PottedBy = Match.CurrentPlayer;
+        _shotPockets.Add(ball.Id);
+        if (ball.Id > 0)
+        {
+            _pocketOrder.Add(ball.Id);
+            TrayVersion++;
+        }
+        Sound?.Invoke(new(BallSoundKind.Pocket, strength));
+    }
+
     private void Respot(Ball ball)
     {
         Vec preferred=RuleId==BilliardsRules.Snooker?ball.Id switch{16=>new(400,600),17=>new(400,300),18=>new(400,450),19=>new(800,450),20=>new(1050,450),_=>new(1430,450)}:new(1100,450);

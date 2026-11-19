@@ -16,7 +16,12 @@ internal sealed class BilliardsSound : IDisposable
     [DllImport("winmm.dll")]private static extern uint waveOutReset(IntPtr device);
     [DllImport("winmm.dll")]private static extern uint waveOutClose(IntPtr device);
     private readonly List<(IntPtr Header,IntPtr Data)> _buffers=[];
-    private sealed class Voice(short[] samples){internal readonly short[] Samples=samples;internal int Position;}
+    private sealed class Voice(short[] samples, BallSoundKind kind)
+    {
+        internal readonly short[] Samples = samples;
+        internal readonly BallSoundKind Kind = kind;
+        internal int Position;
+    }
     private readonly List<Voice> _voices=[];
     private readonly ConcurrentQueue<(BallSound Sound,int Epoch)> _queue=new();
     private readonly AutoResetEvent _signal=new(false);
@@ -24,7 +29,7 @@ internal sealed class BilliardsSound : IDisposable
     private IntPtr _device;
     private volatile bool _failed,_disposed,_enabled=true;
     private int _epoch,_submitted,_pending,_opened,_variation;
-    private long _lastImpact;
+    private readonly long[] _lastContact = new long[Enum.GetValues<BallSoundKind>().Length];
     internal bool Enabled {get=>_enabled;set=>_enabled=value;}
     internal int Submitted=>Volatile.Read(ref _submitted);
     internal int Pending=>Volatile.Read(ref _pending);
@@ -33,8 +38,22 @@ internal sealed class BilliardsSound : IDisposable
     internal void Play(BallSound sound)
     {
         if(!Enabled||_disposed||_failed)return;
-        long now=Environment.TickCount64;if(sound.Kind!=BallSoundKind.Cue&&now-Interlocked.Read(ref _lastImpact)<30)return;
-        if(_queue.Count>=24)return;Interlocked.Exchange(ref _lastImpact,now);_queue.Enqueue((sound,Volatile.Read(ref _epoch)));
+        int cooldown = sound.Kind switch
+        {
+            BallSoundKind.Collision => 11,
+            BallSoundKind.Cushion => 20,
+            _ => 0
+        };
+        if (cooldown > 0)
+        {
+            ref long last = ref _lastContact[(int)sound.Kind];
+            long now = Environment.TickCount64;
+            long previous = Interlocked.Read(ref last);
+            if (now - previous < cooldown || Interlocked.CompareExchange(ref last, now, previous) != previous) return;
+        }
+
+        if (_queue.Count >= (sound.Kind == BallSoundKind.Pocket ? 28 : 24)) return;
+        _queue.Enqueue((sound, Volatile.Read(ref _epoch)));
         if(_worker is null){_worker=new Thread(Run){IsBackground=true,Name="Billiards recorded audio"};_worker.Start();}_signal.Set();
     }
     private void Run()
@@ -53,7 +72,13 @@ internal sealed class BilliardsSound : IDisposable
                         var format=new Format{Tag=1,Channels=1,Rate=BilliardsAudio.SampleRate,Bytes=BilliardsAudio.SampleRate*2,Align=2,Bits=16};
                         if(waveOutOpen(out _device,uint.MaxValue,ref format,IntPtr.Zero,IntPtr.Zero,0)!=0){_device=IntPtr.Zero;_failed=true;return;}Volatile.Write(ref _opened,1);
                     }
-                    if(_voices.Count>=6)_voices.RemoveAt(0);_voices.Add(new(BilliardsAudio.Samples(queued.Sound,_variation++)));
+                    if (_voices.Count >= 6)
+                    {
+                        int index = _voices.FindIndex(voice => voice.Kind != BallSoundKind.Pocket);
+                        if (index < 0 && queued.Sound.Kind != BallSoundKind.Pocket) continue;
+                        _voices.RemoveAt(Math.Max(0, index));
+                    }
+                    _voices.Add(new(BilliardsAudio.Samples(queued.Sound, _variation++), queued.Sound.Kind));
                 }
                 if(epoch!=Volatile.Read(ref _epoch)||_disposed)continue;
                 Reap();while(!_failed&&_buffers.Count<2&&_voices.Count>0)SubmitMix();if(_failed)return;

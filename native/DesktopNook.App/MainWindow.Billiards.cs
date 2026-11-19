@@ -1,20 +1,22 @@
 using System.Windows;
-using System.Windows.Controls;
 
 namespace DesktopNook.App;
 public partial class MainWindow
 {
     private BilliardsController? _games;
-    private MenuItem GamesMenu()
+    internal bool BilliardsRunning => _games?.Running == true;
+
+    private void ShowBilliardsLicense()
     {
-        var menu=new MenuItem{Header="桌面玩法"};
-        menu.Items.Add(Menu(_games?.Running==true?"继续图标台球":"图标台球…",()=>_=StartBilliardsAsync()));
-        if(_games?.Running==true)menu.Items.Add(Menu("退出台球",()=>_games.Stop()));
-        menu.Items.Add(new Separator());menu.Items.Add(Menu("开源许可…",()=>
+        _interactions++;
+        try
         {
-            _interactions++;try{using var stream=typeof(MainWindow).Assembly.GetManifestResourceStream("DesktopNook.BilliardsLicense");using var reader=new System.IO.StreamReader(stream!);using var audio=typeof(MainWindow).Assembly.GetManifestResourceStream("DesktopNook.BilliardsAudioLicense");using var audioReader=new System.IO.StreamReader(audio!);UiDialogs.Show(this,"Desktop Icon Billiards · LXG\n\n"+reader.ReadToEnd()+"\n\n"+audioReader.ReadToEnd(),"开源许可");}finally{_interactions--;}
-        }));
-        return menu;
+            var assembly = typeof(MainWindow).Assembly;
+            using var license = new System.IO.StreamReader(assembly.GetManifestResourceStream("DesktopNook.BilliardsLicense")!);
+            using var audioLicense = new System.IO.StreamReader(assembly.GetManifestResourceStream("DesktopNook.BilliardsAudioLicense")!);
+            UiDialogs.Show(this, "Desktop Icon Billiards · LXG\n\n" + license.ReadToEnd() + "\n\n" + audioLicense.ReadToEnd(), "图标台球许可");
+        }
+        finally { _interactions--; }
     }
     internal async Task StartBilliardsAsync()
     {

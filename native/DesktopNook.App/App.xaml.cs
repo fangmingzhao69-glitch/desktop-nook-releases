@@ -116,7 +116,7 @@ public partial class App : Application
                     if (resumeIndex >= 0) BrandMigration.RefreshAfterUpgrade(Store.DataDirectory);
                     else BrandMigration.Refresh(Store.DataDirectory);
                 }
-                catch (Exception) { window.SetStatus("入口图标刷新未完成，可通过更多菜单刷新程序入口。"); }
+                catch (Exception) { window.SetStatus("入口图标刷新未完成，可在设置中刷新程序入口。"); }
             }, System.Windows.Threading.DispatcherPriority.ContextIdle);
             window.KeepOpenForVerification=IsSandbox&&e.Args.Contains("--keep-open-verification");
             if(e.Args.Contains("--autostart")){window.ShowActivated=false;window.WindowState=WindowState.Minimized;}

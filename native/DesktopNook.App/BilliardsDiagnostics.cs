@@ -38,7 +38,11 @@ internal sealed partial class BilliardsWindow
             case "begin":_begin.RaiseEvent(new RoutedEventArgs(System.Windows.Controls.Button.ClickEvent));break;
             case "rules":ShowRules();break;
             case "sound":_soundCheck.IsChecked=!_soundEnabled;break;
-            case "audio-test":Scene.Audio.Enabled=true;Scene.Audio.Play(new(BallSoundKind.Cue,.2));break;
+            case "audio-test":
+                Scene.Audio.Enabled=true;
+                Scene.Audio.Play(new(BallSoundKind.Collision,.25));
+                Scene.Audio.Play(new(BallSoundKind.Pocket,.85));
+                break;
             case "audio-burst":Scene.Audio.Enabled=true;for(int n=0;n<4;n++)Scene.Audio.Play(new(BallSoundKind.Cue,.12));break;
             case "audio-stop":Scene.Audio.Stop();break;
             case "shoot":if(RulesVisible)BeginGame();Scene.Pause(false);Scene.Round.Shoot(new(1200,450),.65);Scene.Wake();break;
@@ -69,7 +73,7 @@ internal sealed partial class BilliardsWindow
             var png=new PngBitmapEncoder();png.Frames.Add(BitmapFrame.Create(image));using var stream=new MemoryStream();png.Save(stream);result.Image=Convert.ToBase64String(stream.ToArray());
         }
         var left=_leftTray.TranslatePoint(new Point(),this);var right=_rightTray.TranslatePoint(new Point(),this);var table=Scene.TranslatePoint(new Point(),this);
-        result.SideTrays=left.X+_leftTray.ActualWidth<=table.X+1&&right.X>=table.X+Scene.ActualWidth-1&&_leftTray.ActualHeight>Scene.ActualHeight*.9;result.IconFraction=BilliardsBallDrawing.IconFraction;
+        result.SideTrays=left.X+_leftTray.ActualWidth<=table.X+1&&right.X>=table.X+Scene.ActualWidth-1&&_leftTray.ActualHeight>Scene.ActualHeight*.9;result.IconFraction=BilliardsBallDrawing.IconFraction;result.OriginalIcons=Scene.OriginalIcons;
         result.Players=Scene.Round.Match.Players;result.Winner=Scene.Round.Match.Winner;result.Score1=Scene.Round.Match.Scores[0];result.Score2=Scene.Round.Match.Scores[1];result.CurrentPlayer=Scene.Round.Match.CurrentPlayer;result.Sound=_soundEnabled;result.TrayCount=Scene.Round.PocketOrder.Count;result.RulesVisible=RulesVisible;result.AudioSubmitted=Scene.Audio.Submitted;result.AudioPending=Scene.Audio.Pending;result.AudioUnavailable=Scene.Audio.Unavailable;
         result.Invitation=_invitation;result.LocalSeat=_peer?.Seat??0;result.Connection=_onlineRequested?"online":"local";result.NetworkConnected=_peer?.Latest?.Connected==true&&_peer.Connected;result.NetworkStarted=_peer?.Latest?.Started==true;result.NetworkSequence=_peer?.Latest?.Sequence??0;
         if(_peer?.Latest is { } state){var stable=new{state.Round.Round,state.Round.Shots,state.Round.Phase,state.Round.Match,state.Round.PocketOrder,Balls=state.Round.Balls.Select(b=>new{b.Id,b.X,b.Y,b.Sunk,b.PottedBy})};result.NetworkHash=Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(System.Text.Json.JsonSerializer.SerializeToUtf8Bytes(stable)));}

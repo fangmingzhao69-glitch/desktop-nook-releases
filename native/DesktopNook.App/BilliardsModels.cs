@@ -18,6 +18,7 @@ internal sealed class GameSettings
     public string Rule {get;set;}=BilliardsRules.Eight;
     public int Count=>BilliardsRules.Get(Rule).Count;
     public bool Guide {get;set;}=true;
+    public bool OriginalIcons {get;set;}
     public bool Sound {get;set;}=true;
     public int Players {get;set;}=1;
 }
@@ -39,6 +40,7 @@ internal sealed class GameMessage
     public int Count {get;set;}
     public string Rule {get;set;}=BilliardsRules.Eight;
     public bool Guide {get;set;}
+    public bool OriginalIcons {get;set;}
     public bool Sound {get;set;}=true;
     public int Players {get;set;}=1;
     public int? Winner {get;set;}

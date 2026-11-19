@@ -11,7 +11,8 @@ internal sealed class BilliardsSetupWindow : Window
     private readonly ComboBox _source=new(){Padding=new Thickness(8)};
     private readonly ComboBox _rule=new(){Padding=new Thickness(8)};
     private readonly ComboBox _players=new(){Padding=new Thickness(8)};
-    private readonly CheckBox _sound=new(){Content="击球与碰撞音效",Margin=new Thickness(0,0,0,12)};
+    private readonly ComboBox _iconStyle = new() { Padding = new Thickness(8), ItemsSource = new[] { "球形图标", "原始图标" } };
+    private readonly CheckBox _sound=new(){Content="击球、碰撞与落袋音效",Margin=new Thickness(0,0,0,12)};
     private readonly TextBlock _record=new(){FontSize=11,Foreground=ThemePalette.Brush("TextSecondaryBrush"),Margin=new Thickness(0,0,0,12)};
     private readonly GameStorage _storage;
     private readonly CheckBox _guide=new(){Content="显示瞄准辅助线",Margin=new Thickness(0,12,0,12)};
@@ -34,6 +35,10 @@ internal sealed class BilliardsSetupWindow : Window
         foreach(var rule in BilliardsRules.All)_rule.Items.Add(new ComboBoxItem{Content=$"{rule.Name}（{rule.Count} 球＋白球）",Tag=rule.Id});
         _rule.SelectedIndex=BilliardsRules.All.ToList().FindIndex(r=>r.Id==Settings.Rule);body.Children.Add(_rule);
         _rule.SelectionChanged+=(_,_)=>UpdateSummary();
+        body.Children.Add(new TextBlock { Text = "图标样式", Margin = new Thickness(0, 14, 0, 6), Foreground = ThemePalette.Brush("TextSecondaryBrush") });
+        System.Windows.Automation.AutomationProperties.SetName(_iconStyle, "图标样式");
+        _iconStyle.SelectedIndex = Settings.OriginalIcons ? 1 : 0;
+        body.Children.Add(_iconStyle);
         body.Children.Add(new TextBlock{Text="游戏模式",Margin=new Thickness(0,14,0,6),Foreground=ThemePalette.Brush("TextSecondaryBrush")});foreach(var (label,value) in new[]{("单人练习",1),("本地双人对战",2),("创建好友房间",3),("加入好友房间",4)})_players.Items.Add(new ComboBoxItem{Content=label,Tag=value});_players.SelectedIndex=Settings.Players-1;_players.SelectionChanged+=(_,_)=>UpdateSummary();body.Children.Add(_players);
         _guide.IsChecked=Settings.Guide;body.Children.Add(_guide);body.Children.Add(_summary);
         _sound.IsChecked=Settings.Sound;body.Children.Add(_sound);
@@ -45,7 +50,7 @@ internal sealed class BilliardsSetupWindow : Window
             int mode=(int)((ComboBoxItem)_players.SelectedItem).Tag;string rule=(string)((ComboBoxItem)_rule.SelectedItem).Tag;
             if(mode==4){var join=new FriendJoinWindow{Owner=this};if(join.ShowDialog()!=true)return;var invite=GameInvite.Parse(join.Invitation);rule=invite.Rule;Online=new(){Role="join",Invitation=join.Invitation};}
             else if(mode==3)Online=new(){Role="host"};
-            Settings=new(){Source=(string)((ComboBoxItem)_source.SelectedItem).Tag,Rule=rule,Players=mode==1?1:2,Guide=_guide.IsChecked==true,Sound=_sound.IsChecked==true};Selection=Selection.Take(Settings.Count).ToList();if(Selection.Count==0&&mode>=3)Selection.Add(new("friend-default","默认球面",""));DialogResult=true;
+            Settings=new(){Source=(string)((ComboBoxItem)_source.SelectedItem).Tag,Rule=rule,Players=mode==1?1:2,Guide=_guide.IsChecked==true,Sound=_sound.IsChecked==true,OriginalIcons=_iconStyle.SelectedIndex==1};Selection=Selection.Take(Settings.Count).ToList();if(Selection.Count==0&&mode>=3)Selection.Add(new("friend-default","默认球面",""));DialogResult=true;
         };
         _source.SelectionChanged+=async(_,_)=>await RefreshAsync();Content=new ScrollViewer{Content=body,MaxHeight=Math.Max(200,SystemParameters.WorkArea.Height-120),VerticalScrollBarVisibility=ScrollBarVisibility.Auto};UiDialogs.Chrome(this);Loaded+=async(_,_)=>await RefreshAsync();Closed+=(_,_)=>_revision++;
     }

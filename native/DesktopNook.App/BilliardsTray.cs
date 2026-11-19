@@ -66,9 +66,9 @@ internal sealed class BilliardsTray(BilliardsSurface scene,int side) : Framework
         {
             var ball=balls[n];double x=18+spaceX*(n%2+.5)-2,y=ActualHeight-56-r-(n/2)*step;
             double enter=Math.Clamp(ball.ExitAge/.62,0,1),scale=r/ball.Radius*enter;
-            dc.DrawEllipse(Shadow,null,new(x+1,y+3),r+1,r+1);
+            if (!scene.OriginalIcons) dc.DrawEllipse(Shadow,null,new(x+1,y+3),r+1,r+1);
             dc.PushTransform(new MatrixTransform(scale,0,0,scale,x,y));dc.DrawDrawing(scene.BallArt(ball));dc.Pop();
-            dc.DrawLine(Highlight,new(x-r-1,y+r*.85),new(x+r+1,y+r*.85));
+            if (!scene.OriginalIcons) dc.DrawLine(Highlight,new(x-r-1,y+r*.85),new(x+r+1,y+r*.85));
         }
     }
 }

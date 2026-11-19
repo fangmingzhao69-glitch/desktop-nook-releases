@@ -20,6 +20,7 @@ internal sealed class BilliardsSurface : FrameworkElement,IDisposable
     internal readonly BilliardsSound Audio=new();
     private bool _frames,_disposed;private Vec _pointer=new(1100,450);
     internal bool Guide {get;set;}
+    internal bool OriginalIcons { get; }
     internal Action? Changed;
     internal Action? Completed;
     private int _reported;
@@ -46,9 +47,9 @@ internal sealed class BilliardsSurface : FrameworkElement,IDisposable
     private FormattedText? _brand;
     private readonly Pen _rim=new(Trim,2),_guide=new(Brushes.White,2){DashStyle=DashStyles.Dash};
     private readonly Pen _object=new(ColorBrush("#6FE7B2"),3),_white=new(ColorBrush("#70CFFF"),3);
-    internal BilliardsSurface(List<GameIcon> icons,string rule,bool guide,int players=1)
+    internal BilliardsSurface(List<GameIcon> icons,string rule,bool guide,int players,bool originalIcons)
     {
-        _icons=icons;Round=new(icons.Count,rule,players);Round.Sound=Audio.Play;Guide=guide;Focusable=true;ClipToBounds=true;
+        _icons=icons;Round=new(icons.Count,rule,players);Round.Sound=Audio.Play;Guide=guide;OriginalIcons=originalIcons;Focusable=true;ClipToBounds=true;
         Loaded+=(_,_)=>{foreach(var icon in _icons)_images[Key(icon)]=ShellIntegration.AppIcon;_provider.Start(_icons,IconReady);InvalidateVisual();};
         Unloaded+=(_,_)=>Dispose();
         MouseMove+=(_,e)=>{_pointer=World(e.GetPosition(this));if(!Round.NeedsFrames)InvalidateVisual();if(Round.CanShoot){var hit=Round.Balls.FirstOrDefault(b=>b.Id>0&&!b.Sunk&&(b.Position-_pointer).Length<28);ToolTip=hit is null?null:$"{hit.Style.Number} 号 · {_icons[hit.Source].Name}";}};
@@ -104,7 +105,7 @@ internal sealed class BilliardsSurface : FrameworkElement,IDisposable
     internal void RefreshDpi(){_ballArt.Clear();InvalidateVisual();}
     internal DrawingGroup BallArt(Ball ball)
     {
-        if(!_ballArt.TryGetValue(ball.Id,out var art)){_images.TryGetValue(Key(_icons[ball.Source]),out var image);art=BilliardsBallDrawing.Create(ball,image,VisualTreeHelper.GetDpi(this).PixelsPerDip);_ballArt[ball.Id]=art;}return art;
+        if(!_ballArt.TryGetValue(ball.Id,out var art)){_images.TryGetValue(Key(_icons[ball.Source]),out var image);art=BilliardsBallDrawing.Create(ball,image,VisualTreeHelper.GetDpi(this).PixelsPerDip,OriginalIcons);_ballArt[ball.Id]=art;}return art;
     }
     private static Point Point(Vec p)=>new(p.X,p.Y);
     private void Text(DrawingContext dc,string text,Vec p,double size,Brush brush,bool center=false)
@@ -128,14 +129,15 @@ internal sealed class BilliardsSurface : FrameworkElement,IDisposable
         {
             if(ball.Sunk&&ball.ExitAge>=.62)continue;
             double t=ball.Sunk?Math.Clamp(ball.ExitAge/.62,0,1):0;Vec pos=ball.Sunk?ball.ExitFrom*(1-t*t)+ball.Pocket*(t*t):ball.Position;double radius=ball.Radius*(1-t);
-            dc.PushOpacity(1-t);bool rotate=Math.Abs(ball.Angle+t*130)>.01;if(rotate)dc.PushTransform(new RotateTransform(ball.Angle+t*130,pos.X,pos.Y));
-            dc.DrawEllipse(Shade,null,new(pos.X+2,pos.Y+5),radius+3,radius+3);
+            bool circular = ball.Id == 0 || !OriginalIcons;
+            dc.PushOpacity(1-t);bool rotate=circular&&Math.Abs(ball.Angle+t*130)>.01;if(rotate)dc.PushTransform(new RotateTransform(ball.Angle+t*130,pos.X,pos.Y));
+            if (circular) dc.DrawEllipse(Shade,null,new(pos.X+2,pos.Y+5),radius+3,radius+3);
             if(ball.Id==0){dc.DrawEllipse(Brushes.White,WhiteRim,Point(pos),radius,radius);dc.DrawEllipse(WhiteShade,null,new(pos.X+5,pos.Y+5),radius*.5,radius*.5);}
             else
             {
                 dc.PushTransform(new MatrixTransform(1-t,0,0,1-t,pos.X,pos.Y));dc.DrawDrawing(BallArt(ball));dc.Pop();
             }
-            if(ball.Impact>.02)dc.DrawEllipse(null,new Pen(Trim,ball.Impact*10),Point(pos),radius+5,radius+5);
+            if(circular&&ball.Impact>.02)dc.DrawEllipse(null,new Pen(Trim,ball.Impact*10),Point(pos),radius+5,radius+5);
             if(rotate)dc.Pop();dc.Pop();
         }
         if(Charging)
@@ -179,7 +181,7 @@ internal sealed partial class BilliardsWindow : Window
         WindowStyle=WindowStyle.SingleBorderWindow;ResizeMode=ResizeMode.CanResize;Background=ThemePalette.Brush("CanvasBrush");
         var fallback=SystemParameters.WorkArea;var screen=double.IsFinite(start.Width)&&double.IsFinite(start.Height)&&double.IsFinite(start.Left)&&double.IsFinite(start.Top)&&start.Width>0&&start.Height>0?new Rect(start.Left,start.Top,start.Width,start.Height):fallback;
         var bounds=BilliardsPlacement.Initial(screen);Width=bounds.Width;Height=bounds.Height;MinWidth=Math.Min(560,Width);MinHeight=Math.Min(320,Height);Left=bounds.Left;Top=bounds.Top;WindowStartupLocation=WindowStartupLocation.Manual;
-        Scene=new(start.Icons,start.Rule,start.Guide,start.Players){MeasureFrames=start.TestMode};_soundEnabled=start.Sound;Scene.Audio.Enabled=start.Sound&&!start.TestMode;Scene.Round.SetPaused(true);
+        Scene=new(start.Icons,start.Rule,start.Guide,start.Players,start.OriginalIcons){MeasureFrames=start.TestMode};_soundEnabled=start.Sound;Scene.Audio.Enabled=start.Sound&&!start.TestMode;Scene.Round.SetPaused(true);
         if(start.TestMode){Topmost=!start.QuietTest;ShowActivated=!start.QuietTest;}var root=new DockPanel{Background=Background};var top=new Grid{Margin=new Thickness(14,8,14,8)};top.RowDefinitions.Add(new(){Height=GridLength.Auto});top.RowDefinitions.Add(new(){Height=GridLength.Auto});top.ColumnDefinitions.Add(new());top.ColumnDefinitions.Add(new(){Width=GridLength.Auto});
         var actions=new StackPanel{Orientation=Orientation.Horizontal,HorizontalAlignment=HorizontalAlignment.Right};Grid.SetColumn(actions,1);
         var guide=new CheckBox{Content="辅助线",IsChecked=start.Guide,Foreground=ThemePalette.Brush("TextPrimaryBrush"),VerticalAlignment=VerticalAlignment.Center,Margin=new Thickness(0,0,15,0)};

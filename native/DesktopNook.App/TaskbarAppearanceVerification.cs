@@ -211,7 +211,9 @@ internal static class TaskbarAppearanceVerification
                 }
             }
 
-            Check(MainWindow.CurrentVersionLabel == "v0.19.1", "正式候选在更新菜单显示完整版本");
+            var fileVersion = System.Diagnostics.FileVersionInfo.GetVersionInfo(Environment.ProcessPath!).FileVersion;
+            Check(Version.TryParse(fileVersion, out var version) && MainWindow.CurrentVersionLabel == "v" + version.ToString(3),
+                "更新页版本对应当前可执行文件");
 
             var originalExe = Environment.ProcessPath!;
             var target = Path.Combine(root, "update-target.exe");
@@ -221,21 +223,22 @@ internal static class TaskbarAppearanceVerification
             Check(File.ReadAllBytes(backup).SequenceEqual(File.ReadAllBytes(store.SettingsPath)), "更新备份保留任务栏外观配置");
 
             UiMotion.Configure("off");
-            var ownerButton = Find<Button>(window).Single(b => AutomationProperties.GetName(b) == "更多操作");
-            ownerButton.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
-            var menu = window.LastMenu ?? throw new InvalidOperationException("无法打开更多菜单。");
-            var entry = menu.Items.OfType<MenuItem>().Single(item => Equals(item.Header, "任务栏外观…"));
-            menu.IsOpen = false;
+            var ownerButton = Find<Button>(window).Single(b => AutomationProperties.GetName(b) == "设置");
             Exception? dialogFailure = null;
             _ = window.Dispatcher.BeginInvoke(() =>
             {
-                var dialog = Application.Current.Windows.OfType<TaskbarAppearanceWindow>().SingleOrDefault();
+                var dialog = Application.Current.Windows.OfType<SettingsWindow>().SingleOrDefault();
                 try
                 {
-                    if (dialog is null) throw new InvalidOperationException("未打开任务栏外观设置。");
+                    if (dialog is null) throw new InvalidOperationException("未从主窗口打开设置。");
+                    var tab = Find<Button>(dialog).Single(button => Equals(button.Content, SettingsWindow.TaskbarPage));
+                    tab.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
                     dialog.UpdateLayout();
+                    Check(Find<TaskbarAppearancePage>(dialog).Single() is { IsVisible: true } &&
+                        !Application.Current.Windows.OfType<Window>().Any(other => other.IsVisible && other.Owner == dialog),
+                        "单击设置侧栏直接显示任务栏外观页");
                     Check(Find<TextBlock>(dialog).Any(text => text.Text.Contains("隔离模式", StringComparison.Ordinal)),
-                        "从更多菜单打开外观界面，沙箱显示运行限制");
+                        "内嵌外观页显示沙箱运行限制");
                     var buttons = Find<Button>(dialog).Select(button => button.Content as string).OfType<string>().ToList();
                     Check(!buttons.Any(text => text.Contains("导入", StringComparison.Ordinal)) &&
                         buttons.Contains("选颜色…") && buttons.Contains("恢复系统外观"),
@@ -266,14 +269,15 @@ internal static class TaskbarAppearanceVerification
                 catch (Exception ex) { dialogFailure = ex; }
                 finally { dialog?.Close(); }
             }, DispatcherPriority.ContextIdle);
-            entry.RaiseEvent(new RoutedEventArgs(MenuItem.ClickEvent));
+            ownerButton.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
             if (dialogFailure is not null) throw dialogFailure;
 
             var uniformStore = new TaskbarAppearanceStore(Path.Combine(root, "uniform-ui"));
             uniformStore.Save(reproduction);
             var uniformProbe = new ProbeBackend();
             var uniformSession = new TaskbarAppearanceSession(uniformStore, uniformProbe);
-            var uniformDialog = new TaskbarAppearanceWindow(window, uniformSession);
+            var uniformDialog = new SettingsWindow(window, uniformSession);
+            uniformDialog.SelectPage(SettingsWindow.TaskbarPage);
             _ = window.Dispatcher.BeginInvoke(() =>
             {
                 try
@@ -281,18 +285,35 @@ internal static class TaskbarAppearanceVerification
                     uniformDialog.UpdateLayout();
                     Check(Find<TextBlock>(uniformDialog).Any(text => text.Text.Contains("窗口最大化") &&
                         text.Text.Contains("替代桌面外观")), "桌面页面明确提示可能覆盖桌面的场景");
+                    var previewButton = Find<Button>(uniformDialog).Single(item => Equals(item.Content, "预览"));
+                    previewButton.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+                    Check(uniformSession.HasPreview, "内嵌预览启动并保留临时状态");
+                    var general = Find<Button>(uniformDialog).Single(item => Equals(item.Content, "常规"));
+                    general.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+                    Check(!uniformSession.HasPreview && uniformProbe.LastAppearance == uniformSession.Saved,
+                        "切换设置页恢复已保存的外观");
+                    uniformDialog.UpdateLayout();
+                    Check(Find<Button>(uniformDialog).Any(item => Equals(item.Content, "退出并结束进程") && item.IsVisible),
+                        "常规页保留退出入口");
+                    Find<Button>(uniformDialog).Single(item => Equals(item.Content, SettingsWindow.TaskbarPage))
+                        .RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+                    uniformDialog.UpdateLayout();
                     var button = Find<Button>(uniformDialog).Single(item => AutomationProperties.GetAutomationId(item) == "AppearanceUniform");
                     button.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
                     var saved = uniformStore.Load();
                     Check(!saved.FollowScenes && saved.Style == "blur" && saved.ProfileFor("maximized_window_appearance").Enabled &&
                         uniformProbe.LastAppearance?.FollowScenes == false,
                         "界面一键应用统一模糊并保存，原最大化场景保持可恢复");
+                    previewButton.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+                    Check(uniformSession.HasPreview, "关闭设置前有活动预览");
                 }
                 catch (Exception ex) { dialogFailure = ex; }
                 finally { uniformDialog.Close(); }
             }, DispatcherPriority.ContextIdle);
             uniformDialog.ShowDialog();
             if (dialogFailure is not null) throw dialogFailure;
+            Check(!uniformSession.HasPreview && uniformProbe.LastAppearance == uniformSession.Saved,
+                "关闭设置窗口恢复已保存的任务栏外观");
         }
         catch (Exception ex) { failure = ex.ToString(); }
         File.WriteAllText(Path.Combine(root, "taskbar-appearance-verification.json"),

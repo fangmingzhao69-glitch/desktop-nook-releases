@@ -1,4 +1,3 @@
-using System.ComponentModel;
 using System.IO;
 using System.Text.Json;
 using System.Windows;
@@ -9,8 +8,9 @@ using DesktopNook.Core;
 
 namespace DesktopNook.App;
 
-internal sealed class TaskbarAppearanceWindow : Window
+internal sealed class TaskbarAppearancePage : UserControl
 {
+    private readonly Window _owner;
     private readonly TaskbarAppearanceSession _session;
     private readonly DispatcherTimer _previewTimer = new() { Interval = TimeSpan.FromSeconds(12) };
     private readonly CheckBox _enabled = new() { Content = "启用任务栏外观" };
@@ -27,7 +27,7 @@ internal sealed class TaskbarAppearanceWindow : Window
     private readonly TextBlock _radiusLabel = new();
     private readonly ComboBox _line = MakeVisibilityList();
     private readonly ComboBox _peek = MakeVisibilityList();
-    private readonly TextBlock _message = new() { TextWrapping = TextWrapping.Wrap, MinHeight = 42, Margin = new Thickness(0, 10, 0, 8) };
+    private readonly TextBlock _message = new() { TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 8, 0, 8) };
     private readonly StackPanel _body = new() { Margin = new Thickness(20, 10, 20, 18) };
     private readonly StackPanel _footer = new() { Margin = new Thickness(20, 0, 20, 12) };
     private readonly Button _rules;
@@ -35,21 +35,13 @@ internal sealed class TaskbarAppearanceWindow : Window
     private TaskbarAppearanceScene _activeScene = TaskbarAppearanceSettings.Scenes[0];
     private bool _loading;
     private bool _busy;
-    private bool _closingReady;
     private bool _downloadApproved;
 
-    internal TaskbarAppearanceWindow(Window owner, TaskbarAppearanceSession session)
+    internal TaskbarAppearancePage(Window owner, TaskbarAppearanceSession session)
     {
+        _owner = owner;
         _session = session;
         _draft = session.Saved;
-        Owner = owner;
-        Title = "任务栏外观";
-        Width = Math.Min(520, TaskbarPlacement.WorkArea(owner).Width - 24);
-        MaxHeight = Math.Min(640, TaskbarPlacement.WorkArea(owner).Height - 36);
-        ResizeMode = ResizeMode.NoResize;
-        SizeToContent = SizeToContent.Height;
-        WindowStartupLocation = WindowStartupLocation.CenterOwner;
-        ShowInTaskbar = false;
         _style.Items.Add(new ComboBoxItem { Content = "系统默认", Tag = "normal" });
         _style.Items.Add(new ComboBoxItem { Content = "透明", Tag = "clear" });
         _style.Items.Add(new ComboBoxItem { Content = "纯色", Tag = "opaque" });
@@ -69,7 +61,7 @@ internal sealed class TaskbarAppearanceWindow : Window
         var colorRow = new DockPanel();
         var pick = MakeButton("选颜色…", () =>
         {
-            var value = TaskbarColorPicker.Choose(this, _color.Text.Trim());
+            var value = TaskbarColorPicker.Choose(_owner, _color.Text.Trim());
             if (value is not null) _color.Text = value;
         });
         DockPanel.SetDock(pick, Dock.Right);
@@ -92,15 +84,11 @@ internal sealed class TaskbarAppearanceWindow : Window
         options.Children.Add(filters);
         _body.Children.Add(new Expander { Header = "细线与窗口规则", Content = options, Margin = new Thickness(0, 10, 0, 0) });
         _footer.Children.Add(_message);
-        var tools = new WrapPanel { Margin = new Thickness(0, 0, 0, 8) };
+        var actions = new WrapPanel { HorizontalAlignment = HorizontalAlignment.Right };
         var restore = MakeButton("恢复系统外观", () => _ = RunAsync(RestoreSystemAsync));
         restore.Foreground = ThemePalette.Brush("DangerBrush");
-        tools.Children.Add(restore);
-        _footer.Children.Add(tools);
-        var actions = new WrapPanel { HorizontalAlignment = HorizontalAlignment.Right };
-        var cancel = MakeButton("取消", Close);
-        cancel.IsCancel = true;
-        actions.Children.Add(cancel);
+        actions.Children.Add(restore);
+        actions.Children.Add(MakeButton("取消更改", () => _ = RunAsync(ResetDraftAsync)));
         actions.Children.Add(MakeButton("预览", () => _ = RunAsync(PreviewAsync)));
         var uniform = MakeButton("设为统一外观", () => _ = RunAsync(ApplyUniformAsync));
         uniform.ToolTip = "立即对所有场景使用当前样式。保存的动态场景仍可重新启用。";
@@ -108,11 +96,17 @@ internal sealed class TaskbarAppearanceWindow : Window
         actions.Children.Add(MakeButton("应用", () => _ = RunAsync(ApplyAsync), primary: true));
         _footer.Children.Add(actions);
         var layout = new DockPanel();
+        var heading = new TextBlock
+        {
+            Text = SettingsWindow.TaskbarPage, FontSize = 17, FontWeight = FontWeights.SemiBold,
+            Margin = new Thickness(20, 8, 20, 6), Foreground = ThemePalette.Brush("TextPrimaryBrush")
+        };
+        DockPanel.SetDock(heading, Dock.Top);
+        layout.Children.Add(heading);
         DockPanel.SetDock(_footer, Dock.Bottom);
         layout.Children.Add(_footer);
         layout.Children.Add(new ScrollViewer { Content = _body, VerticalScrollBarVisibility = ScrollBarVisibility.Auto });
         Content = layout;
-        UiDialogs.Chrome(this);
         AutomationProperties.SetAutomationId(_scene, "AppearanceScene");
         AutomationProperties.SetAutomationId(_sceneEnabled, "AppearanceSceneEnabled");
         AutomationProperties.SetAutomationId(_followScenes, "AppearanceFollowScenes");
@@ -145,8 +139,6 @@ internal sealed class TaskbarAppearanceWindow : Window
                 _message.Text = "预览已结束，已经恢复到上次保存的设置。";
             });
         };
-        Closing += OnClosing;
-        Closed += (_, _) => _previewTimer.Stop();
         LoadFields(session.Saved);
         _message.Text = session.Restriction ?? (session.Running ? "外观组件已启动。" : "可以先预览，或应用后保存设置。");
     }
@@ -295,7 +287,7 @@ internal sealed class TaskbarAppearanceWindow : Window
         var current = isRules ? activeProfile.Rules : _draft.IgnoredWindows;
         var window = new Window
         {
-            Owner = this, Title = isRules ? "窗口规则" : "忽略窗口", Width = 480, SizeToContent = SizeToContent.Height,
+            Owner = _owner, Title = isRules ? "窗口规则" : "忽略窗口", Width = 480, SizeToContent = SizeToContent.Height,
             WindowStartupLocation = WindowStartupLocation.CenterOwner, ShowInTaskbar = false, ResizeMode = ResizeMode.NoResize
         };
         var editor = new TextBox
@@ -349,7 +341,7 @@ internal sealed class TaskbarAppearanceWindow : Window
         }
         if (_session.NeedsDownload && !_downloadApproved)
         {
-            _downloadApproved = UiDialogs.Show(this, "首次启用需从 GitHub 下载并校验任务栏组件（约 0.8 MB）。", Title,
+            _downloadApproved = UiDialogs.Show(_owner, "首次启用需从 GitHub 下载并校验任务栏组件（约 0.8 MB）。", SettingsWindow.TaskbarPage,
                 MessageBoxButton.OKCancel) == MessageBoxResult.OK;
             return _downloadApproved;
         }
@@ -428,23 +420,28 @@ internal sealed class TaskbarAppearanceWindow : Window
         }
     }
 
-    private void OnClosing(object? sender, CancelEventArgs args)
+    internal bool NeedsExitCheck => _busy || _session.HasPreview;
+
+    internal void StopPreviewTimer() => _previewTimer.Stop();
+
+    internal async Task<bool> TryLeaveAsync()
     {
-        if (_closingReady) return;
-        if (_busy)
+        if (_busy) return false;
+        if (!_session.HasPreview) return true;
+        StopPreviewTimer();
+        await RunAsync(async () =>
         {
-            args.Cancel = true;
-            return;
-        }
-        if (!_session.HasPreview) return;
-        args.Cancel = true;
-        _previewTimer.Stop();
-        Dispatcher.BeginInvoke(async () =>
-        {
-            await RunAsync(_session.CancelPreviewAsync);
-            if (_session.HasPreview) return;
-            _closingReady = true;
-            Close();
+            await _session.CancelPreviewAsync();
+            _message.Text = "预览已结束，已经恢复到上次保存的设置。";
         });
+        return !_session.HasPreview;
+    }
+
+    private async Task ResetDraftAsync()
+    {
+        StopPreviewTimer();
+        await _session.CancelPreviewAsync();
+        LoadFields(_session.Saved);
+        _message.Text = "已经恢复到上次保存的设置。";
     }
 }

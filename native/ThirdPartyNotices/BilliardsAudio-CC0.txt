@@ -11,7 +11,16 @@ Recorded billiards audio (CC0 1.0 Universal)
    https://cdn.freesound.org/previews/350/350918_1147184-hq.mp3
    Original listing: 48 kHz, 24-bit mono, 15.166 s. Public HQ preview used.
 
-Both author pages designate the recordings Creative Commons 0.
+3. "Inside_Pool_Table.WAV" and "Pool_Table_Ball_Hit.WAV" by AmberdeMeillon
+   https://freesound.org/people/AmberdeMeillon/sounds/443057/
+   https://freesound.org/people/AmberdeMeillon/sounds/443067/
+   https://cdn.freesound.org/previews/443/443057_8282799-hq.mp3
+   https://cdn.freesound.org/previews/443/443067_8282799-hq.mp3
+   Description: the same type of billiards shot recorded from inside and
+   outside the table. The selected excerpts capture the actual ball drop.
+   Original listings: 96 kHz, 24-bit mono. Public HQ previews used.
+
+The author pages designate the recordings Creative Commons 0.
 License: https://creativecommons.org/publicdomain/zero/1.0/
 CC0 allows copying, adapting and redistributing, including commercial use.
 Source and author credits are retained here for provenance.
@@ -19,10 +28,9 @@ Source and author credits are retained here for provenance.
 Preparation: selected isolated recorded impacts, removed DC, resampled to
 44.1 kHz / mono / signed PCM16, faded only the cut edges, matched clip RMS
 to 0.05 with a 0.90 peak ceiling, and trimmed silent lead-ins.
-Cushion and pocket feedback are low-pass adaptations of pool-shot recordings;
-they are not represented as separately recorded cushion/pocket sounds.
-No synthesized tones are mixed into the samples. Runtime scales the amplitude
-and selects soft/hard takes without changing playback speed or pitch.
-Exact cut times and output SHA-256 values: Games.Core/Audio/manifest.json.
+The cushion sound is a low-pass adaptation of a recorded impact. Pocket
+sounds use two distinct recorded drops. Runtime adjusts amplitude, softens
+light ball contact and selects takes without changing playback speed or pitch.
+Exact cut times and output SHA-256 values: DesktopNook.Games.Core/Audio/manifest.json.
 Reproduction: native/scripts/Import-BilliardsAudio.py (development only).
 The recordings are packaged with the executable; no runtime download is used.

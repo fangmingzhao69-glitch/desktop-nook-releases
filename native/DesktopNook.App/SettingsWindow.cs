@@ -1,3 +1,4 @@
+using System.ComponentModel;
 using System.Windows;
 using System.Windows.Automation;
 using System.Windows.Controls;
@@ -7,16 +8,30 @@ namespace DesktopNook.App;
 
 internal sealed class SettingsWindow : Window
 {
-    internal enum ActionAfterClose { None, Taskbar, Restore, OpenData, CheckUpdate, LocalUpdate, Releases, License }
+    internal const string TaskbarPage = "任务栏外观设置";
+    internal enum ActionAfterClose { None, RefreshEntry, PinHelp, StopGame, Quit, Restore, OpenData, CheckUpdate, LocalUpdate, Releases, License, GameLicense }
     private readonly MainWindow _owner;
     private readonly StackPanel _content = new();
+    private readonly ScrollViewer _scroller;
+    private readonly ContentControl _taskbarContent = new()
+    {
+        Visibility = Visibility.Collapsed,
+        HorizontalContentAlignment = HorizontalAlignment.Stretch,
+        VerticalContentAlignment = VerticalAlignment.Stretch
+    };
+    private readonly TaskbarAppearanceSession? _taskbarSession;
+    private TaskbarAppearancePage? _taskbarPage;
+    private bool _taskbarSelected;
+    private bool _leavingTaskbar;
+    private bool _closeReady;
     private readonly Dictionary<string, Button> _navigation = new();
     private readonly StartupOptions _options = App.Options;
     internal ActionAfterClose NextAction { get; private set; }
 
-    internal SettingsWindow(MainWindow owner)
+    internal SettingsWindow(MainWindow owner, TaskbarAppearanceSession? taskbarSession = null)
     {
         _owner = owner;
+        _taskbarSession = taskbarSession;
         Owner = owner;
         Title = "设置";
         Width = 820;
@@ -38,19 +53,23 @@ internal sealed class SettingsWindow : Window
         brand.Children.Add(brandName);
         sidebar.Children.Add(brand);
         AddNavigationLabel("偏好设置");
-        AddNavigation("常规"); AddNavigation("外观"); AddNavigation("任务栏");
+        AddNavigation("常规"); AddNavigation("外观"); AddNavigation(TaskbarPage);
         AddNavigationLabel("支持");
         AddNavigation("数据与恢复"); AddNavigation("关于与更新");
         root.Children.Add(new Border { Background = ThemePalette.Brush("CanvasSubtleBrush"), CornerRadius = new CornerRadius(0,0,0,13),
             Child = new ScrollViewer { Content = sidebar, VerticalScrollBarVisibility = ScrollBarVisibility.Auto } });
         _content.Margin = new Thickness(24, 8, 24, 20);
-        var scroller = new ScrollViewer { Content = _content, VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
+        _scroller = new ScrollViewer { Content = _content, VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
             HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled };
-        Grid.SetColumn(scroller, 1);
-        root.Children.Add(scroller);
+        Grid.SetColumn(_scroller, 1);
+        Grid.SetColumn(_taskbarContent, 1);
+        root.Children.Add(_scroller);
+        root.Children.Add(_taskbarContent);
         Content = root;
         UiDialogs.Chrome(this);
         SelectPage("常规");
+        Closing += OnClosing;
+        Closed += (_, _) => _taskbarPage?.StopPreviewTimer();
         SourceInitialized += (_, _) =>
         {
             var work = TaskbarPlacement.WorkArea(owner);
@@ -64,7 +83,10 @@ internal sealed class SettingsWindow : Window
         {
             var button = new Button { Content = page, MinHeight = 34, Margin = new Thickness(0, 0, 0, 4) };
             AutomationProperties.SetAutomationId(button, "SettingsPage-" + page);
-            button.Click += (_, _) => SelectPage(page);
+            button.Click += async (_, _) =>
+            {
+                if (page == TaskbarPage || await LeaveTaskbarAsync()) SelectPage(page);
+            };
             sidebar.Children.Add(button);
             _navigation.Add(page, button);
         }
@@ -82,7 +104,20 @@ internal sealed class SettingsWindow : Window
         {
             button.Background = name == page ? ThemePalette.Brush("SelectionBrush") : Brushes.Transparent;
             button.Foreground = ThemePalette.Brush(name == page ? "AccentInkBrush" : "TextPrimaryBrush");
+            button.FontWeight = name == page ? FontWeights.SemiBold : FontWeights.Normal;
+            AutomationProperties.SetItemStatus(button, name == page ? "当前页" : "");
         }
+        _taskbarSelected = page == TaskbarPage;
+        bool showTaskbar = _taskbarSelected && !_owner.StartingTaskbarAppearance;
+        _taskbarContent.Visibility = showTaskbar ? Visibility.Visible : Visibility.Collapsed;
+        _scroller.Visibility = showTaskbar ? Visibility.Collapsed : Visibility.Visible;
+        if (showTaskbar)
+        {
+            _taskbarContent.Content ??= _taskbarPage = new TaskbarAppearancePage(this, _taskbarSession ?? _owner.TaskbarAppearance());
+            return;
+        }
+
+        _scroller.ScrollToTop();
         _content.Children.Clear();
         var heading = Text(page, 17);
         heading.FontWeight = FontWeights.SemiBold;
@@ -96,6 +131,10 @@ internal sealed class SettingsWindow : Window
                 Toggle("关闭时结束进程", _options.CloseEndsProcess, enabled => _options.CloseEndsProcess = enabled);
                 Pick("添加图标默认视图", null, _options.DefaultCollectView,
                     [("icons", "图标"), ("details", "详细列表")], value => _options.DefaultCollectView = value);
+                ButtonRow("创建或刷新程序入口", () => ContinueWith(ActionAfterClose.RefreshEntry), enabled: !App.IsSandbox);
+                ButtonRow("如何固定到任务栏", () => ContinueWith(ActionAfterClose.PinHelp));
+                if (_owner.BilliardsRunning) ButtonRow("退出台球", () => ContinueWith(ActionAfterClose.StopGame));
+                ButtonRow("退出并结束进程", () => ContinueWith(ActionAfterClose.Quit));
                 break;
             case "外观":
                 ThemeCards();
@@ -121,9 +160,9 @@ internal sealed class SettingsWindow : Window
                 ButtonRow("使用当前窗口尺寸", () => { _owner.SelectWindowSize(); SelectPage("外观"); });
                 ButtonRow("恢复默认尺寸", () => { _owner.SelectWindowSize(reset: true); SelectPage("外观"); });
                 break;
-            case "任务栏":
-                Info("任务栏外观使用现有的透明、模糊、亚克力和场景配置。");
-                ButtonRow("打开任务栏外观", () => ContinueWith(ActionAfterClose.Taskbar), primary: true);
+            case TaskbarPage:
+                Info("正在启动已保存的任务栏外观。");
+                ButtonRow("重新载入", () => SelectPage(TaskbarPage));
                 break;
             case "数据与恢复":
                 Info(App.Store.DataDirectory);
@@ -139,8 +178,27 @@ internal sealed class SettingsWindow : Window
                 ButtonRow("从本地文件更新", () => ContinueWith(ActionAfterClose.LocalUpdate));
                 ButtonRow("打开官方发布页", () => ContinueWith(ActionAfterClose.Releases));
                 ButtonRow("开源许可与源码", () => ContinueWith(ActionAfterClose.License));
+                ButtonRow("图标台球许可", () => ContinueWith(ActionAfterClose.GameLicense));
                 break;
         }
+    }
+
+    private async Task<bool> LeaveTaskbarAsync()
+    {
+        if (_leavingTaskbar) return false;
+        if (!_taskbarSelected || _taskbarPage is not { NeedsExitCheck: true } page) return true;
+        _leavingTaskbar = true;
+        try { return await page.TryLeaveAsync(); }
+        finally { _leavingTaskbar = false; }
+    }
+
+    private async void OnClosing(object? sender, CancelEventArgs args)
+    {
+        if (_closeReady || !_taskbarSelected || _taskbarPage is not { NeedsExitCheck: true }) return;
+        args.Cancel = true;
+        if (!await LeaveTaskbarAsync()) return;
+        _closeReady = true;
+        await Dispatcher.InvokeAsync(Close);
     }
 
     private void ThemeCards()

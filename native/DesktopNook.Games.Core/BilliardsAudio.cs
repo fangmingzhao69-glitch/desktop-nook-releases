@@ -20,11 +20,26 @@ public static class BilliardsAudio
     public static short[] Samples(BallSound sound,int variant=0)
     {
         double power=double.IsFinite(sound.Strength)?Math.Clamp(sound.Strength,0,1):0;
-        string name=sound.Kind switch{BallSoundKind.Cue=>power<.48?"cue-soft":"cue-hard",BallSoundKind.Collision=>variant%2==0?"collision-a":"collision-b",BallSoundKind.Cushion=>"cushion",_=>"pocket"};
-        var recording=Recording(name);var samples=new short[recording.Length];double gain=.12+.78*Math.Pow(power,.75);
-        for(int n=0;n<samples.Length;n++)
+        string name = sound.Kind switch
         {
-            samples[n]=(short)Math.Clamp((int)Math.Round(recording[n]*gain),short.MinValue,short.MaxValue);
+            BallSoundKind.Cue => power < .48 ? "cue-soft" : "cue-hard",
+            BallSoundKind.Collision => variant % 2 == 0 ? "collision-a" : "collision-b",
+            BallSoundKind.Cushion => "cushion",
+            _ => power < .56 ? "pocket" : "pocket-hard"
+        };
+        var recording = Recording(name);
+        var samples = new short[recording.Length];
+        double gain = .07 + 1.04 * Math.Pow(power, .82);
+        if (sound.Kind == BallSoundKind.Pocket) gain *= 1.12;
+
+        // A light contact is softer and less bright. Keep timing and pitch of the recorded hit.
+        double soften = sound.Kind == BallSoundKind.Collision ? .52 * (1 - power) : 0;
+        double low = 0;
+        for (int n = 0; n < samples.Length; n++)
+        {
+            low += .22 * (recording[n] - low);
+            double value = (recording[n] * (1 - soften) + low * soften) * gain;
+            samples[n] = (short)Math.Clamp((int)Math.Round(value), short.MinValue, short.MaxValue);
         }
         return samples;
     }

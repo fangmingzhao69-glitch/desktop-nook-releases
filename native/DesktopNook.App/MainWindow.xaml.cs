@@ -198,28 +198,12 @@ public partial class MainWindow : Window
 
     private void OnSettingsButton(object sender, RoutedEventArgs args) => OpenSettings();
 
-    private void OnMore(object sender, RoutedEventArgs args)
+    private void RefreshProgramEntry() => Run(() =>
     {
-        Popup((FrameworkElement)sender,
-        [
-            Menu("创建或刷新程序入口", () => Run(() =>
-            {
-                if (App.IsSandbox) return;
-                ShortcutInstaller.Install();
-                BrandMigration.RefreshAfterUpgrade(Store.DataDirectory);
-            }, "程序入口已刷新，可从开始菜单固定到任务栏"), !App.IsSandbox),
-            Menu("如何固定到任务栏", ShowPinHelp),
-            Menu("打开数据目录", OpenDataDirectory),
-            Menu("全部移回桌面", RestoreAll, Store.State.Items.Count > 0),
-            new Separator(),
-            GamesMenu(),
-            Menu("任务栏外观…", OpenTaskbarAppearance),
-            Menu("设置…", () => OpenSettings()),
-            Menu("关于与更新…", () => OpenSettings("关于与更新")),
-            new Separator(),
-            Menu("退出并结束进程", Quit)
-        ]);
-    }
+        if (App.IsSandbox) return;
+        ShortcutInstaller.Install();
+        BrandMigration.RefreshAfterUpgrade(Store.DataDirectory);
+    }, "程序入口已刷新，可从开始菜单固定到任务栏");
 
     private void ShowPinHelp()
     {
@@ -243,7 +227,11 @@ public partial class MainWindow : Window
         finally { _interactions--; }
         switch (settings.NextAction)
         {
-            case SettingsWindow.ActionAfterClose.Taskbar: OpenTaskbarAppearance(); break;
+            case SettingsWindow.ActionAfterClose.RefreshEntry: RefreshProgramEntry(); break;
+            case SettingsWindow.ActionAfterClose.PinHelp: ShowPinHelp(); break;
+            case SettingsWindow.ActionAfterClose.StopGame: StopBilliards(); break;
+            case SettingsWindow.ActionAfterClose.Quit: Quit(); break;
+            case SettingsWindow.ActionAfterClose.GameLicense: ShowBilliardsLicense(); break;
             case SettingsWindow.ActionAfterClose.Restore: RestoreAll(); break;
             case SettingsWindow.ActionAfterClose.OpenData: OpenDataDirectory(); break;
             case SettingsWindow.ActionAfterClose.CheckUpdate: _ = CheckOnlineUpdateAsync(true); break;

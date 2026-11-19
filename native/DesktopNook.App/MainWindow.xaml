@@ -27,9 +27,6 @@
          <Button Height="36" Padding="10,0" Click="OnGamesButton" AutomationProperties.Name="图标台球">
           <StackPanel Orientation="Horizontal"><Path Data="M3,13 L5,7 Q6,5 8,5 H12 Q14,5 15,7 L17,13 Q17,16 15,16 L12,13 H8 L5,16 Q3,16 3,13 M6,9 H10 M8,7 V11 M12,9 H12.1 M14,10.5 H14.1" Width="17" Height="17" Stretch="Uniform" Stroke="{DynamicResource AccentInkBrush}" StrokeThickness="1.7" StrokeStartLineCap="Round" StrokeEndLineCap="Round" StrokeLineJoin="Round"/><TextBlock Text="图标台球" Margin="6,0,0,0" FontSize="12" VerticalAlignment="Center"/></StackPanel>
          </Button>
-         <Button x:Name="MoreButton" Width="36" Height="36" Padding="0" ToolTip="更多操作" AutomationProperties.Name="更多操作" Click="OnMore">
-          <Path Data="M4,8 H4.1 M8,8 H8.1 M12,8 H12.1" Width="15" Height="15" Stroke="{DynamicResource TextPrimaryBrush}" StrokeThickness="2.2" StrokeStartLineCap="Round" StrokeEndLineCap="Round" VerticalAlignment="Center"/>
-         </Button>
          <Button x:Name="SettingsButton" Width="36" Height="36" Padding="0" ToolTip="设置" AutomationProperties.Name="设置" Click="OnSettingsButton">
           <Path Data="M2,4 H16 M2,9 H16 M2,14 H16 M6,2 V6 M12,7 V11 M7,12 V16" Width="17" Height="17" Stroke="{DynamicResource TextPrimaryBrush}" StrokeThickness="1.65" StrokeStartLineCap="Round" StrokeEndLineCap="Round"/>
          </Button>

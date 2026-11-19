@@ -190,19 +190,10 @@ internal static class NativeVerification
             }
             textMetrics.Add(new{nativeDpi=nativeDpi*96,wpfDpi=VisualTreeHelper.GetDpi(visual).PixelsPerInchX,textElements=texts.Count,formatting="Display",textScale=1,effectAncestors=0});
         }
-        foreach(double preset in new[]{.8,1,1.5})
-        {
-            window.SelectWindowSize(preset);await Layout();
-            FindNamedButton(window,"更多操作").RaiseEvent(new RoutedEventArgs(System.Windows.Controls.Button.ClickEvent));
-            var menu=window.LastMenu!;
-            try
-            {
-                await SaveMenuPreview(menu,Path.Combine(root,$"more-menu-{preset*100:0}.png"));CheckBounds(menu);
-                if(!menu.Items.OfType<System.Windows.Controls.MenuItem>().Any(i=>i.Header as string=="退出并结束进程"))throw new Exception("适配菜单丢失退出入口。");
-                checks.Add($"More menu fits {preset*100:0}% panel with all commands retained");
-            }
-            finally{menu.IsOpen=false;}
-        }
+        if (Find<System.Windows.Controls.Button>(window).Count(button => System.Windows.Automation.AutomationProperties.GetName(button) == "设置") != 1 ||
+            Find<System.Windows.Controls.Button>(window).Any(button => System.Windows.Automation.AutomationProperties.GetName(button) == "更多操作"))
+            throw new Exception("主窗口的设置入口应只保留设置图标。");
+        checks.Add("The launcher exposes one settings entry and no duplicate menu");
         window.SelectWindowSize(reset:true);await Layout();
         var tab=window.Tabs.Children.OfType<System.Windows.Controls.Button>().Single(b=>b.Tag as string=="office");
         window.CategoryMenu(tab,"office");

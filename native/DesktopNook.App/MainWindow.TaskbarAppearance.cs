@@ -20,7 +20,9 @@ public partial class MainWindow
         _ = RestoreSavedTaskbarAppearanceAsync();
     }
 
-    private TaskbarAppearanceSession TaskbarAppearance()
+    internal bool StartingTaskbarAppearance => _startingTaskbarAppearance;
+
+    internal TaskbarAppearanceSession TaskbarAppearance()
     {
         if (_taskbarAppearance is not null) return _taskbarAppearance;
         var store = new TaskbarAppearanceStore(Store.DataDirectory);
@@ -39,19 +41,6 @@ public partial class MainWindow
         }
         catch (Exception ex) { SetStatus("任务栏外观：" + ex.Message); }
         finally { _startingTaskbarAppearance = false; }
-    }
-
-    private void OpenTaskbarAppearance()
-    {
-        if (_startingTaskbarAppearance)
-        {
-            SetStatus("正在启动任务栏外观组件，请稍后打开设置。");
-            return;
-        }
-        _interactions++;
-        try { new TaskbarAppearanceWindow(this, TaskbarAppearance()).ShowDialog(); }
-        catch (Exception ex) { ShowFailure(ex); }
-        finally { _interactions--; }
     }
 
     private bool StopTaskbarAppearance()
