@@ -49,25 +49,6 @@ $hashes=$payloadFiles|ForEach-Object{(Get-FileHash -LiteralPath $_ -Algorithm SH
 $checksum=Join-Path $stage 'SHA256SUMS.txt'
 [IO.File]::WriteAllLines($checksum,$hashes,[Text.UTF8Encoding]::new($false))
 $releaseFiles=$payloadFiles+@($checksum)
-$readme=@'
-# 轻匣 · Windows 发布
-
-将选中的桌面软件、文件和文件夹收纳到一个任务栏入口，按分类访问。
-
-## 下载与使用
-
-打开本仓库的 Releases，下载最新正式版：
-
-- `DesktopNook-Setup.exe`：安装版，适合首次安装或覆盖升级。
-- `DesktopNook-win-x64.exe`：免安装版，下载后直接运行。
-- `SHA256SUMS.txt`：发布文件的 SHA-256 校验值。
-
-支持 Windows x64；0.12.5 起轻量版依赖 .NET 10 Windows Desktop Runtime x64，不再内含运行时；0.12.6 安装包可确认后自动补装。版本 0.8.0 起支持“更多 → 检查在线更新”，下载、校验后自动更新并重启。启动后也会后台检查，并在发现新版时显示提示。首次从旧版本升级，请覆盖安装一次。
-
-分类、收纳内容及设置保留在本机；本仓库仅用于发布程序与更新说明，不包含用户数据。在线更新使用公开发布信息，无需登录 GitHub。下载速度受网络与系统代理设置影响。
-
-下载失败时可重试，也可手动下载后使用“更多 → 从本地文件更新”。
-'@
 $priorProxy=$env:HTTPS_PROXY
 try {
     if([string]::IsNullOrWhiteSpace($env:HTTPS_PROXY)) {
@@ -75,16 +56,8 @@ try {
         $proxy=[Net.WebRequest]::GetSystemWebProxy().GetProxy($site)
         if($proxy.AbsoluteUri -ne $site.AbsoluteUri){$env:HTTPS_PROXY=$proxy.AbsoluteUri}
     }
-    & gh repo view $Repository --json name 2>$null | Out-Null
-    if($LASTEXITCODE -ne 0) {
-        & gh repo create $Repository --public --description '轻匣 Windows 正式版、安装包与在线更新发布仓库'
-        if($LASTEXITCODE -ne 0){throw '无法创建发布仓库。'}
-        $request=Join-Path $stage 'readme-request.json'
-        $payload=@{message='Add release instructions';content=[Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($readme))}|ConvertTo-Json
-        [IO.File]::WriteAllText($request,$payload,[Text.UTF8Encoding]::new($false))
-        & gh api "repos/$Repository/contents/README.md" --method PUT --input $request --silent
-        if($LASTEXITCODE -ne 0){throw '无法写入发布说明。'}
-    }
+    $visibleRepository=& gh api "repos/$Repository" --jq .full_name
+    if($LASTEXITCODE -ne 0 -or $visibleRepository -ne $Repository){throw "无法确认既有发布仓库 $Repository。请检查权限或网络后重试。"}
     $releases=& gh api "repos/$Repository/releases?per_page=100" | ConvertFrom-Json
     if($LASTEXITCODE -ne 0){throw '无法读取发行版列表。'}
     if(-not $VerifyOnly) {
