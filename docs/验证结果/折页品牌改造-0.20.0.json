@@ -1,0 +1,70 @@
+{
+  "Version": "0.20.0",
+  "DisplayName": "折页",
+  "Date": "2026-11-20",
+  "SourceCommit": "a46eed4ca2b53bffdd57f84c9a0d216a8f512ad9",
+  "ReleaseUrl": "https://github.com/fangmingzhao69-glitch/desktop-nook-releases/releases/tag/v0.20.0",
+  "Latest": true,
+  "Assets": [
+    {
+      "Name": "DesktopNook-Setup.exe",
+      "Size": 556096,
+      "SHA256": "9644c025f654fdf127534ee2368260aad0a8017f7198accb2f01fc3c1dc968d8"
+    },
+    {
+      "Name": "DesktopNook-v0.20.0-source.zip",
+      "Size": 3281707,
+      "SHA256": "0c082f14d1506e19f444f0b1c7bbde961123d9937284a975938ae8d1d093b164"
+    },
+    {
+      "Name": "DesktopNook-win-x64.exe",
+      "Size": 1328714,
+      "SHA256": "b5e8d098b009d11250b37f2ce16a8119fb6d74fb8d32d42e9bcae8c1045bc88b"
+    },
+    {
+      "Name": "SHA256SUMS.txt",
+      "Size": 278,
+      "SHA256": "514dc66eb217ab6a967ae452a38d214870f184bc7c50efa1a74d04a7549fb6e8"
+    }
+  ],
+  "Checks": {
+    "Core": 65,
+    "GameCore": 39,
+    "GameNetwork": 18,
+    "Interface": 126,
+    "Taskbar": 43,
+    "FriendLoopback": 18,
+    "OnlineUpdate": 13
+  },
+  "ThemeMatrix": "grape, melon, lime, berry in light and dark; system mode readback verified",
+  "NotesMouse": "Physical-pointer drag suite stopped at its hit-test guard on the new build and the 0.19.3 baseline. Notes core, visual rendering and isolated upgrade were verified.",
+  "IsolatedUpgrade": {
+    "success": true,
+    "helperExit": 0,
+    "oldVersion": "0.19.2.0",
+    "newVersion": "0.20.0.0",
+    "notesRetained": true,
+    "notesBackupRetained": true,
+    "deletedCategoryRetained": true,
+    "uncheckedPreferenceRetained": true,
+    "collectViewRetained": true,
+    "motionModeRetained": true,
+    "categoryOrdersRetained": true,
+    "orderedCategories": 3,
+    "configurationHashUnchanged": true,
+    "payloadUnchanged": true,
+    "newProcessConfirmed": true
+  },
+  "IsolatedInstaller": {
+    "Installed": true,
+    "Upgraded": true,
+    "UserStateHashPreserved": true,
+    "UserPreferencesHashPreserved": true,
+    "DisplayName": "折页",
+    "Uninstalled": true,
+    "RemainingItems": 0,
+    "RecoveredFiles": 11,
+    "LiveUserDataTouched": false
+  },
+  "InstalledAppUpdated": false
+}
