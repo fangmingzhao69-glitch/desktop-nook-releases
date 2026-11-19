@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-labelledby="title desc">
+  <title id="title">一处小尺寸应用图标</title>
+  <desc id="desc">为十六至二十四像素优化的蓝莓蜜桃四格图标，取消位移、细高光和投影。</desc>
+  <rect x="2" y="2" width="60" height="60" rx="15" fill="#86A7F0" stroke="#C5D6F7" stroke-width="1"/>
+  <rect x="11" y="12" width="18" height="18" rx="4" fill="#F4F8FF"/>
+  <rect x="35" y="12" width="18" height="18" rx="4" fill="#F4F8FF"/>
+  <rect x="11" y="36" width="18" height="18" rx="4" fill="#F4F8FF"/>
+  <rect x="35" y="36" width="18" height="18" rx="4" fill="#FF927E"/>
+</svg>

@@ -279,6 +279,53 @@
         <Popup x:Name="PART_Popup" Placement="Bottom" AllowsTransparency="True" IsOpen="{TemplateBinding IsDropDownOpen}" Focusable="False" VerticalOffset="4"><Border Background="{DynamicResource SurfaceBrush}" BorderBrush="{DynamicResource OutlineBrush}" BorderThickness="1" CornerRadius="8" Padding="4" MinWidth="{TemplateBinding ActualWidth}"><ScrollViewer MaxHeight="240" CanContentScroll="True"><ItemsPresenter/></ScrollViewer></Border></Popup>
       </Grid><ControlTemplate.Triggers><Trigger Property="IsEnabled" Value="False"><Setter Property="Opacity" Value=".45"/></Trigger></ControlTemplate.Triggers></ControlTemplate></Setter.Value></Setter>
     </Style>
+    <Style x:Key="TaskbarAppearanceSlider" TargetType="Slider">
+      <Setter Property="MinHeight" Value="24" />
+      <Setter Property="Template">
+        <Setter.Value>
+          <ControlTemplate TargetType="Slider">
+            <Grid x:Name="SliderSurface" Background="Transparent">
+              <Border Height="4" Margin="7,0" VerticalAlignment="Center" CornerRadius="2" Background="{DynamicResource LineBrush}" />
+              <Track x:Name="PART_Track" IsDirectionReversed="{TemplateBinding IsDirectionReversed}">
+                <Track.DecreaseRepeatButton>
+                  <RepeatButton Focusable="False" Command="{x:Static Slider.DecreaseLarge}">
+                    <RepeatButton.Template>
+                      <ControlTemplate TargetType="RepeatButton">
+                        <Grid Background="Transparent">
+                          <Border Height="4" Margin="7,0,0,0" VerticalAlignment="Center" CornerRadius="2" Background="{DynamicResource PrimaryBrush}" />
+                        </Grid>
+                      </ControlTemplate>
+                    </RepeatButton.Template>
+                  </RepeatButton>
+                </Track.DecreaseRepeatButton>
+                <Track.IncreaseRepeatButton>
+                  <RepeatButton Focusable="False" Command="{x:Static Slider.IncreaseLarge}">
+                    <RepeatButton.Template>
+                      <ControlTemplate TargetType="RepeatButton"><Border Background="Transparent" /></ControlTemplate>
+                    </RepeatButton.Template>
+                  </RepeatButton>
+                </Track.IncreaseRepeatButton>
+                <Track.Thumb>
+                  <Thumb Width="14" Height="14" VerticalAlignment="Center">
+                    <Thumb.Template>
+                      <ControlTemplate TargetType="Thumb">
+                        <Border x:Name="Knob" CornerRadius="7" BorderThickness="1" BorderBrush="{DynamicResource AccentInkBrush}" Background="{DynamicResource SurfaceBrush}" />
+                        <ControlTemplate.Triggers>
+                          <Trigger Property="IsMouseOver" Value="True"><Setter TargetName="Knob" Property="Background" Value="{DynamicResource PrimaryBrush}" /></Trigger>
+                        </ControlTemplate.Triggers>
+                      </ControlTemplate>
+                    </Thumb.Template>
+                  </Thumb>
+                </Track.Thumb>
+              </Track>
+            </Grid>
+            <ControlTemplate.Triggers>
+              <Trigger Property="IsEnabled" Value="False"><Setter TargetName="SliderSurface" Property="Opacity" Value=".45" /></Trigger>
+            </ControlTemplate.Triggers>
+          </ControlTemplate>
+        </Setter.Value>
+      </Setter>
+    </Style>
     <Style TargetType="ProgressBar"><Setter Property="Foreground" Value="{DynamicResource AccentBrush}"/><Setter Property="Background" Value="{DynamicResource SurfaceSubtleBrush}"/></Style>
     <Style TargetType="ToolTip"><Setter Property="Foreground" Value="{DynamicResource OnTooltipBrush}"/><Setter Property="FontSize" Value="12"/><Setter Property="Template"><Setter.Value><ControlTemplate TargetType="ToolTip"><Border Background="{DynamicResource TooltipBrush}" CornerRadius="7" Padding="10,6"><ContentPresenter/></Border></ControlTemplate></Setter.Value></Setter></Style>
   </ResourceDictionary>

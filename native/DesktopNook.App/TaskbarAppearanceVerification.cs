@@ -247,8 +247,19 @@ internal static class TaskbarAppearanceVerification
                     var scenes = Find<ComboBox>(dialog).Single(item => AutomationProperties.GetAutomationId(item) == "AppearanceScene");
                     var styles = Find<ComboBox>(dialog).Single(item => AutomationProperties.GetAutomationId(item) == "AppearanceStyle");
                     var blur = Find<Slider>(dialog).Single(item => AutomationProperties.GetAutomationId(item) == "AppearanceBlurRadius");
+                    var opacity = Find<Slider>(dialog).Single(item => AutomationProperties.GetAutomationId(item) == "AppearanceOpacity");
+                    var apply = Find<Button>(dialog).Single(item => AutomationProperties.GetAutomationId(item) == "AppearanceApply");
+                    var page = Find<TaskbarAppearancePage>(dialog).Single();
+                    var scroll = Find<ScrollViewer>(page).First();
+                    Rect Bounds(FrameworkElement item) => item.TransformToAncestor(page)
+                        .TransformBounds(new Rect(0, 0, item.ActualWidth, item.ActualHeight));
+                    bool SliderFits(Slider slider) => slider.IsVisible && slider.ActualWidth > 100 &&
+                        Bounds(slider).Bottom <= Bounds(scroll).Bottom + .5;
                     var enabled = Find<CheckBox>(dialog).Single(item => AutomationProperties.GetAutomationId(item) == "AppearanceSceneEnabled");
                     Check(scenes.Items.Count == 7 && styles.Items.Count == 5, "设置窗口列出七种场景与五种外观");
+                    Check(SliderFits(opacity) && !blur.IsVisible && Bounds(apply).Top >= Bounds(scroll).Bottom,
+                        "默认桌面场景无需滚动即可看到不透明度，应用按钮固定在独立底栏");
+                    SavePage(dialog, "taskbar-appearance-preview.png");
                     scenes.SelectedIndex = 2;
                     styles.SelectedIndex = 3;
                     blur.Value = 34;
@@ -259,12 +270,28 @@ internal static class TaskbarAppearanceVerification
                     Check(blur.Value == 34 && styles.SelectedIndex == 3 && enabled.IsChecked == true,
                         "切换场景保留未应用的模糊半径、样式及启用开关");
                     dialog.UpdateLayout();
-                    var bitmap = new RenderTargetBitmap((int)dialog.ActualWidth, (int)dialog.ActualHeight, 96, 96, PixelFormats.Pbgra32);
-                    bitmap.Render(dialog);
-                    var screenshot = new PngBitmapEncoder();
-                    screenshot.Frames.Add(BitmapFrame.Create(bitmap));
-                    using var file = File.Create(Path.Combine(root, "taskbar-appearance-preview.png"));
-                    screenshot.Save(file);
+                    Check(SliderFits(blur) && SliderFits(opacity) && blur.Template.FindName("PART_Track", blur) != null,
+                        "模糊场景的不透明度和模糊半径可同时查看，保留原生滑块轨道");
+                    string theme = ThemePalette.Mode;
+                    try
+                    {
+                        ThemePalette.Apply("dark");
+                        dialog.UpdateLayout();
+                        Check(ThemePalette.IsDark && SliderFits(blur) && Bounds(apply).Top >= Bounds(scroll).Bottom,
+                            "深色主题下维持完整滑块和底部操作区");
+                        SavePage(dialog, "taskbar-appearance-dark.png");
+                    }
+                    finally { ThemePalette.Apply(theme); }
+
+                    void SavePage(SettingsWindow settings, string filename)
+                    {
+                        var bitmap = new RenderTargetBitmap((int)settings.ActualWidth, (int)settings.ActualHeight, 96, 96, PixelFormats.Pbgra32);
+                        bitmap.Render(settings);
+                        var screenshot = new PngBitmapEncoder();
+                        screenshot.Frames.Add(BitmapFrame.Create(bitmap));
+                        using var file = File.Create(Path.Combine(root, filename));
+                        screenshot.Save(file);
+                    }
                 }
                 catch (Exception ex) { dialogFailure = ex; }
                 finally { dialog?.Close(); }

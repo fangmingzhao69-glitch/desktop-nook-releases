@@ -1,0 +1,38 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" role="img" aria-labelledby="title desc">
+  <title id="title">一处应用图标</title>
+  <desc id="desc">蓝莓蓝晶瓷圆角底座上的四个模块，三个冰白模块已安放，一个蜜桃橙模块轻轻抬起，表示常用与灵感从一处随手取用。</desc>
+  <defs>
+    <linearGradient id="base" x1="120" y1="80" x2="900" y2="960" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#A9C7FF"/>
+      <stop offset="1" stop-color="#7D9CF3"/>
+    </linearGradient>
+    <linearGradient id="tile" x1="0" y1="0" x2="0" y2="1">
+      <stop stop-color="#FFFFFF"/>
+      <stop offset="1" stop-color="#E2ECFC"/>
+    </linearGradient>
+    <linearGradient id="accent" x1="0" y1="0" x2="1" y2="1">
+      <stop stop-color="#FFC4B3"/>
+      <stop offset="1" stop-color="#FF927E"/>
+    </linearGradient>
+    <linearGradient id="sheen" x1="0" y1="0" x2="1" y2="1">
+      <stop stop-color="#FFFFFF" stop-opacity=".58"/>
+      <stop offset=".42" stop-color="#FFFFFF" stop-opacity="0"/>
+      <stop offset="1" stop-color="#22345E" stop-opacity=".16"/>
+    </linearGradient>
+    <filter id="moduleShadow" x="-30%" y="-30%" width="160%" height="180%">
+      <feDropShadow dx="0" dy="22" stdDeviation="18" flood-color="#314879" flood-opacity=".23"/>
+    </filter>
+  </defs>
+  <rect x="40" y="48" width="944" height="944" rx="224" fill="#314879" opacity=".13"/>
+  <rect x="32" y="32" width="960" height="960" rx="224" fill="url(#base)"/>
+  <rect x="44" y="44" width="936" height="936" rx="212" fill="url(#sheen)"/>
+  <rect x="49" y="49" width="926" height="926" rx="208" fill="none" stroke="#FFFFFF" stroke-opacity=".35" stroke-width="9"/>
+  <path d="M148 158H876" stroke="#FFFFFF" stroke-opacity=".28" stroke-width="12" stroke-linecap="round"/>
+  <g filter="url(#moduleShadow)">
+    <rect x="218" y="248" width="264" height="264" rx="66" fill="url(#tile)" stroke="#FFFFFF" stroke-opacity=".58" stroke-width="7"/>
+    <rect x="542" y="248" width="264" height="264" rx="66" fill="url(#tile)" stroke="#FFFFFF" stroke-opacity=".58" stroke-width="7"/>
+    <rect x="218" y="574" width="264" height="264" rx="66" fill="url(#tile)" stroke="#FFFFFF" stroke-opacity=".58" stroke-width="7"/>
+    <rect x="542" y="540" width="264" height="264" rx="66" fill="url(#accent)" stroke="#FFFFFF" stroke-opacity=".46" stroke-width="7"/>
+  </g>
+  <path d="M606 584H738" stroke="#FFFFFF" stroke-opacity=".48" stroke-width="11" stroke-linecap="round"/>
+</svg>

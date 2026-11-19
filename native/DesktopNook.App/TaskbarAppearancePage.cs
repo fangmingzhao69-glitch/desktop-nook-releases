@@ -1,8 +1,10 @@
+using System.Globalization;
 using System.IO;
 using System.Text.Json;
 using System.Windows;
 using System.Windows.Automation;
 using System.Windows.Controls;
+using System.Windows.Media;
 using System.Windows.Threading;
 using DesktopNook.Core;
 
@@ -14,22 +16,23 @@ internal sealed class TaskbarAppearancePage : UserControl
     private readonly TaskbarAppearanceSession _session;
     private readonly DispatcherTimer _previewTimer = new() { Interval = TimeSpan.FromSeconds(12) };
     private readonly CheckBox _enabled = new() { Content = "启用任务栏外观" };
-    private readonly CheckBox _followScenes = new() { Content = "按场景自动切换外观", Margin = new Thickness(0, 7, 0, 0) };
-    private readonly ComboBox _scene = new() { Margin = new Thickness(0, 4, 0, 8), DisplayMemberPath = "Name" };
-    private readonly CheckBox _sceneEnabled = new() { Content = "为此场景启用单独的外观", Margin = new Thickness(0, 0, 0, 10) };
-    private readonly TextBlock _sceneHint = new() { TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 0, 0, 4) };
-    private readonly ComboBox _style = new() { Margin = new Thickness(0, 4, 0, 12) };
-    private readonly TextBox _color = new() { Margin = new Thickness(0, 4, 0, 12) };
+    private readonly CheckBox _followScenes = new() { Content = "按场景自动切换外观" };
+    private readonly ComboBox _scene = new() { DisplayMemberPath = "Name" };
+    private readonly CheckBox _sceneEnabled = new() { Content = "为此场景启用单独的外观" };
+    private readonly TextBlock _sceneHint = new() { FontSize = 12, TextWrapping = TextWrapping.Wrap };
+    private readonly ComboBox _style = new();
+    private readonly TextBox _color = new() { Width = 112, Height = 34, Padding = new Thickness(8, 4, 8, 4), VerticalContentAlignment = VerticalAlignment.Center };
+    private readonly Border _colorSample = new() { Width = 22, Height = 22, CornerRadius = new CornerRadius(5), BorderThickness = new Thickness(1) };
     private readonly Slider _opacity = new() { Minimum = 0, Maximum = 255, TickFrequency = 1, IsSnapToTickEnabled = true };
     private readonly TextBlock _opacityLabel = new();
     private readonly Slider _radius = new() { Minimum = 0, Maximum = 750, SmallChange = 1, LargeChange = 10 };
-    private readonly StackPanel _radiusFields = new() { Margin = new Thickness(0, 8, 0, 0) };
+    private readonly Grid _radiusRow;
     private readonly TextBlock _radiusLabel = new();
     private readonly ComboBox _line = MakeVisibilityList();
     private readonly ComboBox _peek = MakeVisibilityList();
-    private readonly TextBlock _message = new() { TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 8, 0, 8) };
-    private readonly StackPanel _body = new() { Margin = new Thickness(20, 10, 20, 18) };
-    private readonly StackPanel _footer = new() { Margin = new Thickness(20, 0, 20, 12) };
+    private readonly TextBlock _message = new() { FontSize = 12, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 0, 0, 7) };
+    private readonly StackPanel _body = new() { Margin = new Thickness(22, 2, 22, 10) };
+    private readonly StackPanel _footer = new();
     private readonly Button _rules;
     private TaskbarAppearanceSettings _draft;
     private TaskbarAppearanceScene _activeScene = TaskbarAppearanceSettings.Scenes[0];
@@ -48,64 +51,95 @@ internal sealed class TaskbarAppearancePage : UserControl
         _style.Items.Add(new ComboBoxItem { Content = "模糊", Tag = "blur" });
         _style.Items.Add(new ComboBoxItem { Content = "亚克力", Tag = "acrylic" });
 
-        _body.Children.Add(_enabled);
-        _body.Children.Add(_followScenes);
-        _body.Children.Add(new TextBlock { Text = "适用场景", Margin = new Thickness(0, 10, 0, 0) });
+        var sceneCard = new StackPanel();
+        var switches = new WrapPanel { Margin = new Thickness(0, -3, 0, 5) };
+        _enabled.Margin = new Thickness(0, 0, 14, 0);
+        switches.Children.Add(_enabled);
+        switches.Children.Add(_followScenes);
+        sceneCard.Children.Add(switches);
         _scene.ItemsSource = TaskbarAppearanceSettings.Scenes;
-        _body.Children.Add(_scene);
-        _body.Children.Add(_sceneEnabled);
-        _body.Children.Add(_sceneHint);
-        _body.Children.Add(new TextBlock { Text = "样式", Margin = new Thickness(0, 10, 0, 0) });
-        _body.Children.Add(_style);
-        _body.Children.Add(new TextBlock { Text = "颜色（#RRGGBB）" });
-        var colorRow = new DockPanel();
+        sceneCard.Children.Add(FieldRow("适用场景", _scene));
+        _sceneEnabled.Margin = new Thickness(82, 0, 0, 0);
+        sceneCard.Children.Add(_sceneEnabled);
+        _sceneHint.Foreground = ThemePalette.Brush("TextSecondaryBrush");
+        _sceneHint.Margin = new Thickness(88, 1, 0, 0);
+        sceneCard.Children.Add(_sceneHint);
+        _body.Children.Add(Card(sceneCard));
+
+        var appearanceCard = new StackPanel();
+        appearanceCard.Children.Add(FieldRow("样式", _style));
+        var colorControls = new StackPanel { Orientation = Orientation.Horizontal };
+        _colorSample.BorderBrush = ThemePalette.Brush("OutlineBrush");
+        _colorSample.Margin = new Thickness(0, 0, 8, 0);
+        colorControls.Children.Add(_colorSample);
+        _color.ToolTip = "颜色格式 #RRGGBB";
+        AutomationProperties.SetName(_color, "颜色");
+        colorControls.Children.Add(_color);
         var pick = MakeButton("选颜色…", () =>
         {
             var value = TaskbarColorPicker.Choose(_owner, _color.Text.Trim());
             if (value is not null) _color.Text = value;
         });
-        DockPanel.SetDock(pick, Dock.Right);
-        pick.Margin = new Thickness(8, 4, 0, 12);
-        colorRow.Children.Add(pick);
-        colorRow.Children.Add(_color);
-        _body.Children.Add(colorRow);
-        _body.Children.Add(_opacityLabel);
-        _body.Children.Add(_opacity);
-        _radiusFields.Children.Add(_radiusLabel);
-        _radiusFields.Children.Add(_radius);
-        _body.Children.Add(_radiusFields);
-        var options = new StackPanel { Margin = new Thickness(0, 8, 0, 4) };
-        options.Children.Add(LabeledRow("任务栏顶部细线", _line));
-        options.Children.Add(LabeledRow("Aero Peek（旧式任务栏）", _peek));
+        pick.Margin = new Thickness(7, 0, 0, 0);
+        pick.MinHeight = 34;
+        pick.Background = ThemePalette.Brush("SurfaceBrush");
+        colorControls.Children.Add(pick);
+        appearanceCard.Children.Add(FieldRow("颜色", colorControls));
+        appearanceCard.Children.Add(FieldRow("不透明度", SliderField(_opacity, _opacityLabel, "颜色不透明度")));
+        _radiusRow = FieldRow("模糊半径", SliderField(_radius, _radiusLabel, "模糊半径"));
+        appearanceCard.Children.Add(_radiusRow);
+        _body.Children.Add(Card(appearanceCard));
+
+        var options = new StackPanel { Margin = new Thickness(0, 8, 0, 0) };
+        options.Children.Add(FieldRow("任务栏细线", _line));
+        options.Children.Add(FieldRow("Aero Peek", _peek));
+        _peek.ToolTip = "适用于旧式任务栏";
         var filters = new WrapPanel();
         _rules = MakeButton("窗口规则…", () => EditWindowConditions(isRules: true));
         filters.Children.Add(_rules);
         filters.Children.Add(MakeButton("忽略窗口…", () => EditWindowConditions(isRules: false)));
         options.Children.Add(filters);
-        _body.Children.Add(new Expander { Header = "细线与窗口规则", Content = options, Margin = new Thickness(0, 10, 0, 0) });
+        _body.Children.Add(Card(new Expander { Header = "细线与窗口规则", Content = options }));
+        _message.Foreground = ThemePalette.Brush("TextSecondaryBrush");
         _footer.Children.Add(_message);
-        var actions = new WrapPanel { HorizontalAlignment = HorizontalAlignment.Right };
+        var actionBar = new DockPanel();
         var restore = MakeButton("恢复系统外观", () => _ = RunAsync(RestoreSystemAsync));
         restore.Foreground = ThemePalette.Brush("DangerBrush");
-        actions.Children.Add(restore);
+        restore.VerticalAlignment = VerticalAlignment.Top;
+        DockPanel.SetDock(restore, Dock.Left);
+        actionBar.Children.Add(restore);
+        var actions = new WrapPanel { HorizontalAlignment = HorizontalAlignment.Right };
         actions.Children.Add(MakeButton("取消更改", () => _ = RunAsync(ResetDraftAsync)));
         actions.Children.Add(MakeButton("预览", () => _ = RunAsync(PreviewAsync)));
         var uniform = MakeButton("设为统一外观", () => _ = RunAsync(ApplyUniformAsync));
         uniform.ToolTip = "立即对所有场景使用当前样式。保存的动态场景仍可重新启用。";
         actions.Children.Add(uniform);
-        actions.Children.Add(MakeButton("应用", () => _ = RunAsync(ApplyAsync), primary: true));
-        _footer.Children.Add(actions);
+        var apply = MakeButton("应用", () => _ = RunAsync(ApplyAsync), primary: true);
+        apply.MinWidth = 68;
+        apply.Margin = new Thickness(4, 0, 0, 0);
+        actions.Children.Add(apply);
+        actionBar.Children.Add(actions);
+        _footer.Children.Add(actionBar);
         var layout = new DockPanel();
         var heading = new TextBlock
         {
             Text = SettingsWindow.TaskbarPage, FontSize = 17, FontWeight = FontWeights.SemiBold,
-            Margin = new Thickness(20, 8, 20, 6), Foreground = ThemePalette.Brush("TextPrimaryBrush")
+            Margin = new Thickness(22, 8, 22, 12), Foreground = ThemePalette.Brush("TextPrimaryBrush")
         };
         DockPanel.SetDock(heading, Dock.Top);
         layout.Children.Add(heading);
-        DockPanel.SetDock(_footer, Dock.Bottom);
-        layout.Children.Add(_footer);
-        layout.Children.Add(new ScrollViewer { Content = _body, VerticalScrollBarVisibility = ScrollBarVisibility.Auto });
+        var footerFrame = new Border
+        {
+            BorderBrush = ThemePalette.Brush("LineBrush"), BorderThickness = new Thickness(0, 1, 0, 0),
+            Padding = new Thickness(22, 9, 22, 12), Child = _footer
+        };
+        DockPanel.SetDock(footerFrame, Dock.Bottom);
+        layout.Children.Add(footerFrame);
+        layout.Children.Add(new ScrollViewer
+        {
+            Content = _body, VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
+            HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled
+        });
         Content = layout;
         AutomationProperties.SetAutomationId(_scene, "AppearanceScene");
         AutomationProperties.SetAutomationId(_sceneEnabled, "AppearanceSceneEnabled");
@@ -113,8 +147,11 @@ internal sealed class TaskbarAppearancePage : UserControl
         AutomationProperties.SetAutomationId(uniform, "AppearanceUniform");
         AutomationProperties.SetAutomationId(_style, "AppearanceStyle");
         AutomationProperties.SetAutomationId(_radius, "AppearanceBlurRadius");
+        AutomationProperties.SetAutomationId(_opacity, "AppearanceOpacity");
+        AutomationProperties.SetAutomationId(apply, "AppearanceApply");
         AutomationProperties.SetAutomationId(_line, "AppearanceTopLine");
         _scene.SelectionChanged += (_, _) => SwitchScene();
+        _color.TextChanged += (_, _) => UpdateColorSample();
         _opacity.ValueChanged += (_, _) => UpdateOpacity();
         _radius.ValueChanged += (_, _) => UpdateOpacity();
         _style.SelectionChanged += (_, _) =>
@@ -145,7 +182,7 @@ internal sealed class TaskbarAppearancePage : UserControl
 
     private Button MakeButton(string label, Action click, bool primary = false)
     {
-        var button = new Button { Content = label, Margin = new Thickness(0, 0, 6, 4) };
+        var button = new Button { Content = label, MinHeight = 34, Margin = new Thickness(0, 0, 4, 0) };
         if (primary) button.Style = (Style)FindResource("PrimaryButton");
         button.Click += (_, _) => click();
         return button;
@@ -160,15 +197,63 @@ internal sealed class TaskbarAppearancePage : UserControl
         return list;
     }
 
-    private static Grid LabeledRow(string text, Control field)
+    private static Border Card(UIElement content) => new()
     {
-        var row = new Grid { Margin = new Thickness(0, 0, 0, 8) };
+        Child = content, Background = ThemePalette.Brush("CanvasSubtleBrush"),
+        BorderBrush = ThemePalette.Brush("LineBrush"), BorderThickness = new Thickness(1),
+        CornerRadius = new CornerRadius(10), Margin = new Thickness(0, 0, 0, 8),
+        Padding = new Thickness(12, 8, 12, 8)
+    };
+
+    private static Grid FieldRow(string text, FrameworkElement field)
+    {
+        var row = new Grid { MinHeight = 30, Margin = new Thickness(0, 2, 0, 3) };
+        row.ColumnDefinitions.Add(new() { Width = new GridLength(88) });
         row.ColumnDefinitions.Add(new());
-        row.ColumnDefinitions.Add(new() { Width = GridLength.Auto });
-        row.Children.Add(new TextBlock { Text = text, VerticalAlignment = VerticalAlignment.Center });
+        var caption = new TextBlock
+        {
+            Text = text, VerticalAlignment = VerticalAlignment.Center, Foreground = ThemePalette.Brush("TextSecondaryBrush")
+        };
+        if (field is Control control) AutomationProperties.SetLabeledBy(control, caption);
+        row.Children.Add(caption);
         Grid.SetColumn(field, 1);
         row.Children.Add(field);
         return row;
+    }
+
+    private DockPanel SliderField(Slider slider, TextBlock value, string name)
+    {
+        var row = new DockPanel();
+        value.Foreground = ThemePalette.Brush("AccentInkBrush");
+        value.FontSize = 12;
+        value.HorizontalAlignment = HorizontalAlignment.Center;
+        value.VerticalAlignment = VerticalAlignment.Center;
+        var badge = new Border
+        {
+            MinWidth = 50, Padding = new Thickness(5, 3, 5, 3), Margin = new Thickness(10, 0, 0, 0),
+            VerticalAlignment = VerticalAlignment.Center, CornerRadius = new CornerRadius(5),
+            Background = ThemePalette.Brush("SelectionBrush"), Child = value
+        };
+        DockPanel.SetDock(badge, Dock.Right);
+        row.Children.Add(badge);
+        slider.Style = (Style)FindResource("TaskbarAppearanceSlider");
+        slider.VerticalAlignment = VerticalAlignment.Center;
+        AutomationProperties.SetName(slider, name);
+        row.Children.Add(slider);
+        return row;
+    }
+
+    private void UpdateColorSample()
+    {
+        string text = _color.Text.Trim();
+        if (text.Length == 7 && text[0] == '#' &&
+            uint.TryParse(text.AsSpan(1), NumberStyles.HexNumber, CultureInfo.InvariantCulture, out uint rgb))
+        {
+            var brush = new SolidColorBrush(Color.FromRgb((byte)(rgb >> 16), (byte)(rgb >> 8), (byte)rgb));
+            brush.Freeze();
+            _colorSample.Background = brush;
+        }
+        else _colorSample.Background = Brushes.Transparent;
     }
 
     private void LoadFields(TaskbarAppearanceSettings settings)
@@ -207,25 +292,37 @@ internal sealed class TaskbarAppearancePage : UserControl
         if (_loading) return;
         if (_enabled.IsChecked != true)
         {
-            _sceneHint.Text = "任务栏外观已停用。勾选启用后可预览，或直接使用「设为统一外观」。";
+            ShowSceneHint("启用外观后可预览，或直接设为统一外观。");
             return;
         }
         if (_followScenes.IsChecked != true)
         {
-            _sceneHint.Text = "各场景统一使用桌面外观。重新开启按场景切换可恢复各场景的单独设置。";
+            ShowSceneHint("各场景使用桌面外观。开启自动切换后可恢复独立设置。");
             return;
         }
         if (_activeScene.Key != TaskbarAppearanceSettings.DesktopScene)
         {
-            _sceneHint.Text = _sceneEnabled.IsChecked == true
-                ? "此设置在该场景触发时显示。可用「预览」立即查看。"
-                : "此场景未启用，应用只保存它的设置。";
+            ShowSceneHint(_sceneEnabled.IsChecked == true
+                ? "该场景触发时生效，也可立即预览。"
+                : "该场景未启用，仍可先保存设置。");
             return;
         }
         var overrides = TaskbarAppearanceSettings.Scenes.Skip(1)
             .Where(scene => _draft.ProfileFor(scene.Key).Enabled).Select(scene => scene.Name).ToArray();
-        _sceneHint.Text = overrides.Length == 0 ? ""
-            : $"已启用「{string.Join("、", overrides)}」的独立外观，触发时会替代桌面外观。";
+        ShowSceneHint(overrides.Length switch
+        {
+            0 => "",
+            1 => $"「{overrides[0]}」的独立外观会在触发时替代桌面外观。",
+            _ => $"{overrides.Length} 个场景的独立外观会在触发时替代桌面外观。"
+        }, overrides.Length > 1 ? string.Join("、", overrides) : null);
+    }
+
+    private void ShowSceneHint(string text, string? detail = null)
+    {
+        _sceneHint.Text = text;
+        _sceneHint.ToolTip = detail;
+        AutomationProperties.SetHelpText(_sceneHint, detail ?? "");
+        _sceneHint.Visibility = text.Length == 0 ? Visibility.Collapsed : Visibility.Visible;
     }
 
     private void SwitchScene()
@@ -251,9 +348,9 @@ internal sealed class TaskbarAppearancePage : UserControl
         var custom = mode is not null and not "normal";
         _color.IsEnabled = custom;
         _opacity.IsEnabled = mode is "clear" or "blur" or "acrylic";
-        _radiusFields.Visibility = mode == "blur" ? Visibility.Visible : Visibility.Collapsed;
-        _opacityLabel.Text = $"颜色不透明度：{_opacity.Value * 100 / 255:0}%";
-        _radiusLabel.Text = $"模糊半径：{_radius.Value:0.#}";
+        _radiusRow.Visibility = mode == "blur" ? Visibility.Visible : Visibility.Collapsed;
+        _opacityLabel.Text = $"{_opacity.Value * 100 / 255:0}%";
+        _radiusLabel.Text = $"{_radius.Value:0.#}";
     }
 
     private TaskbarAppearanceSettings Fields()
