@@ -199,7 +199,7 @@ public partial class MainWindow
                 if (NoteProject is { } p && FindNoteEditor(p.SelectedNote, p.EditorKey) is { } box)
                 {
                     box.Focus();
-                    if (box is NoteTaskEditor task) task.SelectCharacters(p.Caret, p.SelectionLength);
+                    if (box is NoteTextEditor formatted) formatted.SelectCharacters(p.Caret, p.SelectionLength);
                     else if (box is TextBox text)
                     {
                         int start = Math.Min(p.Caret, text.Text.Length);
@@ -249,21 +249,50 @@ public partial class MainWindow
             if(NoteProject is null)_noteCards.Children.Add(NotesButton("＋ 新建分类",_=>NewNoteProject(),true));
         }
     }
-    private TextBox NoteEditor(string text,ProjectNote note,Action<string> changed,bool multiline=false,string key="title",bool readOnly=false)
+    private TextBox NoteTitleEditor(ProjectNote note, bool readOnly)
     {
-        var editor=new TextBox{Text=text,FontSize=12,Padding=new Thickness(4),BorderThickness=new Thickness(0),Background=Brushes.Transparent,
-            AcceptsReturn=multiline,TextWrapping=TextWrapping.Wrap,IsReadOnly=readOnly,MinHeight=26};
-        ConfigureNoteEditor(editor, note, key, null);
-        editor.TextChanged+=(_,_)=>{changed(editor.Text);NotesChanged(true,note);UpdateNoteCounts();};
+        var editor=new TextBox{Text=note.Title,FontSize=12,Padding=new Thickness(4),BorderThickness=new Thickness(0),Background=Brushes.Transparent,
+            TextWrapping=TextWrapping.Wrap,IsReadOnly=readOnly,MinHeight=26};
+        ConfigureNoteEditor(editor, note, "title", null);
+        editor.TextChanged+=(_,_)=>{note.Title=editor.Text;NotesChanged(true,note);UpdateNoteCounts();};
         return editor;
+    }
+
+    private Action AddNoteStrikeButton(DockPanel header, string id, Func<NoteTextEditor?> selectedEditor)
+    {
+        var button = NotesButton("S", clicked =>
+        {
+            if (_notesComposing || selectedEditor() is not { IsReadOnly: false, Selection.IsEmpty: false } editor) return;
+            editor.Focus();
+            editor.ToggleStrike();
+            Update(clicked);
+        });
+        button.Content = new TextBlock { Text = "S", TextDecorations = TextDecorations.Strikethrough };
+        AutomationProperties.SetAutomationId(button, id);
+        ToolTipService.SetShowOnDisabled(button, true);
+        DockPanel.SetDock(button, Dock.Right);
+        header.Children.Insert(header.Children.Count - 1, button);
+        Update(button);
+        return () => Update(button);
+
+        void Update(Button target)
+        {
+            var editor = selectedEditor();
+            target.IsEnabled = editor is { IsReadOnly: false, Selection.IsEmpty: false };
+            bool remove = target.IsEnabled && editor!.SelectionIsStruck();
+            string action = remove ? "取消删除线" : "添加删除线";
+            target.Background = remove ? Brush("#DDF2FF") : Brushes.Transparent;
+            target.ToolTip = target.IsEnabled ? action : "选中文字后添加或取消删除线";
+            AutomationProperties.SetName(target, action);
+        }
     }
 
     private void ConfigureNoteEditor(TextBoxBase editor, ProjectNote note, string key, Action? delete)
     {
         editor.Tag = note.Id + ":" + key;
         editor.ContextMenu = new ContextMenu();
-        (int Start, int Length) ReadSelection() => editor is NoteTaskEditor task
-            ? task.CharacterSelection()
+        (int Start, int Length) ReadSelection() => editor is NoteTextEditor formatted
+            ? formatted.CharacterSelection()
             : (((TextBox)editor).SelectionStart, ((TextBox)editor).SelectionLength);
 
         editor.ContextMenuOpening += (_, e) =>
@@ -276,9 +305,9 @@ public partial class MainWindow
                 Menu("复制", editor.Copy, hasSelection),
                 Menu("粘贴", editor.Paste, !editor.IsReadOnly && Clipboard.ContainsText())
             };
-            if (editor is NoteTaskEditor task)
-                entries.Add(Menu(task.SelectionIsStruck() ? "取消删除线" : "添加删除线",
-                    task.ToggleStrike, !editor.IsReadOnly && hasSelection));
+            if (editor is NoteTextEditor formatted)
+                entries.Add(Menu(formatted.SelectionIsStruck() ? "取消删除线" : "添加删除线",
+                    formatted.ToggleStrike, !editor.IsReadOnly && hasSelection));
             entries.Add(new Separator());
             entries.Add(Menu(delete is null ? "删除便签…" : "删除此项", delete ?? (() => DeleteNote(note)), !editor.IsReadOnly));
             Popup(editor, entries);
@@ -308,7 +337,7 @@ public partial class MainWindow
         if (note.Favorite) metadata += " · 常用";
         if (note.Archived) metadata += " · 已单独归档";
         content.Children.Add(NoteOrderBar(note, number, metadata, readOnly));
-        var title = NoteEditor(note.Title, note, t => note.Title = t, readOnly: readOnly);
+        var title = NoteTitleEditor(note, readOnly);
         title.FontWeight = FontWeights.SemiBold;
         title.FontSize = 14;
         AutomationProperties.SetName(title, "记录标题");
@@ -317,7 +346,28 @@ public partial class MainWindow
         content.Children.Add(header);
         if(note.Kind=="text")
         {
-            var body=NoteEditor(note.Text,note,t=>note.Text=t,true,"body",readOnly:readOnly);body.MinHeight=65;AutomationProperties.SetName(body,"文字记录正文");content.Children.Add(body);
+            var body = new NoteTextEditor(note.Text, note.BodyStrikes)
+            {
+                MinHeight = 65,
+                IsReadOnly = readOnly,
+                IsInactiveSelectionHighlightEnabled = !readOnly,
+                Foreground = Brush("#35566E")
+            };
+            AutomationProperties.SetName(body, "文字记录正文");
+            ConfigureNoteEditor(body, note, "body", null);
+            Action? updateStrike = readOnly ? null : AddNoteStrikeButton(header, "NoteTextStrike-" + note.Id, () => body);
+            body.SelectionChanged += (_, _) => updateStrike?.Invoke();
+            body.TextChanged += (_, _) =>
+            {
+                var (text, strikes) = body.ReadContent();
+                if (note.Text == text && (note.BodyStrikes ?? []).SequenceEqual(strikes ?? [])) return;
+                note.Text = text;
+                if (strikes is not null || note.BodyStrikes is not null) note.BodyStrikes = strikes ?? [];
+                NotesChanged(true, note);
+                UpdateNoteCounts();
+                updateStrike?.Invoke();
+            };
+            content.Children.Add(body);
         }
         else AddNoteTasks(note, content, header, readOnly);
         border.ContextMenu=new ContextMenu();

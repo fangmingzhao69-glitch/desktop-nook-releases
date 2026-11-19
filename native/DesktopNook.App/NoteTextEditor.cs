@@ -8,30 +8,29 @@ using DesktopNook.Core;
 
 namespace DesktopNook.App;
 
-internal sealed class NoteTaskEditor : RichTextBox
+internal sealed class NoteTextEditor : RichTextBox
 {
-    public NoteTaskEditor(NoteTask task, Action<List<NoteTask>> pasteTasks)
+    public NoteTextEditor(string text, NoteStrikeRange[]? strikes, Action<List<NoteTask>>? pasteTasks = null)
     {
         FontSize = 12;
         Padding = new Thickness(4);
         BorderThickness = new Thickness(0);
         Background = Brushes.Transparent;
         MinHeight = 26;
-        AcceptsReturn = false;
+        AcceptsReturn = pasteTasks is null;
         HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled;
         VerticalScrollBarVisibility = ScrollBarVisibility.Disabled;
 
         var paragraph = NewParagraph();
         Document = new FlowDocument(paragraph) { PagePadding = new Thickness(0) };
         int start = 0;
-        foreach (var mark in task.Strikes ?? [])
+        foreach (var mark in strikes ?? [])
         {
-            AddText(paragraph, task.Text[start..mark.Start], false);
-            AddText(paragraph, task.Text.Substring(mark.Start, mark.Length), true);
+            AddText(paragraph, text[start..mark.Start], false);
+            AddText(paragraph, text.Substring(mark.Start, mark.Length), true);
             start = mark.Start + mark.Length;
         }
-        AddText(paragraph, task.Text[start..], false);
-        SetDone(task.Done);
+        AddText(paragraph, text[start..], false);
         DataObject.AddPastingHandler(this, (_, args) =>
         {
             string format = args.DataObject.GetDataPresent(DataFormats.UnicodeText) ? DataFormats.UnicodeText : DataFormats.Text;
@@ -40,8 +39,8 @@ internal sealed class NoteTaskEditor : RichTextBox
                 args.CancelCommand();
                 return;
             }
-            if (!IsReadOnly && args.DataObject.GetData(format) is string text &&
-                NotesTaskPaste.ParseMultiline(text) is { Count: > 0 } batch)
+            if (pasteTasks is not null && !IsReadOnly && args.DataObject.GetData(format) is string pasted &&
+                NotesTaskPaste.ParseMultiline(pasted) is { Count: > 0 } batch)
             {
                 args.CancelCommand();
                 // Let the paste command finish before moving or replacing editors in its route.

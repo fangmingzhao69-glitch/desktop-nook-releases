@@ -329,6 +329,37 @@ Test("Multiline checklist paste retains literal lines without interpreting marke
     Assert(NotesTaskPaste.ParseMultiline("   \r\n\r\n").Select(task => task.Text).SequenceEqual(["   ", ""]),
         "blank lines stay literal even when the whole block is whitespace");
 });
+Test("Text record strikeout survives storage, Markdown, and note type conversion", root =>
+{
+    var store = new NotesStore(root);
+    var draft = store.Draft();
+    var category = NotesStore.AddProject(draft, "说明");
+    var note = new ProjectNote { ProjectId = category.Id, Text = "初稿\r\n第二行", BodyStrikes = [new(1, 4)] };
+    draft.Notes.Add(note);
+    store.Commit(draft);
+    var saved = new NotesStore(root).State.Notes.Single();
+    Assert(saved.BodyStrikes?.Single() == new NoteStrikeRange(1, 4), "old-length line endings and strike offsets reload together");
+    Assert(NotesMarkdown.Export(draft, note).Contains("初~~稿~~\n~~第~~二行"), "export preserves the marked characters on both lines");
+    draft.Notes.Single().BodyStrikes![0] = new(0, 1);
+    Assert(store.State.Notes.Single().BodyStrikes![0].Start == 1, "committed ranges are isolated from the draft");
+
+    saved.ChangeKind("todo");
+    Assert(saved.Tasks.Select(task => task.Text).SequenceEqual(["初稿", "第二行"]) &&
+        saved.Tasks[0].Strikes?.Single() == new NoteStrikeRange(1, 1) &&
+        saved.Tasks[1].Strikes?.Single() == new NoteStrikeRange(0, 1), "a cross-line mark is projected into the correct tasks");
+    saved.Tasks[0].Done = true;
+    saved.ChangeKind("text");
+    Assert(saved.BodyStrikes?.SequenceEqual([new NoteStrikeRange(1, 1), new NoteStrikeRange(3, 1)]) == true,
+        "converting back preserves partial marks");
+    saved.BodyStrikes = [];
+    saved.ChangeKind("todo");
+    Assert(saved.Tasks.All(task => task.Strikes is null) && saved.Tasks[0].Done,
+        "removing all formatting does not resurrect old marks or clear checkboxes");
+
+    var legacy = new ProjectNote { Text = "旧文字", Tasks = [new() { Text = "旧文字", Strikes = [new(0, 1)] }] };
+    legacy.ChangeKind("todo");
+    Assert(legacy.Tasks.Single().Strikes?.Length == 1, "a prior text-format record can still recover its checklist marks");
+});
 Test("Notes duplicate names, dangling references and stale revisions are rejected",root=>{
     var store=new NotesStore(root);var draft=store.Draft();var a=NotesStore.AddProject(draft," 项目A ");store.Commit(draft);var stale=store.Draft();
     try{NotesStore.AddProject(draft,"项目A");throw new Exception("duplicate accepted");}catch(ArgumentException){}

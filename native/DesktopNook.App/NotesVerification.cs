@@ -20,6 +20,8 @@ internal static class NotesVerification
         IEnumerable<T> Find<T>(DependencyObject parent) where T:DependencyObject
         {for(int i=0;i<VisualTreeHelper.GetChildrenCount(parent);i++){var child=VisualTreeHelper.GetChild(parent,i);if(child is T t)yield return t;foreach(var item in Find<T>(child))yield return item;}}
         TextBox Field(string name)=>Find<TextBox>(window.NotesHost).First(b=>AutomationProperties.GetName(b)==name);
+        NoteTextEditor Body(ProjectNote? note = null) => Find<NoteTextEditor>(window.NotesHost).First(editor =>
+            AutomationProperties.GetName(editor) == "文字记录正文" && (note is null || Equals(editor.Tag, note.Id + ":body")));
         Button ProjectTab(NoteProject project) => Find<Button>(window.NotesHost)
             .Single(button => AutomationProperties.GetAutomationId(button) == "Project-" + project.Id);
         void ClickMenu(MenuItem item)
@@ -34,16 +36,16 @@ internal static class NotesVerification
             return window.LastMenu!.Items.OfType<MenuItem>().Single(entry => Equals(entry.Header, item));
         }
         async Task Layout(){window.UpdateLayout();await window.Dispatcher.InvokeAsync(()=>{},System.Windows.Threading.DispatcherPriority.ContextIdle);window.UpdateLayout();}
-        NoteTaskEditor[] TaskEditors(ProjectNote note) => Find<NoteTaskEditor>(window.NotesHost)
+        NoteTextEditor[] TaskEditors(ProjectNote note) => Find<NoteTextEditor>(window.NotesHost)
             .Where(editor => editor.Tag is string key && key.StartsWith(note.Id + ":task-", StringComparison.Ordinal)).ToArray();
-        ContextMenu OpenEditorMenu(NoteTaskEditor editor)
+        ContextMenu OpenEditorMenu(NoteTextEditor editor)
         {
             editor.RaiseEvent((ContextMenuEventArgs)Activator.CreateInstance(typeof(ContextMenuEventArgs),
                 System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic, null,
                 new object[] { editor, true }, null)!);
             return window.LastMenu!;
         }
-        bool PasteText(NoteTaskEditor editor, string text)
+        bool PasteText(NoteTextEditor editor, string text)
         {
             var data = new DataObject(DataFormats.UnicodeText, text);
             data.SetData(DataFormats.Rtf, @"{\rtf1\ansi\strike sample}");
@@ -95,16 +97,40 @@ internal static class NotesVerification
             NotesStore.ReorderProject(window.NotesDraft, p, other, after: false);
             window.NotesStore.Commit(window.NotesDraft);
             window.SelectNoteProject(p.Id);window.NotesDraft.Notes.Add(new(){ProjectId=p.Id,Kind="text",Title="旧版文字记录"});window.NotesStore.Commit(window.NotesDraft);window.RenderNotes();await Layout();
-            Field("记录标题").Text="需求沟通";var body=Field("文字记录正文");body.Focus();body.Text="今天确认了项目需求。\n下一步：整理方案并跟进。";
+            Field("记录标题").Text="需求沟通";var body=Body();body.Focus();
+            string textRecord = "今天确认了项目需求。\n下一步：整理方案并跟进。";
+            body.Selection.Text = textRecord;
             await Task.Delay(750);
             Check(new NotesStore(App.Store.DataDirectory).State.Notes.Single().Text.Contains("下一步"),"中文多行文字在停止输入后自动持久保存");
-            Check(ReferenceEquals(body,Field("文字记录正文")),"自动保存不重建编辑控件或打断正文焦点");
-            window.SelectNoteProject(other.Id);await Layout();Check(!Find<TextBox>(window.NotesHost).Any(b=>AutomationProperties.GetName(b)=="文字记录正文"),"不同项目内容隔离");
-            window.SelectNoteProject(p.Id);await Layout();Check(Field("文字记录正文").Text.Contains("下一步"),"切回项目保留正文");
-            window.SelectCategory("office");await Layout();Check(Field("文字记录正文").Text.Contains("下一步"),"左侧分类切换不重建右侧内容");
-            var remembered=Field("文字记录正文");remembered.Focus();remembered.Select(3,2);window.FlushNotes(false);
+            Check(ReferenceEquals(body,Body()),"自动保存不重建编辑控件或打断正文焦点");
+            var textNote = window.NotesDraft.Notes.Single();
+            var bodyStrike = Find<Button>(window.NotesHost).Single(button =>
+                AutomationProperties.GetAutomationId(button) == "NoteTextStrike-" + textNote.Id);
+            int newline = textRecord.IndexOf('\n');
+            body.SelectCharacters(newline - 2, 5);
+            bodyStrike.Focus();
+            bodyStrike.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            NoteStrikeRange[] expectedTextStrikes = [new(newline - 2, 2), new(newline + 1, 2)];
+            Check(body.PlainText == textRecord && textNote.BodyStrikes?.SequenceEqual(expectedTextStrikes) == true,
+                "标题旁删除线按钮支持正文跨行选区并保持原文");
+            Check(window.FlushNotes(false) && new NotesStore(App.Store.DataDirectory).State.Notes.Single()
+                .BodyStrikes?.SequenceEqual(expectedTextStrikes) == true &&
+                NotesMarkdown.Export(window.NotesDraft, textNote).Contains("~~求。~~\n~~下一~~"),
+                "文字记录删除线可保存重读并导出为 Markdown");
+            window.SelectNoteProject(other.Id);await Layout();Check(!Find<NoteTextEditor>(window.NotesHost).Any(b=>AutomationProperties.GetName(b)=="文字记录正文"),"不同项目内容隔离");
+            window.SelectNoteProject(p.Id);await Layout();
+            Check(Body().PlainText.Contains("下一步") && Body().ReadContent().Strikes?.SequenceEqual(expectedTextStrikes) == true,
+                "切回项目保留正文和删除线");
+            var reloadedBody = Body();
+            reloadedBody.Focus();
+            reloadedBody.SelectCharacters(newline - 2, 5);
+            ClickMenu(OpenEditorMenu(reloadedBody).Items.OfType<MenuItem>().Single(item => Equals(item.Header, "取消删除线")));
+            Check(reloadedBody.ReadContent().Strikes is null && textNote.BodyStrikes is { Length: 0 },
+                "正文右键可以取消跨行删除线");
+            window.SelectCategory("office");await Layout();Check(Body().PlainText.Contains("下一步"),"左侧分类切换不重建右侧内容");
+            var remembered=Body();remembered.Focus();remembered.SelectCharacters(3,2);window.FlushNotes(false);
             window.SelectNoteProject(other.Id);await Layout();window.SelectNoteProject(p.Id);await Layout();
-            Check(Field("文字记录正文").SelectionStart==3&&Field("文字记录正文").SelectionLength==2,"切换项目恢复编辑位置与选区");
+            Check(Body().CharacterSelection()==(3,2),"切换项目恢复编辑位置与选区");
             var addButton=Find<Button>(window.NotesHost).Single(b=>AutomationProperties.GetAutomationId(b)=="AddProjectNote");addButton.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));await Layout();
             Check(window.NotesDraft.Notes.Last().Kind=="todo"&&window.LastMenu?.IsOpen!=true,"记一条直接新增待办，不弹出文字类型菜单");
             Check(Find<TextBlock>(window.NotesHost).Any(t=>t.Text=="便签"),"右侧标题显示便签");
@@ -221,8 +247,10 @@ internal static class NotesVerification
             ClickMenu(typeMenu.Items.OfType<MenuItem>().Single(item => Equals(item.Header, "文字记录")));
             await Layout();
             var converted = window.NotesDraft.Notes.Last();
-            Check(converted.Kind == "text" && Find<TextBox>(window.NotesHost).Last().AcceptsReturn &&
-                Find<TextBox>(window.NotesHost).Last().Text == "确认设计方案", "菜单切换为多行文字，保留待办原文");
+            Check(converted.Kind == "text" && Body(converted).AcceptsReturn &&
+                Body(converted).PlainText == "确认设计方案" &&
+                Body(converted).ReadContent().Strikes?.SequenceEqual([new NoteStrikeRange(2, 2)]) == true,
+                "菜单切换为多行文字，保留待办原文与删除线");
             typeMenu = OpenLastCardMenu("便签类型");
             ClickMenu(typeMenu.Items.OfType<MenuItem>().Single(item => Equals(item.Header, "待办清单")));
             await Layout();
@@ -231,7 +259,7 @@ internal static class NotesVerification
             Field("搜索当前分类的记录").Text="需求沟通";await Task.Delay(500);await Layout();
             Check(!Find<CheckBox>(window.NotesHost).Any(),"项目内搜索按记录内容过滤");
             window.AddProjectNote();await Layout();Check(Field("搜索当前分类的记录").Text=="","搜索状态下新建清除筛选使新记录可见");
-            Field("文字记录正文").Text="保存失败仍需保留的草稿";
+            Body().SelectAll(); Body().Selection.Text="保存失败仍需保留的草稿";
             var notes=window.NotesStore.DirectoryPath;var displaced=notes+"-held";Directory.Move(notes,displaced);File.WriteAllText(notes,"阻止创建目录");
             try{Check(!window.FlushNotes(false),"磁盘写入失败返回失败状态");Check(window.NotesDraft.Notes.Any(n=>n.Text.Contains("仍需保留")),"写入失败保留内存草稿");}
             finally{File.Delete(notes);Directory.Move(displaced,notes);}
@@ -240,15 +268,15 @@ internal static class NotesVerification
             Check(!stats.Text.Contains("\n")&&stats.TextWrapping==TextWrapping.NoWrap&&stats.Text.Contains("待完成")&&stats.Text.Contains("已完成"),"分类记录数与待办完成统计保持单行");
             window.Width=1120;window.Height=627.2;await Layout();Snapshot("notes-preview");
             Check(window.IconColumns==6,"默认宽度保留左侧六列图标");
-            var font=Field("文字记录正文").TransformToAncestor(window).TransformBounds(new Rect(0,0,12,12)).Width;
+            var font=Body().TransformToAncestor(window).TransformBounds(new Rect(0,0,12,12)).Width;
             window.Width=800;await Layout();Check(window.IconColumns>=3&&window.NotesHost.ActualWidth>=299,$"窄窗保留三列图标与可读便签宽度（{window.IconColumns}列，{window.NotesHost.ActualWidth:F1}，窗口{window.ActualWidth:F1}，表面{window.Surface.Width:F1}，内部{window.SplitLayout.ActualWidth:F1}）");
-            Check(Math.Abs(font-Field("文字记录正文").TransformToAncestor(window).TransformBounds(new Rect(0,0,12,12)).Width)<.5,"缩窄窗口不缩小正文字号");Snapshot("notes-narrow");
+            Check(Math.Abs(font-Body().TransformToAncestor(window).TransformBounds(new Rect(0,0,12,12)).Width)<.5,"缩窄窗口不缩小正文字号");Snapshot("notes-narrow");
             window.Width=1120;await Layout();window.BeginHidePanel();await Task.Delay(650);Check(window.WindowState==WindowState.Minimized,"便签与左侧整体收起");
-            window.ReleaseIdleResources();window.ShowPanel();await Task.Delay(650);await Layout();Check(Field("文字记录正文").Text.Contains("草稿"),"闲置释放后恢复编辑内容");
+            window.ReleaseIdleResources();window.ShowPanel();await Task.Delay(650);await Layout();Check(Body().PlainText.Contains("草稿"),"闲置释放后恢复编辑内容");
 
             Check(Directory.Exists(Path.Combine(App.Store.DataDirectory,"Notes")),"便签数据位于独立 Notes 目录");
             var active=window.NotesDraft.Projects.Single(x=>x.Id==p.Id);active.Archived=true;window.NotesStore.Commit(window.NotesDraft);window.RenderNotes();await Layout();
-            Check(Find<TextBox>(window.NotesHost).Where(b=>AutomationProperties.GetName(b)=="文字记录正文").All(b=>b.IsReadOnly),"已归档项目的记录只读");
+            Check(Body().IsReadOnly,"已归档项目的记录只读");
             active.Archived=false;window.NotesStore.Commit(window.NotesDraft);window.RenderNotes();await Layout();
             var target=Path.Combine(root,"stage-target.exe");File.Copy(Environment.ProcessPath!,target);
             var staged=LocalUpdater.Stage(Environment.ProcessPath!,target,App.Store.DataDirectory,root,0,App.Options,App.Store.State);
@@ -269,7 +297,7 @@ internal static class NotesVerification
             var archiveGroup = Find<TextBlock>(window.NotesHost).Single(text => text.Text.StartsWith(longProject.Name, StringComparison.Ordinal));
             Check(archiveGroup.Text == longProject.Name + "（整个分类已归档）" && archiveGroup.TextWrapping == TextWrapping.Wrap &&
                 Find<TextBlock>(window.NotesHost).Any(text => text.Text == other.Name), "归档页同时显示单独归档的原分类与整个归档分类，长名称可完整换行");
-            Check(Find<TextBox>(window.NotesHost).Any(box => box.Text == "归档内容" && box.IsReadOnly),
+            Check(Find<NoteTextEditor>(window.NotesHost).Any(box => box.PlainText == "归档内容" && box.IsReadOnly),
                 "整个归档分类的正文可只读查看");
             Snapshot("notes-archive-preview");
             var categoryMenuButton = Find<Button>(window.NotesHost).Single(button => AutomationProperties.GetName(button) == "管理已归档分类：" + longProject.Name);

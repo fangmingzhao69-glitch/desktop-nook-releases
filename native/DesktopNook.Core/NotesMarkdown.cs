@@ -6,15 +6,15 @@ public static class NotesMarkdown
 {
     private static string Heading(string value) => value.Replace("\r", " ").Replace("\n", " ").Replace("\\", "\\\\").Replace("#", "\\#").Replace("*", "\\*").Replace("_", "\\_").Replace("[", "\\[").Replace("]", "\\]").Replace("`", "\\`");
 
-    private static string TaskText(NoteTask task)
+    private static string WithStrikes(string text, NoteStrikeRange[]? strikes)
     {
-        if (task.Strikes is not { Length: > 0 } marks) return task.Text.ReplaceLineEndings("\n");
+        if (strikes is not { Length: > 0 }) return text;
         var output = new StringBuilder();
         int cursor = 0;
-        foreach (var mark in marks)
+        foreach (var mark in strikes)
         {
-            output.Append(task.Text, cursor, mark.Start - cursor);
-            var parts = task.Text.Substring(mark.Start, mark.Length).ReplaceLineEndings("\n").Split('\n');
+            output.Append(text, cursor, mark.Start - cursor);
+            var parts = text.Substring(mark.Start, mark.Length).ReplaceLineEndings("\n").Split('\n');
             for (int index = 0; index < parts.Length; index++)
             {
                 if (index > 0) output.Append('\n');
@@ -31,7 +31,7 @@ public static class NotesMarkdown
             }
             cursor = mark.Start + mark.Length;
         }
-        return output.Append(task.Text, cursor, task.Text.Length - cursor).ToString().ReplaceLineEndings("\n");
+        return output.Append(text, cursor, text.Length - cursor).ToString();
     }
 
     public static string Export(NotesState state, ProjectNote? note = null, NoteProject? project = null)
@@ -42,10 +42,10 @@ public static class NotesMarkdown
             output.Append(new string('#', level)).Append(' ').AppendLine(Heading(record.Title));
             if (record.Archived) output.AppendLine("（已归档）");
             output.AppendLine();
-            if (record.Kind == "text") output.AppendLine(record.Text);
+            if (record.Kind == "text") output.AppendLine(WithStrikes(record.Text, record.BodyStrikes));
             else foreach (var task in record.TasksInDisplayOrder())
             {
-                var lines = TaskText(task).Split('\n');
+                var lines = WithStrikes(task.Text, task.Strikes).ReplaceLineEndings("\n").Split('\n');
                 output.Append(task.Done ? "- [x] " : "- [ ] ").AppendLine(lines[0]);
                 foreach (var line in lines.Skip(1)) output.Append("      ").AppendLine(line);
             }

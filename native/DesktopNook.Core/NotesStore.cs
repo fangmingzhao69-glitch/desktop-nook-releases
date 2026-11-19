@@ -20,7 +20,21 @@ public sealed class NoteProject
 
     internal NoteProject Copy() => (NoteProject)MemberwiseClone();
 }
-public readonly record struct NoteStrikeRange(int Start, int Length);
+public readonly record struct NoteStrikeRange(int Start, int Length)
+{
+    internal static bool AreValid(string text, NoteStrikeRange[]? strikes)
+    {
+        int end = 0;
+        foreach (var range in strikes ?? [])
+        {
+            if (range.Start < end || range.Start > text.Length || range.Length <= 0 ||
+                range.Length > text.Length - range.Start)
+                return false;
+            end = range.Start + range.Length;
+        }
+        return true;
+    }
+}
 
 public sealed class NoteTask
 {
@@ -29,19 +43,6 @@ public sealed class NoteTask
     public NoteStrikeRange[]? Strikes { get; set; }
 
     internal NoteTask Copy() => new() { Text = Text, Done = Done, Strikes = Strikes?.ToArray() };
-
-    internal bool HasValidStrikes()
-    {
-        int end = 0;
-        foreach (var range in Strikes ?? [])
-        {
-            if (range.Start < end || range.Start > Text.Length || range.Length <= 0 ||
-                range.Length > Text.Length - range.Start)
-                return false;
-            end = range.Start + range.Length;
-        }
-        return true;
-    }
 }
 public sealed class ProjectNote
 {
@@ -50,6 +51,7 @@ public sealed class ProjectNote
     public string Title { get; set; } = "";
     public string Kind { get; set; } = "text";
     public string Text { get; set; } = "";
+    public NoteStrikeRange[]? BodyStrikes { get; set; }
     public List<NoteTask> Tasks { get; set; } = [];
     public bool Archived { get; set; }
     public bool Favorite { get; set; }
@@ -65,6 +67,7 @@ public sealed class ProjectNote
     internal ProjectNote Copy()
     {
         var copy = (ProjectNote)MemberwiseClone();
+        copy.BodyStrikes = BodyStrikes?.ToArray();
         copy.Tasks = Tasks.Select(task => task.Copy()).ToList();
         return copy;
     }
@@ -75,25 +78,86 @@ public sealed class ProjectNote
         if (kind == "text")
         {
             Text = string.Join("\n", Tasks.Select(task => task.Text));
+            var strikes = new List<NoteStrikeRange>();
+            int offset = 0;
+            foreach (var task in Tasks)
+            {
+                foreach (var range in task.Strikes ?? [])
+                    strikes.Add(new(offset + range.Start, range.Length));
+                offset += task.Text.Length + 1;
+            }
+            BodyStrikes = strikes.ToArray();
         }
         else if (kind == "todo")
         {
-            var body = Text.ReplaceLineEndings("\n");
-            // Keep existing checkmarks on unchanged tasks, including duplicate lines.
-            if (Tasks.Count == 0 || body != string.Join("\n", Tasks.Select(task => task.Text.ReplaceLineEndings("\n"))))
-            {
-                var previous = Tasks.GroupBy(task => task.Text, StringComparer.Ordinal)
-                    .ToDictionary(group => group.Key, group => new Queue<NoteTask>(group), StringComparer.Ordinal);
-                Tasks = body.Split('\n').Select(line =>
-                    previous.TryGetValue(line, out var matches) && matches.TryDequeue(out var task)
-                        ? task
-                        : new NoteTask { Text = line }).ToList();
-            }
+            RestoreChecklist();
         }
         else throw new ArgumentException("不支持的便签类型。", nameof(kind));
 
         Kind = kind;
         ModifiedUtc = DateTime.UtcNow;
+    }
+
+    private void RestoreChecklist()
+    {
+        var body = Text.ReplaceLineEndings("\n");
+        var strikes = BodyStrikes ?? [];
+        // Text records written before body formatting could still carry the earlier checklist.
+        bool hasBodyFormatting = BodyStrikes is not null;
+        if (Tasks.Count == 0 || Text != string.Join("\n", Tasks.Select(task => task.Text)))
+        {
+            if (body.Length != Text.Length && strikes.Length > 0)
+            {
+                int Offset(int position)
+                {
+                    int result = position;
+                    for (int i = 1; i < position; i++)
+                        if (Text[i] == '\n' && Text[i - 1] == '\r') result--;
+                    return result;
+                }
+                strikes = strikes.Select(range =>
+                {
+                    int start = Offset(range.Start);
+                    return new NoteStrikeRange(start, Offset(range.Start + range.Length) - start);
+                }).Where(range => range.Length > 0).ToArray();
+            }
+
+            var oldLines = Tasks.Select(task => task.Text.ReplaceLineEndings("\n")).ToArray();
+            if (Tasks.Count > 0 && body == string.Join("\n", oldLines))
+            {
+                if (hasBodyFormatting)
+                    for (int i = 0; i < Tasks.Count; i++) Tasks[i].Text = oldLines[i];
+            }
+            else
+            {
+                // Keep existing checkmarks on unchanged tasks, including duplicate lines.
+                var previous = Tasks.GroupBy(task => task.Text.ReplaceLineEndings("\n"), StringComparer.Ordinal)
+                    .ToDictionary(group => group.Key, group => new Queue<NoteTask>(group), StringComparer.Ordinal);
+                Tasks = body.Split('\n').Select(line =>
+                {
+                    return previous.TryGetValue(line, out var matches) && matches.TryDequeue(out var task)
+                        ? task
+                        : new NoteTask { Text = line };
+                }).ToList();
+            }
+        }
+
+        if (!hasBodyFormatting) return;
+        int offset = 0, first = 0;
+        foreach (var task in Tasks)
+        {
+            int end = offset + task.Text.Length;
+            while (first < strikes.Length && strikes[first].Start + strikes[first].Length <= offset) first++;
+            List<NoteStrikeRange>? mapped = null;
+            for (int i = first; i < strikes.Length && strikes[i].Start < end; i++)
+            {
+                int start = Math.Max(offset, strikes[i].Start);
+                int stop = Math.Min(end, strikes[i].Start + strikes[i].Length);
+                if (stop > start) (mapped ??= []).Add(new(start - offset, stop - start));
+            }
+            task.Strikes = mapped?.ToArray();
+            offset = end + 1;
+        }
     }
 }
 public sealed class NotesState
@@ -247,7 +311,8 @@ public sealed class NotesStore
             if (n is null || (state.Format == 2 && (n.DeletedUtc is not null || n.DeleteBatch is not null)) || !Guid.TryParseExact(n.Id, "N", out _) || !noteIds.Add(n.Id) ||
                 n.ProjectId is null || !projects.TryGetValue(n.ProjectId, out var project) ||
                 n.Kind is not ("text" or "todo") || n.Title is null || n.Text is null || n.Tasks is null ||
-                n.Tasks.Any(t => t is null || t.Text is null || !t.HasValidStrikes()) ||
+                !NoteStrikeRange.AreValid(n.Text, n.BodyStrikes) ||
+                n.Tasks.Any(t => t is null || t.Text is null || !NoteStrikeRange.AreValid(t.Text, t.Strikes)) ||
                 (n.DeletedUtc is null && project.DeletedUtc is not null))
                 throw new IOException("便签记录或分类归属无效。");
     }
