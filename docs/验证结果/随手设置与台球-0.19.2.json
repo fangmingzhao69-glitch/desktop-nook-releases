@@ -1,0 +1,76 @@
+{
+  "Version": "0.19.2",
+  "DisplayName": "随手",
+  "Date": "2026-11-19",
+  "SourceCommit": "ab9c8f1bc4c4f35578e365e20d263adbeed11455",
+  "ReleaseUrl": "https://github.com/fangmingzhao69-glitch/desktop-nook-releases/releases/tag/v0.19.2",
+  "Latest": true,
+  "Assets": [
+    {
+      "Name": "DesktopNook-Setup.exe",
+      "Size": 565619,
+      "SHA256": "953c6a6c1768aba8817103b19f9b096d7bac45f66ce312f6c2a2fdc14fb6f38c"
+    },
+    {
+      "Name": "DesktopNook-v0.19.2-source.zip",
+      "Size": 9118061,
+      "SHA256": "7848b308a34afd2f137136067d0a0427e277f98b2bcec21ccba9289934ef0ae4"
+    },
+    {
+      "Name": "DesktopNook-win-x64.exe",
+      "Size": 1357386,
+      "SHA256": "58148de07b39970e6df2a5f5242229de6fc992da2fc8bdca85836c7931f37db1"
+    },
+    {
+      "Name": "SHA256SUMS.txt",
+      "Size": 278,
+      "SHA256": "aeffe30fba0a80ea76b45f191acafb6d7bc2a7017b901b08116b2e111378d18f"
+    }
+  ],
+  "Checks": {
+    "Core": 65,
+    "GameCore": 39,
+    "GameNetwork": 18,
+    "Notes": 88,
+    "Interface": 114,
+    "TaskbarSettings": 34,
+    "Billiards": 49,
+    "FriendLoopback": 18,
+    "OnlineUpdateFromPreviousVersion": 13
+  },
+  "RecordedAudioDevice": {
+    "phase": "recorded-audio-device",
+    "AudioSubmitted": 23,
+    "AudioUnavailable": false,
+    "AudioPending": 0
+  },
+  "IsolatedUpgrade": {
+    "success": true,
+    "helperExit": 0,
+    "oldVersion": "0.19.1.0",
+    "newVersion": "0.19.2.0",
+    "notesRetained": true,
+    "notesBackupRetained": true,
+    "deletedCategoryRetained": true,
+    "uncheckedPreferenceRetained": true,
+    "collectViewRetained": true,
+    "motionModeRetained": true,
+    "categoryOrdersRetained": true,
+    "orderedCategories": 3,
+    "configurationHashUnchanged": true,
+    "payloadUnchanged": true,
+    "newProcessConfirmed": true
+  },
+  "IsolatedInstaller": {
+    "Installed": true,
+    "Upgraded": true,
+    "UserStateHashPreserved": true,
+    "UserPreferencesHashPreserved": true,
+    "DisplayName": "随手",
+    "Uninstalled": true,
+    "RemainingItems": 0,
+    "RecoveredFiles": 11,
+    "LiveUserDataTouched": false
+  },
+  "InstalledAppUpdated": false
+}
