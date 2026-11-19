@@ -80,6 +80,7 @@ internal static class MotionVerification
             Check(UiMotion.ActiveClocks==0,"Equivalent motion-off stress also leaves no active clocks");
             File.WriteAllText(Path.Combine(root,"motion-stress.json"),JsonSerializer.Serialize(new{cyclesPerMode=100,on=new{elapsedMs=onElapsed,cpuMs=onCpu,privateBefore=beforePrivate,privateAfter=onPrivate,idleSampleMs=500,idleCpuMs=onIdleCpu},off=new{elapsedMs=offElapsed,cpuMs=offCpu,privateBefore=offPrivateBefore,privateAfter=offPrivate,idleSampleMs=500,idleCpuMs=offIdleCpu},activeClocks=UiMotion.ActiveClocks,forcedGc=false},new JsonSerializerOptions{WriteIndented=true}));
             UiMotion.Configure("on");
+            await PanelEffectVerification.Run(owner, root, Check);
             UiMotion.Reveal(panel);host.Close();await Settle();Check(UiMotion.ActiveClocks==0,"Closing a window cancels motion for its unloaded content");
             App.Options.MotionMode="off";App.Options.DefaultCollectView="details";App.Options.CloseEndsProcess=!closing;App.Options.WriteWindowSize(App.Options.ReadWindowSize());App.Options.PersistForUpdate();
             var reopened=new StartupOptions(preferencesPath:Path.Combine(App.Store.DataDirectory,"preferences.json"));

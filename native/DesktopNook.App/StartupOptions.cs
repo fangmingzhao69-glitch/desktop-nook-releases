@@ -6,7 +6,7 @@ using System.Text.Json.Serialization;
 namespace DesktopNook.App;
 internal sealed class StartupOptions(string runKey = @"Software\Microsoft\Windows\CurrentVersion\Run",string settingsKey = @"Software\DesktopNook\Settings",string? preferencesPath=null,bool fileOnly=false)
 {
-    private sealed class Preferences {public bool? CloseEndsProcess {get;set;} public WindowSizePreference? WindowSize {get;set;} [JsonIgnore(Condition=JsonIgnoreCondition.WhenWritingNull)]public string? CollectView {get;set;} [JsonIgnore(Condition=JsonIgnoreCondition.WhenWritingNull)]public string? MotionMode {get;set;}}
+    private sealed class Preferences {public bool? CloseEndsProcess {get;set;} public WindowSizePreference? WindowSize {get;set;} [JsonIgnore(Condition=JsonIgnoreCondition.WhenWritingNull)]public string? CollectView {get;set;} [JsonIgnore(Condition=JsonIgnoreCondition.WhenWritingNull)]public string? MotionMode {get;set;} [JsonIgnore(Condition=JsonIgnoreCondition.WhenWritingNull)]public string? PanelStyle {get;set;}}
     private Preferences? ReadPreferences()
     {
         if(preferencesPath is null)return null;
@@ -30,11 +30,23 @@ internal sealed class StartupOptions(string runKey = @"Software\Microsoft\Window
     }
     private string? SavedCollectView {get{var saved=ReadPreferences()?.CollectView;if(saved is "icons" or "details")return saved;if(fileOnly&&ReadPreferences() is not null)return null;using var key=Registry.CurrentUser.OpenSubKey(settingsKey);return key?.GetValue("CollectView") as string;}}
     private string? SavedMotionMode {get{var saved=ReadPreferences()?.MotionMode;if(saved is "system" or "on" or "off")return saved;if(fileOnly&&ReadPreferences() is not null)return null;using var key=Registry.CurrentUser.OpenSubKey(settingsKey);return key?.GetValue("MotionMode") as string;}}
-    private Preferences Snapshot()=>new(){CloseEndsProcess=CloseEndsProcess,WindowSize=ReadWindowSize(),CollectView=SavedCollectView,MotionMode=SavedMotionMode};
+    private Preferences Snapshot()=>new(){CloseEndsProcess=CloseEndsProcess,WindowSize=ReadWindowSize(),CollectView=SavedCollectView,MotionMode=SavedMotionMode,PanelStyle=ReadPreferences()?.PanelStyle};
     internal string MotionMode
     {
         get=>SavedMotionMode is "on" or "off"?SavedMotionMode:"system";
         set{if(value is not ("system" or "on" or "off"))throw new ArgumentException("无效动画设置。");var preferences=Snapshot();preferences.MotionMode=value;SavePreferences(preferences);if(fileOnly)return;using var key=Registry.CurrentUser.CreateSubKey(settingsKey,true);key.SetValue("MotionMode",value);key.Flush();}
+    }
+    internal PanelEffect PanelStyle
+    {
+        get => Enum.TryParse<PanelEffect>(ReadPreferences()?.PanelStyle, out var style) && Enum.IsDefined(style)
+            ? style : PanelEffect.Shutters;
+        set
+        {
+            if (!Enum.IsDefined(value)) throw new ArgumentException("无效开合样式。", nameof(value));
+            var preferences = Snapshot();
+            preferences.PanelStyle = value == PanelEffect.Shutters ? null : value.ToString();
+            SavePreferences(preferences);
+        }
     }
     internal string DefaultCollectView
     {

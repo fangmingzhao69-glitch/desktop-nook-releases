@@ -176,6 +176,14 @@ internal static class NotesVerification
             Check(reordered.Select(editor => editor.PlainText).SequenceEqual(["确认设计方案", "整理项目资料"]) &&
                 ((Paragraph)reordered[1].Document.Blocks.FirstBlock!).TextDecorations.Count > 0,
                 "勾选的待办移到底部并显示整行删除线");
+            var firstRow = (DockPanel)reordered[0].Parent;
+            var checkbox = firstRow.Children.OfType<CheckBox>().Single();
+            var boxBorder = (Border)checkbox.Template.FindName("Box", checkbox);
+            double boxTop = boxBorder.TranslatePoint(new Point(), firstRow).Y;
+            // The 12-DIP editor font leaves four DIPs above the visible glyphs in its first line box.
+            double textTop = reordered[0].TranslatePoint(new Point(0, reordered[0].Padding.Top + 4), firstRow).Y;
+            Check(Math.Abs(boxTop - textTop) <= 1 && checkbox.VerticalAlignment == VerticalAlignment.Top,
+                "待办首行文字与勾选框上缘对齐");
             Snapshot("notes-checklist-complete-order");
             var lastCheck = Find<CheckBox>(window.NotesHost).Last();
             lastCheck.IsChecked = false;

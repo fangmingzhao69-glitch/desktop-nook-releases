@@ -206,6 +206,16 @@ public partial class MainWindow : Window
         {
             var choice=Menu(name,()=>Run(()=>{options.MotionMode=mode;UiMotion.Configure(mode);},"动画效果已更新"));choice.IsCheckable=true;choice.IsChecked=options.MotionMode==mode;motion.Items.Add(choice);
         }
+        var panelStyles = new MenuItem { Header = "开合样式" };
+        foreach (var style in PanelEffectFrame.Choices)
+        {
+            var item = Menu(style.Label, () => Run(() => SelectPanelEffect(style.Effect), "开合样式已设为" + style.Label));
+            item.IsCheckable = true;
+            item.IsChecked = options.PanelStyle == style.Effect;
+            panelStyles.Items.Add(item);
+        }
+        motion.Items.Add(new Separator());
+        motion.Items.Add(panelStyles);
         Popup((FrameworkElement)sender,[
         startup,closing,WindowSizeMenu(),motion,Menu("任务栏外观…",OpenTaskbarAppearance),GamesMenu(),new Separator(),
         Menu(UpdateMenuText,()=>_ = CheckOnlineUpdateAsync(true)),

@@ -1,4 +1,5 @@
 using System.Windows;
+using System.Windows.Controls;
 using System.Windows.Interop;
 
 namespace DesktopNook.App;
@@ -24,7 +25,7 @@ public partial class MainWindow
     internal ShutterMotion PanelMotion=>_shutter;
     private void InitializePanelMotion()
     {
-        _shutter=new(Surface,ShutterOverlay);
+        _shutter=new(Surface,ShutterOverlay, PanelEffectRegions) { Style = App.Options.PanelStyle };
         IconsScroll.ScrollChanged+=(_,e)=>{if(e.VerticalChange!=0||e.HorizontalChange!=0)_shutter.InvalidateSnapshot();};
         Surface.MouseEnter+=(_,_)=>{if(!_shutter.Active&&!_hidePending&&WindowState==WindowState.Normal)_shutter.InvalidateSnapshot();};
         Surface.MouseLeave+=(_,_)=>{if(!_shutter.Active&&!_hidePending&&WindowState==WindowState.Normal)_shutter.InvalidateSnapshot();};
@@ -34,6 +35,34 @@ public partial class MainWindow
         _idleRelease.Tick+=(_,_)=>ReleaseIdleResources();
         Closed+=(_,_)=>{_idleRelease.Stop();UiMotion.ModeChanged-=OnMotionModeChanged;_shutter.Stop();_shutter.ReleaseBuffer();};
         PreviewMouseDown+=(_,e)=>{if(_shutter.Active){FinishPanelMotion();e.Handled=true;}};
+    }
+    private (Rect[] Sections, Rect[] Icons) PanelEffectRegions(PanelEffect effect)
+    {
+        double width = Surface.ActualWidth;
+        double height = Surface.ActualHeight;
+        if (effect is PanelEffect.Relay or PanelEffect.Split)
+        {
+            var layout = SplitLayout.TranslatePoint(new Point(), Surface);
+            double top = Math.Clamp(layout.Y + SplitLayout.RowDefinitions[2].Offset, 0, height);
+            double bottom = Math.Clamp(layout.Y + SplitLayout.RowDefinitions[3].Offset, top, height);
+            return ([new Rect(0, 0, width, top), new Rect(0, top, width, bottom - top),
+                new Rect(0, bottom, width, height - bottom)], []);
+        }
+        if (effect is not (PanelEffect.Scatter or PanelEffect.Wave or PanelEffect.Radial)) return ([], []);
+
+        FrameworkElement viewport = FindVisualChildren<ScrollContentPresenter>(IconsScroll).FirstOrDefault()
+            ?? (FrameworkElement)IconsScroll;
+        Rect Bounds(FrameworkElement element) => element.TransformToAncestor(Surface).TransformBounds(new Rect(element.RenderSize));
+        var visible = Rect.Intersect(Bounds(viewport), new Rect(0, 0, width, height));
+        return ([], FindVisualChildren<Button>(Icons).Where(button => button.IsVisible)
+            .Select(button => Rect.Intersect(Bounds(button), visible))
+            .Where(bounds => !bounds.IsEmpty && bounds.Width >= 2 && bounds.Height >= 2).ToArray());
+    }
+
+    private void SelectPanelEffect(PanelEffect effect)
+    {
+        App.Options.PanelStyle = effect;
+        _shutter.Style = effect;
     }
     private IntPtr MotionWindowMessage(IntPtr hwnd,int message,IntPtr wParam,IntPtr lParam,ref bool handled)
     {

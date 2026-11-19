@@ -8,7 +8,7 @@ namespace DesktopNook.App;
 
 // Orthographic X rotation projects to cos(angle) height. Use five 2D strips,
 // sharing a mutable screenshot buffer, without allocating a new 3D scene per play.
-internal sealed class ShutterMotion(FrameworkElement surface,Grid overlay)
+internal sealed class ShutterMotion(Border surface, Grid overlay, Func<PanelEffect, (Rect[] Sections, Rect[] Icons)> getRegions)
 {
     internal const int StripCount=5;
     internal const int DurationMs=500;
@@ -22,6 +22,7 @@ internal sealed class ShutterMotion(FrameworkElement surface,Grid overlay)
     private readonly List<Strip> _strips=[];
     private readonly List<Strip> _pool=[];
     private Canvas? _canvas;
+    private PanelEffectFrame? _effectFrame;
     private RenderTargetBitmap? _snapshot;
     private RenderTargetBitmap? _buffer;
     private int _bufferAllocations;
@@ -31,7 +32,9 @@ internal sealed class ShutterMotion(FrameworkElement surface,Grid overlay)
     internal void InvalidateSnapshot([System.Runtime.CompilerServices.CallerMemberName]string reason=""){_dirty=true;InvalidationObserver?.Invoke(reason);}
     private int _revision;
     private double _originalOpacity=1;
-    internal bool Active=>_strips.Count!=0;
+    internal PanelEffect Style { get; set; } = PanelEffect.Shutters;
+    internal PanelEffectFrame? ActiveEffect => _effectFrame;
+    internal bool Active=>_strips.Count!=0 || _effectFrame is not null;
     internal bool Closing {get;private set;}
     internal long SnapshotBytes=>_snapshot is null?0:(long)_snapshot.PixelWidth*_snapshot.PixelHeight*4;
     internal double[] Angles=>_strips.Select(s=>s.View.Angle).ToArray();
@@ -44,19 +47,28 @@ internal sealed class ShutterMotion(FrameworkElement surface,Grid overlay)
         _pool.Clear();_canvas=null;overlay.Children.Clear();_buffer=null;_dirty=true;
     }
     internal int[] LastStartOrder {get;private set;}=[];
-    internal int ActiveClocks=>_strips.Count*3;
+    internal int ActiveClocks=>_strips.Count*3+(_effectFrame is not null ? 1 : 0);
     internal string? Failure {get;private set;}
     internal void Stop()
     {
         _revision++;
         foreach(var strip in _strips){strip.View.BeginAnimation(StripView.AngleProperty,null);strip.Translation.BeginAnimation(TranslateTransform.XProperty,null);strip.View.BeginAnimation(UIElement.OpacityProperty,null);}
+        if (_effectFrame is { } frame)
+        {
+            frame.BeginAnimation(PanelEffectFrame.ProgressProperty, null);
+            overlay.Children.Remove(frame);
+            _effectFrame = null;
+        }
         _strips.Clear();overlay.Visibility=Visibility.Collapsed;
         surface.Opacity=_originalOpacity;_snapshot=null;Closing=false;
     }
     internal void Play(bool opening,Action? completed=null)
     {
         var previous=_strips.Select(s=>(s.View.Angle,s.Translation.X,s.View.Opacity)).ToArray();
-        var image=_snapshot;bool continuing=Active;
+        var oldEffect = _effectFrame;
+        var continuation = oldEffect is not null && oldEffect.Preset == Style ? oldEffect.CapturePoses() : null;
+        double oldProgress = oldEffect?.Progress ?? 0;
+        var image=_snapshot;bool continuing=_strips.Count!=0;
         Stop();
         if(!UiMotion.Enabled||!surface.IsLoaded||!surface.IsVisible||surface.ActualWidth<=0||surface.ActualHeight<=0){completed?.Invoke();return;}
         int revision=_revision;Closing=!opening;Failure=null;
@@ -77,11 +89,17 @@ internal sealed class ShutterMotion(FrameworkElement surface,Grid overlay)
                 if(_dirty){_dirty=false;image.Clear();image.Render(surface);BufferCaptures++;}
             }
             _snapshot=image;
+            if (Style != PanelEffect.Shutters)
+            {
+                PlayEffect(image, new Size(width, height), opening, revision, continuation, oldProgress, completed);
+                return;
+            }
             if(_canvas is null||_canvas.Width!=width||_canvas.Height!=height)
             {
                 foreach(var old in _pool)old.Brush.ImageSource=null;
                 _pool.Clear();overlay.Children.Clear();_canvas=new Canvas{Width=width,Height=height,IsHitTestVisible=false,ClipToBounds=true};overlay.Children.Add(_canvas);
             }
+            _canvas.Visibility = Visibility.Visible;
             overlay.Visibility=Visibility.Visible;overlay.IsHitTestVisible=false;
             surface.Opacity=0;
             LastStartOrder=opening?Enumerable.Range(0,StripCount).Reverse().ToArray():Enumerable.Range(0,StripCount).ToArray();
@@ -116,5 +134,30 @@ internal sealed class ShutterMotion(FrameworkElement surface,Grid overlay)
             Failure=ex.ToString();Stop();ReleaseBuffer();completed?.Invoke();
             // Graphics/capture failures degrade to an immediate state change, never block hiding.
         }
+    }
+
+    private void PlayEffect(RenderTargetBitmap image, Size size, bool opening, int revision,
+        PanelEffectFrame.Pose[]? continuation, double oldProgress, Action? completed)
+    {
+        var (sections, icons) = getRegions(Style);
+        var frame = new PanelEffectFrame(image, size, surface.Background, surface.CornerRadius.TopLeft,
+            Style, opening, sections, icons, continuation);
+        var choice = PanelEffectFrame.Choices.Single(item => item.Effect == Style);
+        int milliseconds = opening ? choice.OpenMs : choice.CloseMs;
+        if (continuation is not null) milliseconds = Math.Max(145, (int)(milliseconds * oldProgress));
+        if (_canvas is not null) _canvas.Visibility = Visibility.Collapsed;
+        _effectFrame = frame;
+        LastStartOrder = [];
+        overlay.Children.Add(frame);
+        overlay.Visibility = Visibility.Visible;
+        surface.Opacity = 0;
+        var animation = new DoubleAnimation(0, 1, TimeSpan.FromMilliseconds(milliseconds));
+        animation.Completed += (_, _) =>
+        {
+            if (revision != _revision) return;
+            Stop();
+            completed?.Invoke();
+        };
+        frame.BeginAnimation(PanelEffectFrame.ProgressProperty, animation);
     }
 }
