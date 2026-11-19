@@ -1,0 +1,73 @@
+{
+  "Version": "0.19.0",
+  "DisplayName": "一处",
+  "Date": "2026-11-19",
+  "SourceCommit": "728a23a2e9feadabfb487899edc975f8f8afce2c",
+  "ReleaseUrl": "https://github.com/fangmingzhao69-glitch/desktop-nook-releases/releases/tag/v0.19.0",
+  "Latest": true,
+  "Assets": [
+    {
+      "Name": "DesktopNook-Setup.exe",
+      "Size": 537920,
+      "SHA256": "3512bf6c522822843f1afe33ee1634af0bffe7f29184a3e0c5db38796d0bf000"
+    },
+    {
+      "Name": "DesktopNook-v0.19.0-source.zip",
+      "Size": 9075918,
+      "SHA256": "810cb1d8ec8abe41e9341a59d33c10a767564d23f2e6c0dcc6f663e072cbd9af"
+    },
+    {
+      "Name": "DesktopNook-win-x64.exe",
+      "Size": 1304138,
+      "SHA256": "7261139bd7a398bf057adbc6ad561559b188ec65fcab6c42e8e25d3750f91697"
+    },
+    {
+      "Name": "SHA256SUMS.txt",
+      "Size": 278,
+      "SHA256": "f2ff9d0965e990c8e974b8dcc68e5c592aae0b72d1eb6a0d04dde15f9cc22610"
+    }
+  ],
+  "Checks": {
+    "Core": 65,
+    "GameCore": 37,
+    "GameNetwork": 18,
+    "Notes": 88,
+    "Interface": 115,
+    "Motion": 65,
+    "Sizing": 42,
+    "Taskbar": 34,
+    "Billiards": 47,
+    "FriendLoopback": 18,
+    "OnlineUpdateFromPreviousVersion": 13
+  },
+  "IsolatedUpgrade": {
+    "success": true,
+    "helperExit": 0,
+    "oldVersion": "0.18.1.0",
+    "newVersion": "0.19.0.0",
+    "notesRetained": true,
+    "notesBackupRetained": true,
+    "deletedCategoryRetained": true,
+    "uncheckedPreferenceRetained": true,
+    "collectViewRetained": true,
+    "motionModeRetained": true,
+    "categoryOrdersRetained": true,
+    "orderedCategories": 3,
+    "configurationHashUnchanged": true,
+    "payloadUnchanged": true,
+    "newProcessConfirmed": true
+  },
+  "IsolatedInstaller": {
+    "Installed": true,
+    "Upgraded": true,
+    "UserStateHashPreserved": true,
+    "UserPreferencesHashPreserved": true,
+    "DisplayName": "一处",
+    "Uninstalled": true,
+    "RemainingItems": 0,
+    "RecoveredFiles": 11,
+    "LiveUserDataTouched": false
+  },
+  "InstalledAppUpdated": false,
+  "PhysicalMixedDpiMonitorsTested": false
+}
