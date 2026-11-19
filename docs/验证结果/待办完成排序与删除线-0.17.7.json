@@ -1,0 +1,56 @@
+{
+  "Version": "0.17.7",
+  "Date": "2026-11-19",
+  "SourceCommit": "18b415c1e67515405428edd6143c0a7cb2c484a1",
+  "ReleaseUrl": "https://github.com/fangmingzhao69-glitch/desktop-nook-releases/releases/tag/v0.17.7",
+  "Latest": true,
+  "Assets": [
+    {
+      "Name": "DesktopNook-Setup.exe",
+      "Size": 518432,
+      "SHA256": "718e3c9fc100768e3fdbc56531dafa48c625fa2da700f957b2383b3c3ab95020"
+    },
+    {
+      "Name": "DesktopNook-v0.17.7-source.zip",
+      "Size": 9007836,
+      "SHA256": "5459de6f201d1f8fb998429937f29932fecdee04186c1b17d058087ab17a1c5b"
+    },
+    {
+      "Name": "DesktopNook-win-x64.exe",
+      "Size": 1214026,
+      "SHA256": "473d1f0f34295de8f39c9378fea7837de3e140e9a8b5cfb09306f167497a4f34"
+    },
+    {
+      "Name": "SHA256SUMS.txt",
+      "Size": 278,
+      "SHA256": "f507858d6ba83a8f1e339a5605583b74a27b4734210b488edfe1f46ea012cedb"
+    }
+  ],
+  "Checks": {
+    "Core": 63,
+    "GameCore": 37,
+    "GameNetwork": 18,
+    "Notes": 75,
+    "Interface": 71,
+    "Motion": 30,
+    "OnlineUpdateFromPreviousVersion": 13
+  },
+  "IsolatedUpgrade": {
+    "success": true,
+    "helperExit": 0,
+    "oldVersion": "0.17.6.0",
+    "newVersion": "0.17.7.0",
+    "notesRetained": true,
+    "notesBackupRetained": true,
+    "deletedCategoryRetained": true,
+    "uncheckedPreferenceRetained": true,
+    "collectViewRetained": true,
+    "motionModeRetained": true,
+    "categoryOrdersRetained": true,
+    "orderedCategories": 3,
+    "configurationHashUnchanged": true,
+    "payloadUnchanged": true,
+    "newProcessConfirmed": true
+  },
+  "InstalledAppUpdated": false
+}
