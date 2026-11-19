@@ -25,8 +25,8 @@ internal static class NativeVerification
                 var options=new StartupOptions(optionKey+@"\Run",optionKey+@"\Settings");
                 if(options.Enabled)throw new Exception("自启默认状态异常。");
                 using(var unrelated=Registry.CurrentUser.CreateSubKey(optionKey+@"\Run"))unrelated.SetValue("OtherEntry","keep");
-                options.SetEnabled(true,@"C:\验证 空格\轻匣.exe");
-                if(!options.Enabled||options.Command!="\"C:\\验证 空格\\轻匣.exe\" --autostart")throw new Exception("自启路径引用异常。");
+                options.SetEnabled(true,@"C:\验证 空格\一处.exe");
+                if(!options.Enabled||options.Command!="\"C:\\验证 空格\\一处.exe\" --autostart")throw new Exception("自启路径引用异常。");
                 options.CloseEndsProcess=false;if(new StartupOptions(optionKey+@"\Run",optionKey+@"\Settings").CloseEndsProcess)throw new Exception("关闭行为设置未保留。");
                 options.SetEnabled(false);using var check=Registry.CurrentUser.OpenSubKey(optionKey+@"\Run");if(options.Enabled||check?.GetValue("OtherEntry") as string!="keep")throw new Exception("关闭自启影响其他入口。");
                 checks.Add("Startup option persists quoted command, can be disabled and preserves other entries");
@@ -72,7 +72,7 @@ internal static class NativeVerification
             {
                 var file=Path.Combine(desktop,"示例应用 "+(i+1)+".url");File.WriteAllText(file,"[InternetShortcut]\r\nURL=https://example.invalid/"+i+"\r\n");App.Store.Collect(file,i<3?"office":"dev");
             }
-            window.SelectCategory(null);if(window.VisibleCount!=7)throw new Exception("六列网格数据数量异常。");checks.Add("Native six-column grid with a seventh icon");
+            window.SelectCategory(null);if(window.VisibleCount!=7)throw new Exception("五列网格数据数量异常。");checks.Add("Native five-column grid with a seventh icon");
             var registryPath=@"Software\DesktopNook\Verification\"+Guid.NewGuid().ToString("N");
             var registry=new WindowsRecycleBin(registryPath);var snapshot=registry.Capture();
             try{registry.Hide();if(registry.IsVisible)throw new Exception("隔离注册表隐藏失败。");registry.Restore(snapshot);if(!registry.IsVisible)throw new Exception("隔离注册表恢复失败。");checks.Add("Recycle Bin registry implementation tested under isolated HKCU test key; live desktop not changed");}
@@ -83,29 +83,29 @@ internal static class NativeVerification
             await OleDragVerification.Run(window);checks.Add("Real mouse and OLE roundtrip between owned windows using isolated desktop directory");
             await OleDragVerification.Run(window,"file");checks.Add("Regular document uses actual native OLE drag in and out");
             await OleDragVerification.Run(window,"folder");checks.Add("Complete folder uses actual native OLE drag in and out");
-            var minimize=FindNamedButton(window,"最小化轻匣");minimize.RaiseEvent(new RoutedEventArgs(System.Windows.Controls.Button.ClickEvent));
+            var minimize=FindNamedButton(window,"最小化一处");minimize.RaiseEvent(new RoutedEventArgs(System.Windows.Controls.Button.ClickEvent));
             await Task.Delay(650);if(window.WindowState!=WindowState.Minimized)throw new Exception("最小化按钮未收起。");window.ShowPanel();checks.Add("Minimize button preserves process and collection state");
             window.Render();window.SetStatus("隔离验证模式 · 不操作真实桌面");
             await window.Dispatcher.InvokeAsync(()=>{},DispatcherPriority.ContextIdle);
             var positions=window.IconPositions();
-            if(positions.Count!=7 || positions.Take(6).Any(p=>Math.Abs(p.Y-positions[0].Y)>1) || positions[6].Y-positions[0].Y>90)throw new Exception("图标行距或六列排列与紧凑布局不符。");
-            checks.Add("Six icons share the first row, seventh wraps with compact row spacing");
-            if(Math.Abs(window.ActualWidth-1120)>2 || Math.Abs(window.ActualHeight-627.2)>2)throw new Exception("项目便签整窗尺寸校验失败。");
+            if(positions.Count!=7 || positions.Take(5).Any(p=>Math.Abs(p.Y-positions[0].Y)>1) || positions[5].Y-positions[0].Y>100)throw new Exception("图标行距或五列排列与紧凑布局不符。");
+            checks.Add("Five icons share the first row while the remaining icons wrap");
+            if(Math.Abs(window.ActualWidth-1080)>2 || Math.Abs(window.ActualHeight-620)>2)throw new Exception("项目便签整窗尺寸校验失败。");
             var bottom=new TaskbarAnchor(new Rect(100,1040,44,40),new Rect(0,1040,1920,40),new Rect(0,0,1920,1040),96);
-            var placement=TaskbarPlacement.Calculate(bottom,1120,627.2);
+            var placement=TaskbarPlacement.Calculate(bottom,1080,620);
             if(placement.Left!=100 || Math.Abs(placement.Bottom-1032)>1)throw new Exception("任务栏左边缘对齐校验失败。");
-            var edge=TaskbarPlacement.Calculate(bottom with{Button=new Rect(1820,1040,44,40)},1120,627.2);
+            var edge=TaskbarPlacement.Calculate(bottom with{Button=new Rect(1820,1040,44,40)},1080,620);
             if(edge.Right>1920)throw new Exception("任务栏边缘溢出。");
-            var secondary=TaskbarPlacement.Calculate(new(new Rect(-1800,1040,44,40),new Rect(-1920,1040,1920,40),new Rect(-1920,0,1920,1040),144),1120,627.2);
-            if(secondary.Left!=-1800 || Math.Abs(secondary.Width-1680)>1)throw new Exception("副屏 DPI 换算校验失败。");
+            var secondary=TaskbarPlacement.Calculate(new(new Rect(-1800,1040,44,40),new Rect(-1920,1040,1920,40),new Rect(-1920,0,1920,1040),144),1080,620);
+            if(secondary.Left!=-1800 || Math.Abs(secondary.Width-WindowSizePreference.BaseWidth*1.5)>1)throw new Exception("副屏 DPI 换算校验失败。");
             checks.Add("Project notes surfaces and taskbar alignment, screen edges and 150 percent DPI math");
             var actualAnchor=await TaskbarPlacement.FindAsync();
-            if(actualAnchor is null)throw new Exception("本机任务栏未找到轻匣按钮。");
+            if(actualAnchor is null)throw new Exception("本机任务栏未找到一处按钮。");
             File.WriteAllText(Path.Combine(root,"taskbar-anchor.json"),JsonSerializer.Serialize(new{button=actualAnchor.Button.ToString(),tray=actualAnchor.Tray.ToString(),work=actualAnchor.Work.ToString(),dpi=actualAnchor.Dpi}));
             checks.Add("Live taskbar button bounds discovered using application identity");
             var bitmap=new RenderTargetBitmap((int)Math.Ceiling(window.ActualWidth),(int)Math.Ceiling(window.ActualHeight),96,96,PixelFormats.Pbgra32);bitmap.Render(window);
             var encoder=new PngBitmapEncoder();encoder.Frames.Add(BitmapFrame.Create(bitmap));using(var file=File.Create(Path.Combine(root,"native-preview.png")))encoder.Save(file);
-            checks.Add("Native window rendered at 1120x627.2 with production icon");
+            checks.Add("Native window rendered at 1080x620 with production icon");
             window.ShowIconMenu(window.IconButton(App.Store.State.Items[0].Id),App.Store.State.Items[0]);
             try
             {
@@ -141,6 +141,7 @@ internal static class NativeVerification
             if(dialogFailure is not null)throw dialogFailure;
             checks.Add("Compact update confirmation fits panel and can be cancelled without downloading");
             await BrandVerification.Run(window,root,checks);
+            await YichuThemeVerification.Run(window,root,checks);
             await MotionVerification.Run(window,root,checks);
             if(Environment.GetCommandLineArgs().Contains("--leave-payloads"))
             {

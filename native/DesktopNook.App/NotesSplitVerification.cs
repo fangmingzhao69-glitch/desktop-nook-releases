@@ -86,7 +86,7 @@ internal static class NotesSplitVerification
                 Check(!window.PanelMotion.Active&&window.Surface.Opacity>.99&&window.Icons.Opacity>.99,$"分栏拖动第 {step} 帧两侧保持可见，无入场或百叶残影");
             }
             double moving=window.LauncherColumn.ActualWidth;
-            Check(moving<before-100&&window.IconColumns<6,"拖动中即时减少图标列数，不等松手才重排");
+            Check(moving<before-100&&window.IconColumns<5,"拖动中即时减少图标列数，不等松手才重排");
             window.RenderNotes();await Layout();
             Check(Math.Abs(window.LauncherColumn.ActualWidth-moving)<2,"拖动时刷新便签不按旧比例拉回分隔线");
             mouse_event(4,0,0,0,UIntPtr.Zero);pressed=false;await Layout();

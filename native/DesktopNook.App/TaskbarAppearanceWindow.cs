@@ -44,8 +44,8 @@ internal sealed class TaskbarAppearanceWindow : Window
         _draft = session.Saved;
         Owner = owner;
         Title = "任务栏外观";
-        Width = 480;
-        MaxHeight = Math.Max(340, Math.Min(700, SystemParameters.WorkArea.Height - 36));
+        Width = Math.Min(520, TaskbarPlacement.WorkArea(owner).Width - 24);
+        MaxHeight = Math.Min(640, TaskbarPlacement.WorkArea(owner).Height - 36);
         ResizeMode = ResizeMode.NoResize;
         SizeToContent = SizeToContent.Height;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
@@ -93,7 +93,9 @@ internal sealed class TaskbarAppearanceWindow : Window
         _body.Children.Add(new Expander { Header = "细线与窗口规则", Content = options, Margin = new Thickness(0, 10, 0, 0) });
         _footer.Children.Add(_message);
         var tools = new WrapPanel { Margin = new Thickness(0, 0, 0, 8) };
-        tools.Children.Add(MakeButton("恢复系统外观", () => _ = RunAsync(RestoreSystemAsync)));
+        var restore = MakeButton("恢复系统外观", () => _ = RunAsync(RestoreSystemAsync));
+        restore.Foreground = ThemePalette.Brush("DangerBrush");
+        tools.Children.Add(restore);
         _footer.Children.Add(tools);
         var actions = new WrapPanel { HorizontalAlignment = HorizontalAlignment.Right };
         var cancel = MakeButton("取消", Close);
@@ -360,7 +362,7 @@ internal sealed class TaskbarAppearanceWindow : Window
         if (!CanApply(appearance)) return;
         if (!appearance.UsesComponent && !_session.Running)
         {
-            _message.Text = "当前没有由轻匣应用的外观。";
+            _message.Text = "当前没有由一处应用的外观。";
             return;
         }
         await _session.PreviewAsync(appearance, _downloadApproved);
@@ -376,7 +378,7 @@ internal sealed class TaskbarAppearanceWindow : Window
         await _session.ApplyAsync(appearance, _downloadApproved);
         _draft = _session.Saved;
         _previewTimer.Stop();
-        _message.Text = !appearance.Enabled ? "已保存，轻匣的任务栏外观已关闭。"
+        _message.Text = !appearance.Enabled ? "已保存，一处的任务栏外观已关闭。"
             : _activeScene.Key != TaskbarAppearanceSettings.DesktopScene &&
                 (!appearance.FollowScenes || !appearance.ProfileFor(_activeScene.Key).Enabled)
                 ? "已保存此场景的设置。启用场景切换与此场景后，触发时才会显示。"
@@ -399,7 +401,7 @@ internal sealed class TaskbarAppearanceWindow : Window
         await _session.ApplyAsync(_session.Saved with { Enabled = false }, allowDownload: false);
         _previewTimer.Stop();
         LoadFields(_session.Saved);
-        _message.Text = "轻匣的任务栏外观已关闭。";
+        _message.Text = "一处的任务栏外观已关闭。";
     }
 
     private async Task RunAsync(Func<Task> operation)

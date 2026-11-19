@@ -10,7 +10,7 @@ internal sealed partial class BilliardsWindow
 {
     private readonly bool _onlineRequested;
     private readonly CancellationTokenSource _netLife=new();
-    private readonly TextBlock _netStatus=new(){Foreground=Brushes.LightSkyBlue,FontSize=12,TextWrapping=TextWrapping.Wrap,VerticalAlignment=VerticalAlignment.Center};
+    private readonly TextBlock _netStatus=new(){Foreground=ThemePalette.Brush("AccentInkBrush"),FontSize=12,TextWrapping=TextWrapping.Wrap,VerticalAlignment=VerticalAlignment.Center};
     private readonly Button _copyInvite=new(){Content="复制邀请",IsEnabled=false,Margin=new Thickness(0,0,8,0)};
     private GamePeer? _peer;
     private GameRoomHost? _room;
@@ -30,7 +30,7 @@ internal sealed partial class BilliardsWindow
         var help=new Button{Content="连接帮助"};help.Click+=(_,_)=>
         {
             Scene.Pause(true);UiDialogs.Show(this,"同网可搜索房间，也可直接复制邀请。异地优先使用邀请内的公网 IPv6；组网工具提供的地址也可连接。\n\nTCP 默认端口 38471（冲突时会换用可用端口），局域网发现 UDP 38472。连接失败请确认房间仍在、邀请未过期，以及 Windows / 路由器是否允许所选端口入站。软件不会自动修改防火墙或路由器。\n\n局域网发现不包含邀请密钥，无密钥加入需房主确认。图标、文件名和文件内容不在网络上传送。本版本先完成本机双端测试，跨电脑 / 跨公网请另行验收。","好友连接帮助");if(IsActive&&!RulesVisible)Scene.Pause(false);
-        };actions.Children.Add(help);foreach(var button in actions.Children.OfType<Button>()){button.Background=new SolidColorBrush(Color.FromRgb(220,241,250));button.Foreground=new SolidColorBrush(Color.FromRgb(21,63,85));button.FontSize=11;button.Padding=new Thickness(8,5,8,5);}panel.Children.Add(actions);panel.Children.Add(_netStatus);return panel;
+        };actions.Children.Add(help);foreach(var button in actions.Children.OfType<Button>()){button.Background=ThemePalette.Brush("SelectionBrush");button.Foreground=ThemePalette.Brush("TextPrimaryBrush");button.FontSize=11;button.Padding=new Thickness(8,5,8,5);}panel.Children.Add(actions);panel.Children.Add(_netStatus);return panel;
     }
     private void ConfigureNetwork(GameMessage start)
     {

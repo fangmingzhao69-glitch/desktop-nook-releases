@@ -11,9 +11,9 @@ internal sealed record WindowSizePreference
     public bool Free {get;init;}
     public bool Locked {get;init;}
     public double Zoom {get;init;}=1;
-    public double Width {get;init;}=1120;
-    public double Height {get;init;}=627.2;
-    internal const double BaseWidth=1120,BaseHeight=627.2,Ratio=1120d/627.2;
+    public double Width {get;init;}=BaseWidth;
+    public double Height {get;init;}=BaseHeight;
+    internal const double BaseWidth=1080,BaseHeight=620,Ratio=BaseWidth/BaseHeight;
     internal static readonly double[] Presets=[.8,1,1.25,1.5];
     internal WindowSizePreference Validated()=>this with
     {
@@ -26,7 +26,7 @@ internal sealed record WindowSizePreference
 
 public partial class MainWindow
 {
-    internal const double ContentScale=1.12;
+    internal const double ContentScale=1;
     private WindowSizePreference _sizePreference=new();
     private bool _resizing;
     private Point _resizePointer;
@@ -98,19 +98,19 @@ public partial class MainWindow
         // constrains the window shape only; available space controls row/column count.
         Surface.Width=Math.Max(1,(ActualWidth>0?ActualWidth:Width)/ContentScale);
         Surface.Height=Math.Max(1,(ActualHeight>0?ActualHeight:Height)/ContentScale);
+        BrandSubtitle.Visibility=Surface.Width<860?Visibility.Collapsed:Visibility.Visible;
         UpdateNotesColumns();
-        IconColumns=Math.Clamp((int)Math.Floor((LauncherColumn.Width.Value-56)/(584d/6)),3,30);
-        foreach(var panel in FindVisualChildren<UniformGrid>(Icons))panel.Columns=IconColumns;
+        UpdateIconColumns();
         ResizeHandles.Visibility=_sizePreference.Free?Visibility.Visible:Visibility.Collapsed;
         ResizeHint.Visibility=ResizeHandles.Visibility;
         if(LastMenu?.IsOpen==true)MenuLayout.Adapt(LastMenu,this);
     }
     private void UpdateIconColumns()
     {
-        IconColumns=Math.Clamp((int)Math.Floor((LauncherColumn.Width.Value-56)/(584d/6)),3,30);
+        IconColumns=Math.Clamp((int)Math.Floor((LauncherColumn.Width.Value-40)/112d),3,30);
         foreach(var panel in FindVisualChildren<UniformGrid>(Icons))panel.Columns=IconColumns;
     }
-    internal int IconColumns {get;private set;}=6;
+    internal int IconColumns {get;private set;}=5;
     private void ResizeDelta(object sender,DragDeltaEventArgs e)
     {
         var point=PointToScreen(Mouse.GetPosition(this));var dpi=VisualTreeHelper.GetDpi(this);
@@ -122,14 +122,15 @@ public partial class MainWindow
     {
         double width=start.Width+(edge.Contains('L')?-dx:edge.Contains('R')?dx:0);
         double height=start.Height+(edge.Contains('T')?-dy:edge.Contains('B')?dy:0);
-        double minWidth=Math.Min(800,work.Width),minHeight=Math.Min(360,work.Height);
+        double maxWidth=work.Width*.92,maxHeight=work.Height*.92;
+        double minWidth=Math.Min(800,maxWidth),minHeight=Math.Min(360,maxHeight);
         if(locked)
         {
             if(edge is "T" or "B"||(edge.Length==2&&Math.Abs(dy*WindowSizePreference.Ratio)>Math.Abs(dx)))width=height*WindowSizePreference.Ratio;
-            double maximum=Math.Min(work.Width,work.Height*WindowSizePreference.Ratio);
+            double maximum=Math.Min(maxWidth,maxHeight*WindowSizePreference.Ratio);
             width=Math.Clamp(width,Math.Min(minWidth,maximum),maximum);height=width/WindowSizePreference.Ratio;
         }
-        else{width=Math.Clamp(width,minWidth,work.Width);height=Math.Clamp(height,minHeight,work.Height);}
+        else{width=Math.Clamp(width,minWidth,maxWidth);height=Math.Clamp(height,minHeight,maxHeight);}
         double left=edge.Contains('L')?start.Right-width:start.Left,top=edge.Contains('T')?start.Bottom-height:start.Top;
         left=Math.Clamp(left,work.Left,work.Right-width);top=Math.Clamp(top,work.Top,work.Bottom-height);
         return new Rect(left,top,width,height);

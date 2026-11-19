@@ -10,6 +10,7 @@ internal static class Maintenance
     {
         var command=args.Single(a=>a.StartsWith("--maintenance="))[14..];
         if(command=="shortcut"){if(!sandbox){ShortcutInstaller.Install();new StartupOptions().RefreshEnabledPath();}return 0;}
+        if(command=="remove-shortcut"){if(!sandbox)ShortcutInstaller.RemoveOwned();return 0;}
         using var mutex=new Mutex(false,"Local\\DesktopNook-"+signature);bool owned=false;
         try
         {

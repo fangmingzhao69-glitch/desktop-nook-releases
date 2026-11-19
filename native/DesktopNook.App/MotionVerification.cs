@@ -33,7 +33,7 @@ internal static class MotionVerification
             Check(panel.Opacity==1&&panel.RenderTransform.Value.IsIdentity&&UiMotion.ActiveClocks==0,"Interrupted/replaced reveal can be cancelled without residual visual state");
             tile.IsChecked=true;Check(tile.IsChecked==true,"Selection changes immediately without waiting for animation");
             await Settle();var surface=(Border)tile.Template.FindName("Tile",tile);
-            Check(surface.Background is SolidColorBrush brush&&brush.Color==Color.FromRgb(221,242,255)&&UiMotion.ActiveClocks==0,"Selection feedback settles to the exact highlight without idle clocks");
+            Check(surface.Background is SolidColorBrush brush&&brush.Color==ThemePalette.Brush("SelectionBrush").Color&&UiMotion.ActiveClocks==0,"Selection feedback settles to the exact highlight without idle clocks");
             UiMotion.Reveal(panel);UiMotion.Configure("off");
             UiMotion.Reveal(panel);Check(!panel.HasAnimatedProperties&&UiMotion.ActiveClocks==0&&panel.Opacity==1,"Turning motion off finishes current transitions and prevents new clocks");
             UiMotion.Configure("system");Check(UiMotion.Enabled==SystemParameters.ClientAreaAnimation,"System mode follows the Windows client-area animation preference");

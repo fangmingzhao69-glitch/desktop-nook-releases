@@ -12,10 +12,10 @@ internal sealed class BilliardsSetupWindow : Window
     private readonly ComboBox _rule=new(){Padding=new Thickness(8)};
     private readonly ComboBox _players=new(){Padding=new Thickness(8)};
     private readonly CheckBox _sound=new(){Content="击球与碰撞音效",Margin=new Thickness(0,0,0,12)};
-    private readonly TextBlock _record=new(){FontSize=11,Foreground=Brushes.SlateGray,Margin=new Thickness(0,0,0,12)};
+    private readonly TextBlock _record=new(){FontSize=11,Foreground=ThemePalette.Brush("TextSecondaryBrush"),Margin=new Thickness(0,0,0,12)};
     private readonly GameStorage _storage;
     private readonly CheckBox _guide=new(){Content="显示瞄准辅助线",Margin=new Thickness(0,12,0,12)};
-    private readonly TextBlock _summary=new(){TextWrapping=TextWrapping.Wrap,Foreground=Brushes.SlateGray,Margin=new Thickness(0,12,0,8)};
+    private readonly TextBlock _summary=new(){TextWrapping=TextWrapping.Wrap,Foreground=ThemePalette.Brush("TextSecondaryBrush"),Margin=new Thickness(0,12,0,8)};
     private readonly Button _start=new(){Content="开始台球",IsDefault=true,MinWidth=100};
     private readonly NookStore _store;private readonly string? _category;private readonly bool _sandbox;
     private int _revision;
@@ -26,18 +26,18 @@ internal sealed class BilliardsSetupWindow : Window
     {
         _store=store;_category=category;_sandbox=sandbox;_storage=storage;Settings=storage.LoadSettings();Title="图标台球";Width=410;SizeToContent=SizeToContent.Height;ShowInTaskbar=false;ResizeMode=ResizeMode.NoResize;WindowStartupLocation=WindowStartupLocation.CenterOwner;
         var body=new StackPanel{Margin=new Thickness(22,14,22,20)};
-        body.Children.Add(new TextBlock{Text="用图标打一局台球",FontSize=18,FontWeight=FontWeights.SemiBold,Foreground=new SolidColorBrush(Color.FromRgb(25,60,88)),Margin=new Thickness(0,0,0,12)});
-        body.Children.Add(new TextBlock{Text="图标来源",Margin=new Thickness(0,0,0,5),Foreground=Brushes.SlateGray});
+        body.Children.Add(new TextBlock{Text="用图标打一局台球",FontSize=18,FontWeight=FontWeights.SemiBold,Foreground=ThemePalette.Brush("TextPrimaryBrush"),Margin=new Thickness(0,0,0,12)});
+        body.Children.Add(new TextBlock{Text="图标来源",Margin=new Thickness(0,0,0,5),Foreground=ThemePalette.Brush("TextSecondaryBrush")});
         foreach(var (label,value) in new[]{(category is null?"当前页（全部）":"当前分类","current"),("全部收纳图标","all"),("桌面图标镜像","desktop")})_source.Items.Add(new ComboBoxItem{Content=label,Tag=value});
         _source.SelectedIndex=Settings.Source=="desktop"?2:Settings.Source=="all"?1:0;body.Children.Add(_source);
-        body.Children.Add(new TextBlock{Text="台球规则",Margin=new Thickness(0,16,0,6),Foreground=Brushes.SlateGray});
+        body.Children.Add(new TextBlock{Text="台球规则",Margin=new Thickness(0,16,0,6),Foreground=ThemePalette.Brush("TextSecondaryBrush")});
         foreach(var rule in BilliardsRules.All)_rule.Items.Add(new ComboBoxItem{Content=$"{rule.Name}（{rule.Count} 球＋白球）",Tag=rule.Id});
         _rule.SelectedIndex=BilliardsRules.All.ToList().FindIndex(r=>r.Id==Settings.Rule);body.Children.Add(_rule);
         _rule.SelectionChanged+=(_,_)=>UpdateSummary();
-        body.Children.Add(new TextBlock{Text="游戏模式",Margin=new Thickness(0,14,0,6),Foreground=Brushes.SlateGray});foreach(var (label,value) in new[]{("单人练习",1),("本地双人对战",2),("创建好友房间",3),("加入好友房间",4)})_players.Items.Add(new ComboBoxItem{Content=label,Tag=value});_players.SelectedIndex=Settings.Players-1;_players.SelectionChanged+=(_,_)=>UpdateSummary();body.Children.Add(_players);
+        body.Children.Add(new TextBlock{Text="游戏模式",Margin=new Thickness(0,14,0,6),Foreground=ThemePalette.Brush("TextSecondaryBrush")});foreach(var (label,value) in new[]{("单人练习",1),("本地双人对战",2),("创建好友房间",3),("加入好友房间",4)})_players.Items.Add(new ComboBoxItem{Content=label,Tag=value});_players.SelectedIndex=Settings.Players-1;_players.SelectionChanged+=(_,_)=>UpdateSummary();body.Children.Add(_players);
         _guide.IsChecked=Settings.Guide;body.Children.Add(_guide);body.Children.Add(_summary);
         _sound.IsChecked=Settings.Sound;body.Children.Add(_sound);
-        body.Children.Add(new TextBlock{Text="开局先显示规则。好友房间可复制邀请或搜索同网房间；联机双方准备后开始。",FontSize=11,TextWrapping=TextWrapping.Wrap,Foreground=Brushes.SlateGray,Margin=new Thickness(0,0,0,14)});
+        body.Children.Add(new TextBlock{Text="开局先显示规则。好友房间可复制邀请或搜索同网房间；联机双方准备后开始。",FontSize=11,TextWrapping=TextWrapping.Wrap,Foreground=ThemePalette.Brush("TextSecondaryBrush"),Margin=new Thickness(0,0,0,14)});
         body.Children.Add(_record);
         var actions=new StackPanel{Orientation=Orientation.Horizontal,HorizontalAlignment=HorizontalAlignment.Right};actions.Children.Add(new Button{Content="取消",IsCancel=true,Margin=new Thickness(0,0,8,0)});_start.Style=(Style)Application.Current.FindResource("PrimaryButton");actions.Children.Add(_start);body.Children.Add(actions);
         _start.Click+=(_,_)=>

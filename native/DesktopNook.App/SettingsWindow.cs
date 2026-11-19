@@ -1,0 +1,265 @@
+using System.Windows;
+using System.Windows.Automation;
+using System.Windows.Controls;
+using System.Windows.Media;
+
+namespace DesktopNook.App;
+
+internal sealed class SettingsWindow : Window
+{
+    internal enum ActionAfterClose { None, Taskbar, Restore, OpenData, CheckUpdate, LocalUpdate, Releases, License }
+    private readonly MainWindow _owner;
+    private readonly StackPanel _content = new();
+    private readonly Dictionary<string, Button> _navigation = new();
+    private readonly StartupOptions _options = App.Options;
+    internal ActionAfterClose NextAction { get; private set; }
+
+    internal SettingsWindow(MainWindow owner)
+    {
+        _owner = owner;
+        Owner = owner;
+        Title = "设置";
+        Width = 820;
+        Height = 540;
+        ShowInTaskbar = false;
+        ResizeMode = ResizeMode.NoResize;
+        WindowStartupLocation = WindowStartupLocation.CenterOwner;
+        FontSize = 13;
+
+        var root = new Grid { Margin = new Thickness(0, 12, 0, 0) };
+        root.ColumnDefinitions.Add(new() { Width = new(180) });
+        root.ColumnDefinitions.Add(new());
+        var sidebar = new StackPanel { Margin = new Thickness(12) };
+        var brand = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(8, 8, 0, 16) };
+        brand.Children.Add(new Image { Width = 24, Height = 24, Margin = new Thickness(0, 0, 8, 0),
+            Source = new System.Windows.Media.Imaging.BitmapImage(new Uri("pack://application:,,,/Assets/AppIcon.png")) });
+        var brandName = Text("一处", 16);
+        brandName.FontWeight = FontWeights.SemiBold;
+        brand.Children.Add(brandName);
+        sidebar.Children.Add(brand);
+        AddNavigationLabel("偏好设置");
+        AddNavigation("常规"); AddNavigation("外观"); AddNavigation("任务栏");
+        AddNavigationLabel("支持");
+        AddNavigation("数据与恢复"); AddNavigation("关于与更新");
+        root.Children.Add(new Border { Background = ThemePalette.Brush("CanvasSubtleBrush"), CornerRadius = new CornerRadius(0,0,0,13),
+            Child = new ScrollViewer { Content = sidebar, VerticalScrollBarVisibility = ScrollBarVisibility.Auto } });
+        _content.Margin = new Thickness(24, 8, 24, 20);
+        var scroller = new ScrollViewer { Content = _content, VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
+            HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled };
+        Grid.SetColumn(scroller, 1);
+        root.Children.Add(scroller);
+        Content = root;
+        UiDialogs.Chrome(this);
+        SelectPage("常规");
+        SourceInitialized += (_, _) =>
+        {
+            var work = TaskbarPlacement.WorkArea(owner);
+            MaxWidth = Math.Max(1, work.Width * .92);
+            MaxHeight = Math.Max(1, work.Height * .92);
+            Width = Math.Min(820, MaxWidth);
+            Height = Math.Min(540, MaxHeight);
+        };
+
+        void AddNavigation(string page)
+        {
+            var button = new Button { Content = page, MinHeight = 34, Margin = new Thickness(0, 0, 0, 4) };
+            AutomationProperties.SetAutomationId(button, "SettingsPage-" + page);
+            button.Click += (_, _) => SelectPage(page);
+            sidebar.Children.Add(button);
+            _navigation.Add(page, button);
+        }
+        void AddNavigationLabel(string label)
+        {
+            var text = Text(label, 11, "TextSecondaryBrush");
+            text.Margin = new Thickness(8, 10, 0, 6);
+            sidebar.Children.Add(text);
+        }
+    }
+
+    internal void SelectPage(string page)
+    {
+        foreach (var (name, button) in _navigation)
+        {
+            button.Background = name == page ? ThemePalette.Brush("SelectionBrush") : Brushes.Transparent;
+            button.Foreground = ThemePalette.Brush(name == page ? "AccentInkBrush" : "TextPrimaryBrush");
+        }
+        _content.Children.Clear();
+        var heading = Text(page, 17);
+        heading.FontWeight = FontWeights.SemiBold;
+        heading.Margin = new Thickness(0, 0, 0, 16);
+        _content.Children.Add(heading);
+
+        switch (page)
+        {
+            case "常规":
+                Toggle("开机自启", _options.Enabled, enabled => _options.SetEnabled(enabled), !App.IsSandbox);
+                Toggle("关闭时结束进程", _options.CloseEndsProcess, enabled => _options.CloseEndsProcess = enabled);
+                Pick("添加图标默认视图", null, _options.DefaultCollectView,
+                    [("icons", "图标"), ("details", "详细列表")], value => _options.DefaultCollectView = value);
+                break;
+            case "外观":
+                ThemeCards();
+                var motionHeading = Text("面板与动效", 14);
+                motionHeading.FontWeight = FontWeights.SemiBold;
+                motionHeading.Margin = new Thickness(0, 18, 0, 10);
+                _content.Children.Add(motionHeading);
+                Pick("开合样式", "Settings-PanelStyle", _options.PanelStyle,
+                    PanelEffectFrame.Choices.Select(choice => (choice.Effect, choice.Label)).ToArray(), _owner.SelectPanelEffect);
+                Pick("界面反馈动画", "Settings-Motion", _options.MotionMode,
+                    [("system", "跟随系统"), ("on", "开启"), ("off", "关闭")], value =>
+                    {
+                        _options.MotionMode = value;
+                        UiMotion.Configure(value);
+                    });
+                var sizes = WindowSizePreference.Presets.Select(value => (value, $"{value * 100:0}%")).Append((0d, "自由调整")).ToArray();
+                Pick("窗口尺寸", null, _owner.SizePreference.Free ? 0 : _owner.SizePreference.Zoom, sizes, value =>
+                {
+                    _owner.SelectWindowSize(value > 0 ? value : null);
+                    SelectPage("外观");
+                });
+                Toggle("锁定宽高比", _owner.SizePreference.Locked, value => _owner.SelectWindowSize(locked: value), _owner.SizePreference.Free);
+                ButtonRow("使用当前窗口尺寸", () => { _owner.SelectWindowSize(); SelectPage("外观"); });
+                ButtonRow("恢复默认尺寸", () => { _owner.SelectWindowSize(reset: true); SelectPage("外观"); });
+                break;
+            case "任务栏":
+                Info("任务栏外观使用现有的透明、模糊、亚克力和场景配置。");
+                ButtonRow("打开任务栏外观", () => ContinueWith(ActionAfterClose.Taskbar), primary: true);
+                break;
+            case "数据与恢复":
+                Info(App.Store.DataDirectory);
+                Info("备份时复制整个数据目录。恢复收纳内容前会要求确认。");
+                ButtonRow("打开数据目录", () => ContinueWith(ActionAfterClose.OpenData));
+                ButtonRow("全部移回桌面", () => ContinueWith(ActionAfterClose.Restore), enabled: App.Store.State.Items.Count > 0,
+                    foreground: "DangerBrush");
+                break;
+            case "关于与更新":
+                Info($"一处  {MainWindow.CurrentVersionLabel}");
+                Info("常用与灵感，都在一处。");
+                ButtonRow("检查在线更新", () => ContinueWith(ActionAfterClose.CheckUpdate), primary: true);
+                ButtonRow("从本地文件更新", () => ContinueWith(ActionAfterClose.LocalUpdate));
+                ButtonRow("打开官方发布页", () => ContinueWith(ActionAfterClose.Releases));
+                ButtonRow("开源许可与源码", () => ContinueWith(ActionAfterClose.License));
+                break;
+        }
+    }
+
+    private void ThemeCards()
+    {
+        var label = Text("面板主题", 14);
+        label.FontWeight = FontWeights.SemiBold;
+        label.Margin = new Thickness(0, 0, 0, 8);
+        _content.Children.Add(label);
+        var cards = new Grid();
+        foreach (var (mode, caption, canvas, surface) in new[]
+        {
+            ("light", "浅色", "#EFF4FC", "#FFFFFF"),
+            ("dark", "深色", "#1B2235", "#314A73"),
+            ("system", "跟随系统", "#D8E4F9", "#526385")
+        })
+        {
+            int column = cards.ColumnDefinitions.Count;
+            cards.ColumnDefinitions.Add(new());
+            var preview = new Grid { Height = 28 };
+            preview.ColumnDefinitions.Add(new() { Width = new GridLength(2, GridUnitType.Star) });
+            preview.ColumnDefinitions.Add(new());
+            preview.Children.Add(new Border { Background = SampleBrush(canvas), CornerRadius = new CornerRadius(4,0,0,4) });
+            var accent = new Border { Background = SampleBrush(surface), CornerRadius = new CornerRadius(0,4,4,0) };
+            Grid.SetColumn(accent, 1);
+            preview.Children.Add(accent);
+            var content = new StackPanel { MinWidth = 90 };
+            content.Children.Add(preview);
+            content.Children.Add(new TextBlock { Text = caption, FontSize = 12, Margin = new Thickness(0,6,0,0) });
+            var button = new Button { Content = content, Margin = new Thickness(0,0,8,0),
+                Padding = new Thickness(8), Background = ThemePalette.Brush(_options.ThemeMode == mode ? "SelectionBrush" : "SurfaceSubtleBrush") };
+            AutomationProperties.SetAutomationId(button, "Settings-Theme-" + mode);
+            AutomationProperties.SetName(button, caption);
+            if (_options.ThemeMode == mode) AutomationProperties.SetItemStatus(button, "当前主题");
+            button.Click += (_, _) => Save(() =>
+            {
+                _options.ThemeMode = mode;
+                _owner.FinishPanelMotion();
+                ThemePalette.Apply(mode);
+                _owner.PanelMotion.InvalidateSnapshot();
+                SelectPage("外观");
+                FindNavigationFocus(mode);
+            });
+            Grid.SetColumn(button, column);
+            cards.Children.Add(button);
+        }
+        _content.Children.Add(cards);
+
+        void FindNavigationFocus(string mode)
+        {
+            if (_content.Children.OfType<Grid>().FirstOrDefault() is not { } options) return;
+            options.Children.OfType<Button>().FirstOrDefault(button =>
+                AutomationProperties.GetAutomationId(button) == "Settings-Theme-" + mode)?.Focus();
+        }
+
+        static SolidColorBrush SampleBrush(string color)
+        {
+            var brush = new SolidColorBrush((Color)ColorConverter.ConvertFromString(color));
+            brush.Freeze();
+            return brush;
+        }
+    }
+
+    private void ContinueWith(ActionAfterClose action)
+    {
+        NextAction = action;
+        DialogResult = true;
+    }
+
+    private static TextBlock Text(string value, int size = 13, string color = "TextPrimaryBrush") => new()
+    {
+        Text = value, FontSize = size, Foreground = ThemePalette.Brush(color),
+        VerticalAlignment = VerticalAlignment.Center, TextWrapping = TextWrapping.Wrap
+    };
+
+    private void Info(string value)
+    {
+        var text = Text(value, 13, "TextSecondaryBrush");
+        text.Margin = new Thickness(0, 0, 0, 14);
+        _content.Children.Add(text);
+    }
+
+    private void ButtonRow(string title, Action change, bool primary = false, bool enabled = true, string? foreground = null)
+    {
+        var button = new Button { Content = title, HorizontalAlignment = HorizontalAlignment.Left,
+            Margin = new Thickness(0, 0, 0, 8), MinHeight = 34, IsEnabled = enabled };
+        if (primary) button.Style = (Style)FindResource("PrimaryButton");
+        if (foreground is not null) button.Foreground = ThemePalette.Brush(foreground);
+        button.Click += (_, _) => Save(change);
+        _content.Children.Add(button);
+    }
+
+    private void Toggle(string title, bool value, Action<bool> change, bool enabled = true)
+    {
+        var control = new CheckBox { Content = title, IsChecked = value, IsEnabled = enabled, MinHeight = 34,
+            Margin = new Thickness(0, 0, 0, 6) };
+        control.Click += (_, _) => Save(() => change(control.IsChecked == true));
+        _content.Children.Add(control);
+    }
+
+    private void Pick<T>(string title, string? id, T value, (T Value, string Label)[] options, Action<T> change)
+    {
+        var row = new DockPanel { Margin = new Thickness(0, 0, 0, 10) };
+        var control = new ComboBox { Width = 176, MinHeight = 34, ItemsSource = options.Select(item => item.Label) };
+        if (id is not null) AutomationProperties.SetAutomationId(control, id);
+        AutomationProperties.SetName(control, title);
+        control.SelectedIndex = Array.FindIndex(options, item => EqualityComparer<T>.Default.Equals(item.Value, value));
+        control.SelectionChanged += (_, _) =>
+        {
+            if (control.SelectedIndex >= 0) Save(() => change(options[control.SelectedIndex].Value));
+        };
+        DockPanel.SetDock(control, Dock.Right);
+        row.Children.Add(control);
+        row.Children.Add(Text(title));
+        _content.Children.Add(row);
+    }
+
+    private void Save(Action change)
+    {
+        try { change(); }
+        catch (Exception error) { UiDialogs.Show(this, error.Message, "设置"); }
+    }
+}

@@ -38,7 +38,7 @@ Function .onInit
  Call DetectDesktopRuntime
  StrCmp $RuntimeFound 1 runtime_ready
  IfSilent runtime_missing_silent
- MessageBox MB_OKCANCEL|MB_ICONINFORMATION "轻匣需要 .NET 10 桌面运行时（x64）。点击确定将从微软官方下载并安装必要组件，完成后继续安装轻匣。Windows 可能要求管理员授权。" /SD IDCANCEL IDCANCEL runtime_cancelled
+ MessageBox MB_OKCANCEL|MB_ICONINFORMATION "一处需要 .NET 10 桌面运行时（x64）。点击确定将从微软官方下载并安装必要组件，完成后继续安装一处。Windows 可能要求管理员授权。" /SD IDCANCEL IDCANCEL runtime_cancelled
  InitPluginsDir
  File /oname=$PLUGINSDIR\RuntimeBootstrap.ps1 "${RUNTIME_BOOTSTRAP_SCRIPT}"
  File /oname=$PLUGINSDIR\DotNetRuntime.json "DotNetRuntime.json"
@@ -46,7 +46,7 @@ Function .onInit
  StrCmp $RuntimeExit 1602 runtime_cancelled
  StrCmp $RuntimeExit 0 runtime_recheck
  StrCmp $RuntimeExit 3010 0 runtime_failed
- MessageBox MB_OK "必要组件已安装，Windows 建议稍后重启。轻匣将继续安装，不会自动重启电脑。" /SD IDOK
+ MessageBox MB_OK "必要组件已安装，Windows 建议稍后重启。一处将继续安装，不会自动重启电脑。" /SD IDOK
  runtime_recheck:
  StrCpy $RuntimeBootstrapped 1
  Call DetectDesktopRuntime

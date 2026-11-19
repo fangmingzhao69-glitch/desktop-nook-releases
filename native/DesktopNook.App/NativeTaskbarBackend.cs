@@ -28,7 +28,7 @@ internal sealed class NativeTaskbarBackend(string storePath, bool sandbox, bool 
             if (RuntimeInformation.ProcessArchitecture != Architecture.X64)
                 return "此任务栏外观组件需要 x64 进程。";
             if (!dryRun && IndependentBackendExists())
-                return "已有 TranslucentTB 正在管理任务栏。请从系统托盘退出独立版，再启用轻匣的任务栏外观。";
+                return "已有 TranslucentTB 正在管理任务栏。请从系统托盘退出独立版，再启用一处的任务栏外观。";
             return null;
         }
     }
@@ -114,7 +114,7 @@ internal sealed class NativeTaskbarBackend(string storePath, bool sandbox, bool 
                 {
                     string mutexName = dry ? "Local\\DesktopNook-TaskbarAppearanceTest" : "Local\\DesktopNook-TaskbarAppearance";
                     using var ownership = new Mutex(true, mutexName, out bool first);
-                    if (!first) throw new IOException("当前会话已有轻匣管理任务栏外观。");
+                    if (!first) throw new IOException("当前会话已有一处管理任务栏外观。");
                     try
                     {
                         _result = module.Run(storage, _stop.SafeWaitHandle.DangerousGetHandle(),

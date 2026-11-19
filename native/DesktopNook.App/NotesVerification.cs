@@ -133,12 +133,12 @@ internal static class NotesVerification
             Check(Body().CharacterSelection()==(3,2),"切换项目恢复编辑位置与选区");
             var addButton=Find<Button>(window.NotesHost).Single(b=>AutomationProperties.GetAutomationId(b)=="AddProjectNote");addButton.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));await Layout();
             Check(window.NotesDraft.Notes.Last().Kind=="todo"&&window.LastMenu?.IsOpen!=true,"记一条直接新增待办，不弹出文字类型菜单");
-            Check(Find<TextBlock>(window.NotesHost).Any(t=>t.Text=="便签"),"右侧标题显示便签");
-            var launcherHeading = Find<TextBlock>(window).First(text => text.Text == "轻匣");
-            var notesHeading = Find<TextBlock>(window.NotesHost).Single(text => text.Text == "便签");
+            Check(Find<TextBlock>(window.NotesHost).Any(t=>t.Text=="便签与待办"),"右侧标题显示便签");
+            var launcherHeading = Find<TextBlock>(window).First(text => text.Text == "一处");
+            var notesHeading = Find<TextBlock>(window.NotesHost).Single(text => text.Text == "便签与待办");
             Check(notesHeading.FontFamily.Equals(launcherHeading.FontFamily) && notesHeading.FontWeight == launcherHeading.FontWeight &&
-                notesHeading.FontSize == launcherHeading.FontSize && Field("记录标题").FontFamily.Equals(launcherHeading.FontFamily),
-                "便签标题和编辑框共用轻匣字体，面板标题字号和字重一致");
+                notesHeading.FontSize == 15 && launcherHeading.FontSize == 16 && Field("记录标题").FontFamily.Equals(launcherHeading.FontFamily),
+                "便签标题和编辑框共用一处字体，品牌和区域标题保持设计层级");
             var customTitle=Find<TextBox>(window.NotesHost).Last(b=>AutomationProperties.GetName(b)=="记录标题");customTitle.Text="可编辑清单名称";
             Check(window.FlushNotes(false)&&new NotesStore(App.Store.DataDirectory).State.Notes.Last().Title=="可编辑清单名称","自定义清单名称持久保存");
             var checklist = window.NotesDraft.Notes.Last();
@@ -266,12 +266,12 @@ internal static class NotesVerification
             Check(window.FlushNotes(false)&&new NotesStore(App.Store.DataDirectory).State.Notes.Any(n=>n.Text.Contains("仍需保留")),"解除故障后重试成功提交草稿");
             var stats=Find<TextBlock>(window.NotesHost).Single(t=>AutomationProperties.GetName(t)=="分类记录统计");
             Check(!stats.Text.Contains("\n")&&stats.TextWrapping==TextWrapping.NoWrap&&stats.Text.Contains("待完成")&&stats.Text.Contains("已完成"),"分类记录数与待办完成统计保持单行");
-            window.Width=1120;window.Height=627.2;await Layout();Snapshot("notes-preview");
-            Check(window.IconColumns==6,"默认宽度保留左侧六列图标");
+            window.Width=1080;window.Height=620;await Layout();Snapshot("notes-preview");
+            Check(window.IconColumns==5,"默认宽度保留左侧五列图标");
             var font=Body().TransformToAncestor(window).TransformBounds(new Rect(0,0,12,12)).Width;
             window.Width=800;await Layout();Check(window.IconColumns>=3&&window.NotesHost.ActualWidth>=299,$"窄窗保留三列图标与可读便签宽度（{window.IconColumns}列，{window.NotesHost.ActualWidth:F1}，窗口{window.ActualWidth:F1}，表面{window.Surface.Width:F1}，内部{window.SplitLayout.ActualWidth:F1}）");
             Check(Math.Abs(font-Body().TransformToAncestor(window).TransformBounds(new Rect(0,0,12,12)).Width)<.5,"缩窄窗口不缩小正文字号");Snapshot("notes-narrow");
-            window.Width=1120;await Layout();window.BeginHidePanel();await Task.Delay(650);Check(window.WindowState==WindowState.Minimized,"便签与左侧整体收起");
+            window.Width=1080;await Layout();window.BeginHidePanel();await Task.Delay(650);Check(window.WindowState==WindowState.Minimized,"便签与左侧整体收起");
             window.ReleaseIdleResources();window.ShowPanel();await Task.Delay(650);await Layout();Check(Body().PlainText.Contains("草稿"),"闲置释放后恢复编辑内容");
 
             Check(Directory.Exists(Path.Combine(App.Store.DataDirectory,"Notes")),"便签数据位于独立 Notes 目录");
@@ -317,7 +317,8 @@ internal static class NotesVerification
             var cards = Find<Border>(window.NotesHost).Where(border => border.Tag is ProjectNote).ToList();
             var handles = Find<Thumb>(window.NotesHost).Where(thumb => AutomationProperties.GetAutomationId(thumb).StartsWith("NoteOrder-")).ToList();
             Check(handles.Select(handle => handle.Tag).SequenceEqual(new object[] { 1, 2 }), "分类内便签显示连续序号");
-            Check(handles[0].ActualWidth >= cards[0].ActualWidth - 24, "排序栏覆盖卡片宽度，可从远离序号的位置拖动");
+            Check(handles[0].ActualWidth >= cards[0].ActualWidth - cards[0].Padding.Left - cards[0].Padding.Right
+                - cards[0].BorderThickness.Left - cards[0].BorderThickness.Right - 1, "排序栏覆盖卡片内容区，可从远离序号的位置拖动");
             var firstId = ((ProjectNote)cards[0].Tag).Id;
             var secondId = ((ProjectNote)cards[1].Tag).Id;
             await NotesSplitVerification.DragNote(window, handles[1], cards[0], cancel: true);
@@ -351,7 +352,7 @@ internal static class NotesVerification
             window.NotesDraft.Notes.Remove(hidden);
             window.NotesStore.Commit(window.NotesDraft);
             Field("搜索当前分类的记录").Text = "";
-            window.Width = 1120;
+            window.Width = 1080;
             await Task.Delay(450);
             await Layout();
             var temporaryNotes = Enumerable.Range(1, 6)

@@ -1,0 +1,5 @@
+<DrawingGroup xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation">
+  <GeometryDrawing Brush="#86A7F0"><GeometryDrawing.Geometry><RectangleGeometry Rect="32,32,960,960" RadiusX="240" RadiusY="240"/></GeometryDrawing.Geometry><GeometryDrawing.Pen><Pen Brush="#C5D6F7" Thickness="16"/></GeometryDrawing.Pen></GeometryDrawing>
+  <GeometryDrawing Brush="#F4F8FF"><GeometryDrawing.Geometry><GeometryGroup><RectangleGeometry Rect="176,192,288,288" RadiusX="64" RadiusY="64"/><RectangleGeometry Rect="560,192,288,288" RadiusX="64" RadiusY="64"/><RectangleGeometry Rect="176,576,288,288" RadiusX="64" RadiusY="64"/></GeometryGroup></GeometryDrawing.Geometry></GeometryDrawing>
+  <GeometryDrawing Brush="#FF927E"><GeometryDrawing.Geometry><RectangleGeometry Rect="560,576,288,288" RadiusX="64" RadiusY="64"/></GeometryDrawing.Geometry></GeometryDrawing>
+</DrawingGroup>

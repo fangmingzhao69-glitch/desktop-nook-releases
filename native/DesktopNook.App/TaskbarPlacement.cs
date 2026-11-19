@@ -74,7 +74,7 @@ internal static class TaskbarPlacement
                 foreach(AutomationElement element in elements)
                 {
                     var info=element.Cached;
-                    if(!info.AutomationId.Contains("DesktopNook.DesktopNook",StringComparison.OrdinalIgnoreCase) && !info.Name.Contains("轻匣",StringComparison.OrdinalIgnoreCase) && !info.Name.Contains("桌面小筑",StringComparison.OrdinalIgnoreCase))continue;
+                    if(!info.AutomationId.Contains("DesktopNook.DesktopNook",StringComparison.OrdinalIgnoreCase) && !info.Name.Contains("一处",StringComparison.OrdinalIgnoreCase) && !info.Name.Contains("轻匣",StringComparison.OrdinalIgnoreCase) && !info.Name.Contains("桌面小筑",StringComparison.OrdinalIgnoreCase))continue;
                     if(info.ControlType!=ControlType.Button && info.ControlType!=ControlType.ListItem)continue;
                     var bounds=info.BoundingRectangle;if(bounds.IsEmpty || bounds.Width<5 || bounds.Height<5 || info.IsOffscreen)continue;
                     candidates.Add(Anchor(tray,bounds));
@@ -87,7 +87,7 @@ internal static class TaskbarPlacement
     internal static Rect Calculate(TaskbarAnchor anchor,double logicalWidth,double logicalHeight)
     {
         var scale=anchor.Dpi/96;var width=logicalWidth*scale;var height=logicalHeight*scale;
-        var fit=Math.Min(1,Math.Min(anchor.Work.Width/width,anchor.Work.Height/height));width*=fit;height*=fit;
+        var fit=Math.Min(1,Math.Min(anchor.Work.Width*.92/width,anchor.Work.Height*.92/height));width*=fit;height*=fit;
         var x=anchor.Button.Left;var y=anchor.Tray.Top-height-8*scale;
         if(anchor.Tray.Bottom<=anchor.Work.Top+1)y=anchor.Tray.Bottom+8*scale;
         else if(anchor.Tray.Right<=anchor.Work.Left+1){x=anchor.Tray.Right+8*scale;y=anchor.Button.Top;}

@@ -70,7 +70,7 @@ try {
     if($existing -and -not $existing.draft -and -not $VerifyOnly){throw '该版本已公开，请使用新版本号，不覆盖已发布文件。'}
     # Publish only the explicit files, after all uploads and hashes succeed.
     if(-not $existing) {
-        & gh release create $tag @releaseFiles --repo $Repository --target $sourceCommit --draft --title ('轻匣 '+$version) --notes-file $NotesFile
+        & gh release create $tag @releaseFiles --repo $Repository --target $sourceCommit --draft --title ('一处 '+$version) --notes-file $NotesFile
         if($LASTEXITCODE -ne 0){throw '发行包上传未完成，草稿保留，可再次运行本脚本续传。'}
     } elseif($existing.draft -and -not $VerifyOnly) {
         if($existing.target_commitish -ne $sourceCommit){throw '已有草稿绑定其他源码提交，请检查后使用新版本号。'}

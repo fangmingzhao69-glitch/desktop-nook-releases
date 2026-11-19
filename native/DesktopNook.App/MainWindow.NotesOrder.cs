@@ -160,7 +160,7 @@ public partial class MainWindow
         protected override void OnRender(DrawingContext drawingContext)
         {
             var size = AdornedElement.RenderSize;
-            var pen = new Pen(Brush("#218DEB"), 2);
+            var pen = new Pen(Brush("AccentInkBrush"), 2);
             if (Horizontal)
             {
                 double x = After ? size.Width - 1 : 1;

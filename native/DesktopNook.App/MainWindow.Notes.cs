@@ -28,7 +28,7 @@ public partial class MainWindow
     private Grid _notesSearchLayer = null!;
     private ScrollViewer _notesScroll = null!;
     private NoteProject? NoteProject => NotesDraft?.Projects.FirstOrDefault(p => p.Id == NotesDraft.ActiveProject);
-    private static TextBlock NotesText(string text, double size = 12) => new() { Text = text, FontSize = size, Foreground = Brush("#35566E"), TextWrapping = TextWrapping.Wrap, VerticalAlignment = VerticalAlignment.Center };
+    private static TextBlock NotesText(string text, double size = 12) => new() { Text = text, FontSize = size, Foreground = Brush("TextPrimaryBrush"), TextWrapping = TextWrapping.Wrap, VerticalAlignment = VerticalAlignment.Center };
     private Button NotesButton(string text, Action<Button> action, bool primary = false)
     {
         var b = new Button { Content = text, FontSize = 12, Padding = new Thickness(9,6,9,6), VerticalAlignment = VerticalAlignment.Center };
@@ -38,30 +38,36 @@ public partial class MainWindow
     private void InitializeNotes(bool deferVisuals)
     {
         NotesStore = new(Store.DataDirectory); NotesDraft = NotesStore.Draft();
-        NotesHost.RowDefinitions.Add(new() { Height = new(78) });
-        NotesHost.RowDefinitions.Add(new() { Height = new(49) });
-        NotesHost.RowDefinitions.Add(new()); NotesHost.RowDefinitions.Add(new() { Height = new(46) });
-        var title = new DockPanel { Margin = new Thickness(18,0,16,0), LastChildFill = true };
-        var controls = new StackPanel { Orientation = Orientation.Horizontal };
-        var moreButton=NotesButton("···", b => OnMore(b,new()));AutomationProperties.SetName(moreButton,"更多操作");controls.Children.Add(moreButton);
-        var minimizeButton=NotesButton("−", b => OnMinimizeButton(b,new()));AutomationProperties.SetName(minimizeButton,"最小化轻匣");minimizeButton.ToolTip="最小化";controls.Children.Add(minimizeButton);
-        var closeButton=NotesButton("×", b => OnCloseButton(b,new()));AutomationProperties.SetName(closeButton,"关闭轻匣");closeButton.ToolTip="关闭轻匣";controls.Children.Add(closeButton);
-        DockPanel.SetDock(controls,Dock.Right); title.Children.Add(controls);
+        NotesHost.RowDefinitions.Add(new() { Height = new(60) });
+        NotesHost.RowDefinitions.Add(new() { Height = new(42) });
+        NotesHost.RowDefinitions.Add(new()); NotesHost.RowDefinitions.Add(new() { Height = new(36) });
+        var title = new DockPanel { Margin = new Thickness(18,0,16,0), LastChildFill = true, VerticalAlignment = VerticalAlignment.Center };
         _addNote = NotesButton("＋ 记一条", _ => AddProjectNote(), true);
         AutomationProperties.SetAutomationId(_addNote,"AddProjectNote");
         DockPanel.SetDock(_addNote,Dock.Right); title.Children.Add(_addNote);
-        var heading = NotesText("便签",17);
+        var heading = NotesText("便签与待办",15);
         heading.FontWeight = FontWeights.SemiBold;
         heading.Foreground = (Brush)FindResource("Ink");
-        title.Children.Add(heading);
+        var copy = new StackPanel { VerticalAlignment = VerticalAlignment.Center };
+        copy.Children.Add(heading);
+        var caption = NotesText("想法，也放在一处",11);
+        caption.Foreground = Brush("TextSecondaryBrush");
+        copy.Children.Add(caption);
+        title.Children.Add(copy);
         NotesHost.Children.Add(title);
         var projects = new DockPanel { Margin = new Thickness(14,0,12,0) }; Grid.SetRow(projects,1);
-        var manage = NotesButton("⋯",b=>ProjectManagement(b));manage.ToolTip="分类管理"; DockPanel.SetDock(manage,Dock.Right); projects.Children.Add(manage);
+        var manage = NotesButton("⋯",b=>ProjectManagement(b));manage.ToolTip="分类管理";
+        AutomationProperties.SetName(manage,"分类管理");
+        manage.Content=DesignGlyphs.Path(DesignGlyphs.More);
+        manage.Width=32;manage.Height=32;manage.Padding=new Thickness(0);DockPanel.SetDock(manage,Dock.Right); projects.Children.Add(manage);
         _notesArchiveButton = NotesButton("查看归档", _ => ToggleNotesArchive());
         AutomationProperties.SetAutomationId(_notesArchiveButton, "NotesArchive");
         DockPanel.SetDock(_notesArchiveButton, Dock.Right);
         projects.Children.Add(_notesArchiveButton);
         _addNoteProject = NotesButton("＋ 新建分类", _ => NewNoteProject());
+        _addNoteProject.Content=DesignGlyphs.Path(DesignGlyphs.Add);
+        _addNoteProject.Width=32;_addNoteProject.Height=32;_addNoteProject.Padding=new Thickness(0);
+        _addNoteProject.ToolTip="新建分类";
         AutomationProperties.SetName(_addNoteProject, "新建分类");
         DockPanel.SetDock(_addNoteProject, Dock.Right);
         projects.Children.Add(_addNoteProject);
@@ -71,19 +77,19 @@ public partial class MainWindow
         projects.Children.Add(_projectScroll); NotesHost.Children.Add(projects);
         var body=new Grid { Margin=new Thickness(16,8,16,0) }; Grid.SetRow(body,2);
         body.RowDefinitions.Add(new(){Height=GridLength.Auto});body.RowDefinitions.Add(new(){Height=GridLength.Auto});body.RowDefinitions.Add(new());
-        _noteSearch=new TextBox { FontSize=12,Padding=new Thickness(9,7,9,7),Margin=new Thickness(0,0,0,8), Height=34 };
+        _noteSearch=new TextBox { FontSize=13,Padding=new Thickness(9,7,9,7),Margin=new Thickness(0,0,0,8), Height=34 };
         AutomationProperties.SetName(_noteSearch,"搜索当前分类的记录");
         TrackComposition(_noteSearch);
         _noteSearch.TextChanged+=(_,_)=>{if(_renderingNotes||NoteProject is null)return;NoteProject.Search=_noteSearch.Text;_notesSearchHint.Visibility=_noteSearch.Text.Length==0?Visibility.Visible:Visibility.Collapsed;NotesChanged();_notesSearch.Stop();_notesSearch.Start();};
-        _notesSearchLayer=new Grid();_notesSearchLayer.Children.Add(_noteSearch);_notesSearchHint=NotesText("搜索当前分类的记录…",12);_notesSearchHint.Margin=new Thickness(10,0,10,8);_notesSearchHint.IsHitTestVisible=false;_notesSearchHint.Foreground=Brush("#8998A6");_notesSearchLayer.Children.Add(_notesSearchHint);body.Children.Add(_notesSearchLayer);
+        _notesSearchLayer=new Grid();_notesSearchLayer.Children.Add(_noteSearch);_notesSearchHint=NotesText("搜索当前分类的记录…",12);_notesSearchHint.Margin=new Thickness(10,0,10,8);_notesSearchHint.IsHitTestVisible=false;_notesSearchHint.Foreground=Brush("TextSecondaryBrush");_notesSearchLayer.Children.Add(_notesSearchHint);body.Children.Add(_notesSearchLayer);
         _notesCounts=NotesText("",11);AutomationProperties.SetName(_notesCounts,"分类记录统计");_notesCounts.Margin=new Thickness(0,0,0,8);_notesCounts.TextWrapping=TextWrapping.NoWrap;_notesCounts.TextTrimming=TextTrimming.CharacterEllipsis;Grid.SetRow(_notesCounts,1);body.Children.Add(_notesCounts);
         _noteCards=new StackPanel(); _notesScroll=new ScrollViewer { Content=_noteCards, VerticalScrollBarVisibility=ScrollBarVisibility.Auto, HorizontalScrollBarVisibility=ScrollBarVisibility.Disabled };
         _notesScroll.ScrollChanged+=(_,e)=>{if(e.VerticalChange==0)return;_shutter.InvalidateSnapshot();if(!_renderingNotes&&!_showNotesArchive&&NoteProject is not null){NoteProject.Scroll=_notesScroll.VerticalOffset;NotesChanged();}};
         Grid.SetRow(_notesScroll,2);body.Children.Add(_notesScroll);NotesHost.Children.Add(body);
-        var footer=new DockPanel { Margin=new Thickness(12,0,12,0) };Grid.SetRow(footer,3);
+        var footer=new DockPanel { Margin=new Thickness(12,0,12,0) };
         var retry=NotesButton("重试",_=>FlushNotes());DockPanel.SetDock(retry,Dock.Right);footer.Children.Add(retry);
-        var export=NotesButton("导出",_=>ExportNotes());DockPanel.SetDock(export,Dock.Right);footer.Children.Add(export);
-        _notesStatus=NotesText("已保存",10);_notesStatus.TextTrimming=TextTrimming.CharacterEllipsis;footer.Children.Add(_notesStatus);NotesHost.Children.Add(footer);
+        var export=NotesButton("导出 Markdown",_=>ExportNotes());DockPanel.SetDock(export,Dock.Right);footer.Children.Add(export);
+        _notesStatus=NotesText("已保存到本地",11);_notesStatus.Foreground=Brush("TextSecondaryBrush");_notesStatus.TextTrimming=TextTrimming.CharacterEllipsis;footer.Children.Add(_notesStatus);var footerSurface=new Border{Background=Brush("SurfaceSubtleBrush"),BorderBrush=Brush("LineBrush"),BorderThickness=new Thickness(0,1,0,0),CornerRadius=new CornerRadius(0,0,17,0),Child=footer};Grid.SetRow(footerSurface,3);NotesHost.Children.Add(footerSurface);
         _notesSave.Tick+=(_,_)=>{_notesSave.Stop();FlushNotes(false);};
         _notesDeadline.Tick+=(_,_)=>{_notesDeadline.Stop();FlushNotes(false);};
         _notesSearch.Tick+=(_,_)=>{if(_notesComposing||_noteDragHandle is not null)return;_notesSearch.Stop();RenderNoteCards();};
@@ -124,7 +130,7 @@ public partial class MainWindow
         if(_notesComposing){_notesStatus.Text="请先确认输入法文字，再完成操作";return false;}
         if(!_notesDirty)return true;
         _notesSave.Stop();_notesDeadline.Stop();
-        try{NotesStore.Commit(NotesDraft);_notesDirty=false;_notesStatus.Text=(NoteProject?.Name??"便签")+" · 已保存";_notesStatus.ToolTip=null;return true;}
+        try{NotesStore.Commit(NotesDraft);_notesDirty=false;_notesStatus.Text=(NoteProject?.Name??"便签")+" · 已保存到本地";_notesStatus.ToolTip=null;return true;}
         catch(Exception ex){_notesStatus.Text="保存失败 · 草稿已保留，请重试或导出";_notesStatus.ToolTip=ex.Message;
             if(showError){_interactions++;try{UiDialogs.Show(this,"便签保存失败，草稿仍保留在当前窗口。请重试或导出后再操作。\n"+ex.Message,"便签保存失败");}finally{_interactions--;}}return false;}
     }
@@ -177,8 +183,10 @@ public partial class MainWindow
             foreach(var project in NotesDraft.Projects.Where(p=>!p.Archived || p.Id==NotesDraft.ActiveProject))
             {
                 var b=NotesButton(project.Name+(project.Archived?"（归档）":""),_=>SelectNoteProject(project.Id));b.Content=new TextBlock{Text=project.Name+(project.Archived?"（归档）":""),TextTrimming=TextTrimming.CharacterEllipsis};b.MaxWidth=140;b.ToolTip=project.Name+" · 右键管理分类";
-                b.Background=project.Id==NotesDraft.ActiveProject?Brush("#DDF2FF"):Brushes.Transparent;
-                b.Foreground=Brush("#0877BE");b.Margin=new Thickness(0,0,4,0);
+                b.Background=project.Id==NotesDraft.ActiveProject?Brush("SelectionBrush"):Brushes.Transparent;
+                b.Foreground=Brush(project.Id==NotesDraft.ActiveProject?"AccentInkBrush":"TextSecondaryBrush");b.Margin=new Thickness(0,0,4,0);
+                b.Style=(Style)FindResource("CategoryTab");
+                Selector.SetIsSelected(b,project.Id==NotesDraft.ActiveProject);
                 AutomationProperties.SetAutomationId(b,"Project-"+project.Id);
                 if (!project.Archived) EnableNoteProjectDrag(b, project);
                 b.MouseRightButtonUp+=(_,e)=>{e.Handled=true;NoteProjectMenu(b,project);};_projectTabs.Children.Add(b);
@@ -187,7 +195,7 @@ public partial class MainWindow
             _noteSearch.IsEnabled=NoteProject is not null;
             _noteSearch.Text=NoteProject?.Search??"";_notesSearchHint.Text="搜索"+(NoteProject?.Name??"当前分类")+"的记录…";_notesSearchHint.Visibility=_noteSearch.Text.Length==0?Visibility.Visible:Visibility.Collapsed;_noteSearch.ToolTip="搜索"+(NoteProject?.Name??"当前分类")+"的记录";
             RenderNoteCards();UpdateNotesColumns();
-            _notesStatus.Text=(NoteProject?.Name??"便签")+(_notesDirty?" · 保存中…":" · 已保存");
+            _notesStatus.Text=(NoteProject?.Name??"便签")+(_notesDirty?" · 保存中…":" · 已保存到本地");
         }
         finally{_renderingNotes=false;}
         var offset=NoteProject?.Scroll??0;
@@ -281,7 +289,7 @@ public partial class MainWindow
             target.IsEnabled = editor is { IsReadOnly: false, Selection.IsEmpty: false };
             bool remove = target.IsEnabled && editor!.SelectionIsStruck();
             string action = remove ? "取消删除线" : "添加删除线";
-            target.Background = remove ? Brush("#DDF2FF") : Brushes.Transparent;
+            target.Background = remove ? Brush("SelectionBrush") : Brushes.Transparent;
             target.ToolTip = target.IsEnabled ? action : "选中文字后添加或取消删除线";
             AutomationProperties.SetName(target, action);
         }
@@ -331,7 +339,7 @@ public partial class MainWindow
     private void AddNoteCard(ProjectNote note, int number, bool readOnly)
     {
         var content=new StackPanel();
-        var border=new Border { Tag=note, CornerRadius=new CornerRadius(10),BorderBrush=Brush("#CDE5F6"),BorderThickness=new Thickness(1),Padding=new Thickness(10),Margin=new Thickness(0,0,0,10),Background=Brush("#F5FAFE"),Child=content };
+        var border=new Border { Tag=note, CornerRadius=new CornerRadius(10),BorderBrush=Brush("LineBrush"),BorderThickness=new Thickness(1),Padding=new Thickness(12),Margin=new Thickness(0,0,0,10),Background=Brush("SurfaceBrush"),Child=content };
         var header=new DockPanel();var menu=NotesButton("···",b=>NoteCardMenu(b,note));AutomationProperties.SetName(menu,"便签操作");DockPanel.SetDock(menu,Dock.Right);header.Children.Add(menu);
         string metadata = note.ModifiedUtc.ToLocalTime().ToString("MM月dd日 HH:mm");
         if (note.Favorite) metadata += " · 常用";
@@ -339,7 +347,7 @@ public partial class MainWindow
         content.Children.Add(NoteOrderBar(note, number, metadata, readOnly));
         var title = NoteTitleEditor(note, readOnly);
         title.FontWeight = FontWeights.SemiBold;
-        title.FontSize = 14;
+        title.FontSize = 13;
         AutomationProperties.SetName(title, "记录标题");
         if (!readOnly) title.ToolTip = "点击编辑便签名称";
         header.Children.Add(title);
@@ -351,7 +359,7 @@ public partial class MainWindow
                 MinHeight = 65,
                 IsReadOnly = readOnly,
                 IsInactiveSelectionHighlightEnabled = !readOnly,
-                Foreground = Brush("#35566E")
+                Foreground = Brush("TextPrimaryBrush")
             };
             AutomationProperties.SetName(body, "文字记录正文");
             ConfigureNoteEditor(body, note, "body", null);

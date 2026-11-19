@@ -20,7 +20,17 @@ public partial class App : Application
     {
         try
         {
-            var game=Array.IndexOf(e.Args,"--icon-billiards");if(game>=0){_=BilliardsHost.Run(e.Args,game);return;}
+            ThemePalette.Apply("light");
+            var game=Array.IndexOf(e.Args,"--icon-billiards");
+            if(game>=0)
+            {
+                int theme = Array.IndexOf(e.Args, "--theme");
+                string mode = theme >= 0 && theme + 1 < e.Args.Length && e.Args[theme + 1] is "dark" or "system"
+                    ? e.Args[theme + 1] : "light";
+                ThemePalette.Apply(mode);
+                ThemePalette.Watch(this);
+                _=BilliardsHost.Run(e.Args,game);return;
+            }
             bool interactiveVerification = e.Args.Any(arg =>
                 (arg.EndsWith("-self-test", StringComparison.Ordinal) && arg != "--storage-self-test")
                 || arg is "--billiards-parent-probe" or "--billiards-perf-test" or "--verification-marker");
@@ -96,8 +106,10 @@ public partial class App : Application
             Options.PersistForUpdate();
             Store = new NookStore(dataDirectory, desktops, Recycle,storeAllPayloads:!IsSandbox||File.Exists(Path.Combine(dataDirectory,"storage.json")));
             UiMotion.Configure(Options.MotionMode);
+            ThemePalette.Apply(Options.ThemeMode);
+            ThemePalette.Watch(this);
             var window = new MainWindow(deferNoteVisuals: e.Args.Contains("--autostart")); MainWindow = window;
-            if(!IsSandbox)Dispatcher.BeginInvoke(()=>{try{BrandMigration.Refresh(Store.DataDirectory,refreshShortcuts:false);}catch(Exception){window.SetStatus("入口图标刷新未完成，可稍后重新打开轻匣重试。");}},System.Windows.Threading.DispatcherPriority.ContextIdle);
+            if(!IsSandbox)Dispatcher.BeginInvoke(()=>{try{BrandMigration.Refresh(Store.DataDirectory);}catch(Exception){window.SetStatus("入口图标刷新未完成，可稍后重新打开一处重试。");}},System.Windows.Threading.DispatcherPriority.ContextIdle);
             window.KeepOpenForVerification=IsSandbox&&e.Args.Contains("--keep-open-verification");
             if(e.Args.Contains("--autostart")){window.ShowActivated=false;window.WindowState=WindowState.Minimized;}
             window.Show();
@@ -138,7 +150,7 @@ public partial class App : Application
             if (e.Args.Contains("--category-self-test")) Dispatcher.BeginInvoke(async () => await CategoryDeletionVerification.Run(window, root), System.Windows.Threading.DispatcherPriority.Loaded);
 #endif
         }
-        catch (Exception ex) { MessageBox.Show("轻匣暂时无法打开。原文件和数据均保留。\n\n" + ex.Message, "轻匣", MessageBoxButton.OK, MessageBoxImage.Error); Shutdown(1); }
+        catch (Exception ex) { MessageBox.Show("一处暂时无法打开。原文件和数据均保留。\n\n" + ex.Message, "一处", MessageBoxButton.OK, MessageBoxImage.Error); Shutdown(1); }
     }
     private static async Task RelocateAfterHandoff(MainWindow window,string plan)
     {

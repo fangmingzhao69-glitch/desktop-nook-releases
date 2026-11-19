@@ -81,7 +81,8 @@ public partial class MainWindow
                     IsChecked = task.Done,
                     VerticalAlignment = VerticalAlignment.Top,
                     Margin = new Thickness(2, 0, 6, 0),
-                    Padding = new Thickness(6, 8, 6, 2),
+                    Padding = new Thickness(6, 8, 6, 8),
+                    MinHeight = 32,
                     IsEnabled = !readOnly
                 };
                 AutomationProperties.SetName(check, "完成待办");
@@ -92,7 +93,7 @@ public partial class MainWindow
                 {
                     IsReadOnly = readOnly,
                     IsInactiveSelectionHighlightEnabled = !readOnly,
-                    Foreground = Brush(task.Done ? "#8998A6" : "#35566E"),
+                    Foreground = Brush(task.Done ? "TextSecondaryBrush" : "TextPrimaryBrush"),
                     ToolTip = readOnly ? null : "粘贴多行文字可自动拆成多条待办"
                 };
                 editor.SetDone(task.Done);
@@ -132,7 +133,7 @@ public partial class MainWindow
                     }
 
                     editor.SetDone(task.Done);
-                    editor.Foreground = Brush(task.Done ? "#8998A6" : "#35566E");
+                    editor.Foreground = Brush(task.Done ? "TextSecondaryBrush" : "TextPrimaryBrush");
                     int position = note.TasksInDisplayOrder().TakeWhile(other => other != task).Count();
                     if (rows.Children.IndexOf(row) != position)
                     {

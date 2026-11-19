@@ -152,14 +152,16 @@ public static class UiMotion
         bool pressed=control is ButtonBase button&&button.IsPressed;
         if(GetFeedback(control)=="primary")
         {
-            double to=!control.IsEnabled?0:pressed ? .28 : control.IsMouseOver ? .18 : 0,from=state.Surface.Opacity;
+            double to=control.IsEnabled&&(pressed||control.IsMouseOver)?1:0,from=state.Surface.Opacity;
+            if(to>0)state.Surface.Background=ThemePalette.Brush(pressed?"PrimaryPressedBrush":"PrimaryHoverBrush");
             Stop(state.Surface,UIElement.OpacityProperty);state.Surface.Opacity=to;
             if(animate&&Enabled&&Math.Abs(from-to)>.001)Animate(state.Surface,UIElement.OpacityProperty,new DoubleAnimation(from,to,TimeSpan.FromMilliseconds(140)){FillBehavior=FillBehavior.Stop});
             return;
         }
         bool selected=control is ToggleButton {IsChecked:true};
         var baseColor=GetFeedback(control) is "tile" or "icon"?Colors.Transparent:control.Background is SolidColorBrush background?background.Color:Colors.Transparent;
-        Color toColor=selected?Color.FromRgb(221,242,255):!control.IsEnabled?baseColor:pressed?Color.FromRgb(208,233,249):control.IsMouseOver?Color.FromRgb(225,243,255):baseColor;
+        Color toColor=selected?ThemePalette.Brush("SelectionBrush").Color:!control.IsEnabled?baseColor:
+            pressed?ThemePalette.Brush("SelectionBrush").Color:control.IsMouseOver?ThemePalette.Brush("SelectionHoverBrush").Color:baseColor;
         var brush=state.Brush!;var fromColor=brush.Color;
         Stop(brush,SolidColorBrush.ColorProperty);brush.Color=toColor;
         if(animate&&Enabled&&fromColor!=toColor)Animate(brush,SolidColorBrush.ColorProperty,new ColorAnimation(fromColor,toColor,TimeSpan.FromMilliseconds(selected?160:140)){FillBehavior=FillBehavior.Stop});

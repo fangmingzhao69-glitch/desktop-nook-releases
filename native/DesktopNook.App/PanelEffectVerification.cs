@@ -71,18 +71,19 @@ internal static class PanelEffectVerification
 
         async Task VerifyMenu()
         {
-            var more = Find<Button>(owner.NotesHost)
-                .Single(button => AutomationProperties.GetName(button) == "更多操作");
-            more.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
-            var menu = owner.LastMenu ?? throw new InvalidOperationException("没有打开更多菜单。");
-            var motion = menu.Items.OfType<MenuItem>().Single(item => Equals(item.Header, "动画效果"));
-            var styles = motion.Items.OfType<MenuItem>().Single(item => Equals(item.Header, "开合样式"));
-            var entries = styles.Items.OfType<MenuItem>().ToArray();
-            check(entries.Select(item => item.Header as string).SequenceEqual(PanelEffectFrame.Choices.Select(style => style.Label)),
-                "开合样式菜单包括两份演示的十种效果和百叶翻转");
-            menu.IsOpen = false;
-            entries.Single(item => Equals(item.Header, "胶囊生长")).RaiseEvent(new RoutedEventArgs(MenuItem.ClickEvent));
-            await owner.Dispatcher.InvokeAsync(() => { }, DispatcherPriority.ContextIdle);
+            var settings = new SettingsWindow(owner);
+            settings.SelectPage("外观");
+            try
+            {
+                settings.Show();
+                settings.UpdateLayout();
+                var styles = Find<ComboBox>(settings).Single(box => AutomationProperties.GetAutomationId(box) == "Settings-PanelStyle");
+                check(styles.Items.Cast<string>().SequenceEqual(PanelEffectFrame.Choices.Select(style => style.Label)),
+                    "外观设置包括两份演示的十种效果和百叶翻转");
+                styles.SelectedItem = "胶囊生长";
+                await owner.Dispatcher.InvokeAsync(() => { }, DispatcherPriority.ContextIdle);
+            }
+            finally { settings.Close(); }
             App.Options.PersistForUpdate();
             var reopened = new StartupOptions(preferencesPath: Path.Combine(App.Store.DataDirectory, "preferences.json"));
             check(owner.PanelMotion.Style == PanelEffect.Capsule && reopened.PanelStyle == PanelEffect.Capsule,

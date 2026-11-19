@@ -59,7 +59,7 @@ public partial class MainWindow
             .Where(bounds => !bounds.IsEmpty && bounds.Width >= 2 && bounds.Height >= 2).ToArray());
     }
 
-    private void SelectPanelEffect(PanelEffect effect)
+    internal void SelectPanelEffect(PanelEffect effect)
     {
         App.Options.PanelStyle = effect;
         _shutter.Style = effect;
