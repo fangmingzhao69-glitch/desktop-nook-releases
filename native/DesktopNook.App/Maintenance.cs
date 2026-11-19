@@ -9,7 +9,16 @@ internal static class Maintenance
     public static int Run(string[] args,string root,string signature,bool sandbox)
     {
         var command=args.Single(a=>a.StartsWith("--maintenance="))[14..];
-        if(command=="shortcut"){if(!sandbox){ShortcutInstaller.Install();new StartupOptions().RefreshEnabledPath();}return 0;}
+        if(command=="shortcut")
+        {
+            if(!sandbox)
+            {
+                ShortcutInstaller.Install();
+                new StartupOptions().RefreshEnabledPath();
+                BrandMigration.RefreshAfterUpgrade(root);
+            }
+            return 0;
+        }
         if(command=="remove-shortcut"){if(!sandbox)ShortcutInstaller.RemoveOwned();return 0;}
         using var mutex=new Mutex(false,"Local\\DesktopNook-"+signature);bool owned=false;
         try

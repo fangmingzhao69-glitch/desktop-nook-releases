@@ -25,8 +25,8 @@ internal static class NativeVerification
                 var options=new StartupOptions(optionKey+@"\Run",optionKey+@"\Settings");
                 if(options.Enabled)throw new Exception("自启默认状态异常。");
                 using(var unrelated=Registry.CurrentUser.CreateSubKey(optionKey+@"\Run"))unrelated.SetValue("OtherEntry","keep");
-                options.SetEnabled(true,@"C:\验证 空格\一处.exe");
-                if(!options.Enabled||options.Command!="\"C:\\验证 空格\\一处.exe\" --autostart")throw new Exception("自启路径引用异常。");
+                options.SetEnabled(true,@"C:\验证 空格\随手.exe");
+                if(!options.Enabled||options.Command!="\"C:\\验证 空格\\随手.exe\" --autostart")throw new Exception("自启路径引用异常。");
                 options.CloseEndsProcess=false;if(new StartupOptions(optionKey+@"\Run",optionKey+@"\Settings").CloseEndsProcess)throw new Exception("关闭行为设置未保留。");
                 options.SetEnabled(false);using var check=Registry.CurrentUser.OpenSubKey(optionKey+@"\Run");if(options.Enabled||check?.GetValue("OtherEntry") as string!="keep")throw new Exception("关闭自启影响其他入口。");
                 checks.Add("Startup option persists quoted command, can be disabled and preserves other entries");
@@ -83,7 +83,7 @@ internal static class NativeVerification
             await OleDragVerification.Run(window);checks.Add("Real mouse and OLE roundtrip between owned windows using isolated desktop directory");
             await OleDragVerification.Run(window,"file");checks.Add("Regular document uses actual native OLE drag in and out");
             await OleDragVerification.Run(window,"folder");checks.Add("Complete folder uses actual native OLE drag in and out");
-            var minimize=FindNamedButton(window,"最小化一处");minimize.RaiseEvent(new RoutedEventArgs(System.Windows.Controls.Button.ClickEvent));
+            var minimize=FindNamedButton(window,"最小化随手");minimize.RaiseEvent(new RoutedEventArgs(System.Windows.Controls.Button.ClickEvent));
             await Task.Delay(650);if(window.WindowState!=WindowState.Minimized)throw new Exception("最小化按钮未收起。");window.ShowPanel();checks.Add("Minimize button preserves process and collection state");
             window.Render();window.SetStatus("隔离验证模式 · 不操作真实桌面");
             await window.Dispatcher.InvokeAsync(()=>{},DispatcherPriority.ContextIdle);
@@ -100,7 +100,7 @@ internal static class NativeVerification
             if(secondary.Left!=-1800 || Math.Abs(secondary.Width-WindowSizePreference.BaseWidth*1.5)>1)throw new Exception("副屏 DPI 换算校验失败。");
             checks.Add("Project notes surfaces and taskbar alignment, screen edges and 150 percent DPI math");
             var actualAnchor=await TaskbarPlacement.FindAsync();
-            if(actualAnchor is null)throw new Exception("本机任务栏未找到一处按钮。");
+            if(actualAnchor is null)throw new Exception("本机任务栏未找到随手按钮。");
             File.WriteAllText(Path.Combine(root,"taskbar-anchor.json"),JsonSerializer.Serialize(new{button=actualAnchor.Button.ToString(),tray=actualAnchor.Tray.ToString(),work=actualAnchor.Work.ToString(),dpi=actualAnchor.Dpi}));
             checks.Add("Live taskbar button bounds discovered using application identity");
             var bitmap=new RenderTargetBitmap((int)Math.Ceiling(window.ActualWidth),(int)Math.Ceiling(window.ActualHeight),96,96,PixelFormats.Pbgra32);bitmap.Render(window);

@@ -109,7 +109,15 @@ public partial class App : Application
             ThemePalette.Apply(Options.ThemeMode);
             ThemePalette.Watch(this);
             var window = new MainWindow(deferNoteVisuals: e.Args.Contains("--autostart")); MainWindow = window;
-            if(!IsSandbox)Dispatcher.BeginInvoke(()=>{try{BrandMigration.Refresh(Store.DataDirectory);}catch(Exception){window.SetStatus("入口图标刷新未完成，可稍后重新打开一处重试。");}},System.Windows.Threading.DispatcherPriority.ContextIdle);
+            if(!IsSandbox)Dispatcher.BeginInvoke(() =>
+            {
+                try
+                {
+                    if (resumeIndex >= 0) BrandMigration.RefreshAfterUpgrade(Store.DataDirectory);
+                    else BrandMigration.Refresh(Store.DataDirectory);
+                }
+                catch (Exception) { window.SetStatus("入口图标刷新未完成，可通过更多菜单刷新程序入口。"); }
+            }, System.Windows.Threading.DispatcherPriority.ContextIdle);
             window.KeepOpenForVerification=IsSandbox&&e.Args.Contains("--keep-open-verification");
             if(e.Args.Contains("--autostart")){window.ShowActivated=false;window.WindowState=WindowState.Minimized;}
             window.Show();
@@ -150,7 +158,7 @@ public partial class App : Application
             if (e.Args.Contains("--category-self-test")) Dispatcher.BeginInvoke(async () => await CategoryDeletionVerification.Run(window, root), System.Windows.Threading.DispatcherPriority.Loaded);
 #endif
         }
-        catch (Exception ex) { MessageBox.Show("一处暂时无法打开。原文件和数据均保留。\n\n" + ex.Message, "一处", MessageBoxButton.OK, MessageBoxImage.Error); Shutdown(1); }
+        catch (Exception ex) { MessageBox.Show("随手暂时无法打开。原文件和数据均保留。\n\n" + ex.Message, "随手", MessageBoxButton.OK, MessageBoxImage.Error); Shutdown(1); }
     }
     private static async Task RelocateAfterHandoff(MainWindow window,string plan)
     {

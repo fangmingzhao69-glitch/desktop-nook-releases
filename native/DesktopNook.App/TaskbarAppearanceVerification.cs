@@ -141,7 +141,7 @@ internal static class TaskbarAppearanceVerification
                     TaskbarAppearanceSettings.Scenes.Skip(1).All(scene =>
                         !document.RootElement.GetProperty(scene.Key).GetProperty("enabled").GetBoolean()) &&
                     uniform.ProfileFor("maximized_window_appearance").Enabled,
-                    "统一模糊在组件侧关闭场景覆盖，最大化透明仍保存在一处设置");
+                    "统一模糊在组件侧关闭场景覆盖，最大化透明仍保存在随手设置");
             }
             var maximizedPreview = reproduction.ForPreview("maximized_window_appearance");
             var maximizedUniform = reproduction.ForUniformAppearance("maximized_window_appearance");
@@ -151,7 +151,7 @@ internal static class TaskbarAppearanceVerification
                     .ForPreview("maximized_window_appearance").ShowLine == false,
                 "预览和设为统一外观均保留来源场景的细线、Peek 与模糊默认值，显式隐藏不被改写");
             Check(clear.ProfileFor("task_view_opened_appearance").Enabled == false,
-                "现有一处配置在升级后不会自动开启未设置的场景");
+                "现有随手配置在升级后不会自动开启未设置的场景");
             TaskbarAppearanceStore.WriteComponentSettings(launchSettings, uniform with { FollowScenes = true });
             using (var document = JsonDocument.Parse(File.ReadAllText(launchSettings)))
             {
@@ -211,7 +211,7 @@ internal static class TaskbarAppearanceVerification
                 }
             }
 
-            Check(MainWindow.CurrentVersionLabel == "v0.19.0", "正式候选在更新菜单显示完整版本");
+            Check(MainWindow.CurrentVersionLabel == "v0.19.1", "正式候选在更新菜单显示完整版本");
 
             var originalExe = Environment.ProcessPath!;
             var target = Path.Combine(root, "update-target.exe");

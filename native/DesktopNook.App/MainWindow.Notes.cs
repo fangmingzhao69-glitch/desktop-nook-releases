@@ -50,7 +50,7 @@ public partial class MainWindow
         heading.Foreground = (Brush)FindResource("Ink");
         var copy = new StackPanel { VerticalAlignment = VerticalAlignment.Center };
         copy.Children.Add(heading);
-        var caption = NotesText("想法，也放在一处",11);
+        var caption = NotesText("想法，随手记",11);
         caption.Foreground = Brush("TextSecondaryBrush");
         copy.Children.Add(caption);
         title.Children.Add(copy);

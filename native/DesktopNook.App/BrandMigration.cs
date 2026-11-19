@@ -7,6 +7,14 @@ namespace DesktopNook.App;
 
 internal static class BrandMigration
 {
+    internal static void RefreshAfterUpgrade(string dataRoot)
+    {
+        var roaming = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData);
+        string? pinnedFolder = string.IsNullOrEmpty(roaming) ? null :
+            Path.Combine(roaming, "Microsoft", "Internet Explorer", "Quick Launch", "User Pinned", "TaskBar");
+        Refresh(dataRoot, pinnedFolder: pinnedFolder);
+    }
+
     internal static void Refresh(string dataRoot,string? startFolder=null,string? pinnedFolder=null,string registryKey=@"Software\Microsoft\Windows\CurrentVersion\Uninstall\DesktopNook",string? iconFolder=null,bool refreshShortcuts=true)
     {
         var program=Environment.ProcessPath??throw new IOException("无法定位程序。");
@@ -21,7 +29,7 @@ internal static class BrandMigration
         {
             // Icon identity changes with artwork, not every application release.
             var artwork=Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(bytes))[..16];
-            Directory.CreateDirectory(folder);var file=Path.Combine(folder,"Yichu-"+artwork+".ico");
+            Directory.CreateDirectory(folder);var file=Path.Combine(folder,"Suishou-"+artwork+".ico");
             if(!File.Exists(file)||!File.ReadAllBytes(file).SequenceEqual(bytes))File.WriteAllBytes(file,bytes);
             // Shell cache brokers need an unencrypted public icon. Do not decrypt or
             // relax protection on any folder/file; choose a different cache instead.
@@ -52,7 +60,7 @@ internal static class BrandMigration
                 try{return string.Equals((string)entry.TargetPath,program,StringComparison.OrdinalIgnoreCase);}
                 finally{Marshal.FinalReleaseComObject(entry);}
             }
-            var current=Path.Combine(startFolder,"一处.lnk");
+            var current=Path.Combine(startFolder,"随手.lnk");
             bool legacy = ShortcutInstaller.LegacyNames.Any(name => Owned(Path.Combine(startFolder, name)));
             if(refreshShortcuts&&(legacy||Owned(current))&&(!File.Exists(current)||Owned(current)))
             {
@@ -65,11 +73,13 @@ internal static class BrandMigration
                 dynamic entry=shell.CreateShortcut(link);
                 try
                 {
-                    if(string.Equals((string)entry.IconLocation,iconLocation,StringComparison.OrdinalIgnoreCase)&&(string)entry.Description=="一处")return;
+                    if(string.Equals((string)entry.IconLocation,iconLocation,StringComparison.OrdinalIgnoreCase)&&(string)entry.Description=="随手")return;
                     var arguments=(string)entry.Arguments;
                     // Preserve target, arguments, working directory, file name and pin order.
-                    entry.IconLocation=iconLocation;entry.Description="一处";entry.Save();
-                    ShortcutInstaller.SetIdentity(link,iconLocation,program,arguments);changed++;
+                    entry.IconLocation=iconLocation;entry.Description="随手";entry.Save();
+                    ShortcutInstaller.SetIdentity(link,iconLocation,program,arguments);
+                    ShellIntegration.RefreshShortcut(link);
+                    changed++;
                 }
                 finally{Marshal.FinalReleaseComObject(entry);}
             }
@@ -79,8 +89,8 @@ internal static class BrandMigration
         {
             if(string.Equals(key?.GetValue("InstallLocation") as string,Path.GetDirectoryName(program),StringComparison.OrdinalIgnoreCase))
             {
-                if(key!.GetValue("DisplayName") as string!="一处"||key.GetValue("DisplayIcon") as string!=iconLocation)changed++;
-                key.SetValue("DisplayName","一处");key.SetValue("DisplayIcon",iconLocation);key.SetValue("DisplayVersion",version);
+                if(key!.GetValue("DisplayName") as string!="随手"||key.GetValue("DisplayIcon") as string!=iconLocation)changed++;
+                key.SetValue("DisplayName","随手");key.SetValue("DisplayIcon",iconLocation);key.SetValue("DisplayVersion",version);
             }
         }
         if(changed>0)ShellIntegration.RefreshDesktop();

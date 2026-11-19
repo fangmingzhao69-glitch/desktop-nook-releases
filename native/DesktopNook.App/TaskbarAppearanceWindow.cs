@@ -362,7 +362,7 @@ internal sealed class TaskbarAppearanceWindow : Window
         if (!CanApply(appearance)) return;
         if (!appearance.UsesComponent && !_session.Running)
         {
-            _message.Text = "当前没有由一处应用的外观。";
+            _message.Text = "当前没有由随手应用的外观。";
             return;
         }
         await _session.PreviewAsync(appearance, _downloadApproved);
@@ -378,7 +378,7 @@ internal sealed class TaskbarAppearanceWindow : Window
         await _session.ApplyAsync(appearance, _downloadApproved);
         _draft = _session.Saved;
         _previewTimer.Stop();
-        _message.Text = !appearance.Enabled ? "已保存，一处的任务栏外观已关闭。"
+        _message.Text = !appearance.Enabled ? "已保存，随手的任务栏外观已关闭。"
             : _activeScene.Key != TaskbarAppearanceSettings.DesktopScene &&
                 (!appearance.FollowScenes || !appearance.ProfileFor(_activeScene.Key).Enabled)
                 ? "已保存此场景的设置。启用场景切换与此场景后，触发时才会显示。"
@@ -401,7 +401,7 @@ internal sealed class TaskbarAppearanceWindow : Window
         await _session.ApplyAsync(_session.Saved with { Enabled = false }, allowDownload: false);
         _previewTimer.Stop();
         LoadFields(_session.Saved);
-        _message.Text = "一处的任务栏外观已关闭。";
+        _message.Text = "随手的任务栏外观已关闭。";
     }
 
     private async Task RunAsync(Func<Task> operation)

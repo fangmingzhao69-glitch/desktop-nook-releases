@@ -72,7 +72,7 @@ internal static class DataPaths
         try
         {
             try{owned=mutex.WaitOne(0);}catch(AbandonedMutexException){owned=true;}
-            if(!owned)throw new IOException("请先正常退出一处，未在运行期间迁移数据。");
+            if(!owned)throw new IOException("请先正常退出随手，未在运行期间迁移数据。");
             var desktops=new[]{Environment.GetFolderPath(Environment.SpecialFolder.DesktopDirectory),Environment.GetFolderPath(Environment.SpecialFolder.CommonDesktopDirectory)};
             var receipt=Migrate(source,target,desktops,new WindowsRecycleBin());
             File.WriteAllText(report,JsonSerializer.Serialize(new{success=true,receipt},new JsonSerializerOptions{WriteIndented=true}));return 0;

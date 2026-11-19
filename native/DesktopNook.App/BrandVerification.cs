@@ -12,31 +12,45 @@ namespace DesktopNook.App;
 
 internal static class BrandVerification
 {
+    [DllImport("shell32.dll", CharSet = CharSet.Unicode, ExactSpelling = true)]
+    private static extern uint ExtractIconExW(string file, int index, [Out] IntPtr[] large, [Out] IntPtr[] small, uint count);
+
+    [DllImport("user32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool DestroyIcon(IntPtr icon);
+
     internal static async Task Run(MainWindow owner,string root,List<string> checks)
     {
         if(!App.IsSandbox)throw new InvalidOperationException("Brand checks require isolated data.");
-        if(owner.Title!="一处")throw new Exception("窗口名称未更新。");
+        if(owner.Title!="随手")throw new Exception("窗口名称未更新。");
         var info=FileVersionInfo.GetVersionInfo(Environment.ProcessPath!);
-        if(info.ProductName!="DesktopNook"||!(info.FileDescription??"").Contains("一处"))throw new Exception("显示名称或旧版更新兼容标识异常。");
+        if(info.ProductName!="DesktopNook"||!(info.FileDescription??"").Contains("随手"))throw new Exception("显示名称或旧版更新兼容标识异常。");
         using(var resource=Application.GetResourceStream(new Uri("pack://application:,,,/Assets/AppIcon.ico")).Stream)
         {
             var decoder=new IconBitmapDecoder(resource,BitmapCreateOptions.None,BitmapCacheOption.OnLoad);
             if(!new[]{16,20,24,32,40,48,64,96,128,256}.SequenceEqual(decoder.Frames.Select(f=>f.PixelWidth)))throw new Exception("图标尺寸不完整。");
         }
-        checks.Add("Yichu display name preserves DesktopNook update identity and ten native icon sizes");
+        checks.Add("Suishou display name preserves DesktopNook update identity and ten native icon sizes");
         var folder=Path.Combine(root,"brand-shortcuts");Directory.CreateDirectory(folder);
-        var legacy=Path.Combine(folder,"桌面小筑.lnk");
+        var legacy=Path.Combine(folder,"一处.lnk");
         var type=Type.GetTypeFromProgID("WScript.Shell")!;dynamic shell=Activator.CreateInstance(type)!;
         try
         {
             void Legacy(string target)
             {
                 dynamic link=shell.CreateShortcut(legacy);
-                try{link.TargetPath=target;link.Save();}finally{Marshal.FinalReleaseComObject(link);}
+                try{link.TargetPath=target;link.Arguments="--autostart";link.WorkingDirectory=root;link.Save();}finally{Marshal.FinalReleaseComObject(link);}
             }
             Legacy(Environment.ProcessPath!);
             var renamed=ShortcutInstaller.Install(folder);
-            if(Path.GetFileName(renamed)!="一处.lnk"||!File.Exists(renamed)||File.Exists(legacy))throw new Exception("同目标快捷方式未迁移。");
+            if(Path.GetFileName(renamed)!="随手.lnk"||!File.Exists(renamed)||File.Exists(legacy))throw new Exception("同目标快捷方式未迁移。");
+            dynamic startLink=shell.CreateShortcut(renamed);
+            try
+            {
+                if ((string)startLink.Arguments != "--autostart" || (string)startLink.WorkingDirectory != root)
+                    throw new Exception("开始菜单名称迁移丢失参数或工作目录。");
+            }
+            finally { Marshal.FinalReleaseComObject(startLink); }
             Legacy(Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.System),"cmd.exe"));
             ShortcutInstaller.Install(folder);
             if(!File.Exists(legacy))throw new Exception("错误移除了其他目标的快捷方式。");
@@ -52,14 +66,17 @@ internal static class BrandVerification
             {
                 using(var key=Microsoft.Win32.Registry.CurrentUser.CreateSubKey(reg))key.SetValue("InstallLocation",Path.GetDirectoryName(Environment.ProcessPath!)!);
                 var publicIcons=Path.Combine(root,"public-icon-cache");BrandMigration.Refresh(App.Store.DataDirectory,folder,pinned,reg,publicIcons);
-                string expectedIcon;using(var source=Application.GetResourceStream(new Uri("pack://application:,,,/Assets/AppIcon.ico")).Stream)expectedIcon=Path.Combine(publicIcons,"Yichu-"+Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(source))[..16]+".ico");
+                string expectedIcon;using(var source=Application.GetResourceStream(new Uri("pack://application:,,,/Assets/AppIcon.ico")).Stream)expectedIcon=Path.Combine(publicIcons,"Suishou-"+Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(source))[..16]+".ico");
+                if (!IconPixels(Environment.ProcessPath!).SequenceEqual(IconPixels(expectedIcon)))
+                    throw new Exception("Windows 从 EXE 提取的图标与入口使用的 ICO 不一致。");
+                checks.Add("Executable shell icon and refreshed shortcut ICO contain the same artwork");
                 dynamic updatedPin=shell.CreateShortcut(ownedPath);
                 try{if((string)updatedPin.TargetPath!=Environment.ProcessPath||(string)updatedPin.Arguments!=args||(string)updatedPin.WorkingDirectory!=root||(string)updatedPin.IconLocation!=expectedIcon+",0")throw new Exception("固定入口迁移未保留目标或参数。");updatedPin.IconLocation=Environment.ProcessPath+",0";updatedPin.Save();}finally{Marshal.FinalReleaseComObject(updatedPin);}
                 var pinBefore=LocalUpdater.Hash(ownedPath);var pinTime=File.GetLastWriteTimeUtc(ownedPath);var startBefore=LocalUpdater.Hash(renamed);
                 for(int n=0;n<5;n++)BrandMigration.Refresh(App.Store.DataDirectory,folder,pinned,reg,publicIcons,refreshShortcuts:false);
                 if(pinBefore!=LocalUpdater.Hash(ownedPath)||pinTime!=File.GetLastWriteTimeUtc(ownedPath)||startBefore!=LocalUpdater.Hash(renamed))throw new Exception("日常启动改写了任务栏或开始菜单入口。");
                 checks.Add("Five startup refreshes preserve pinned shortcut bytes/timestamp and start-menu identity even with an older icon reference");
-                if((File.GetAttributes(expectedIcon)&FileAttributes.Encrypted)!=0)throw new Exception("公开图标仍被 EFS 加密。");using(var key=Microsoft.Win32.Registry.CurrentUser.OpenSubKey(reg))if(key?.GetValue("DisplayName") as string!="一处")throw new Exception("安装显示名未迁移。");
+                if((File.GetAttributes(expectedIcon)&FileAttributes.Encrypted)!=0)throw new Exception("公开图标仍被 EFS 加密。");using(var key=Microsoft.Win32.Registry.CurrentUser.OpenSubKey(reg))if(key?.GetValue("DisplayName") as string!="随手")throw new Exception("安装显示名未迁移。");
                 if(LocalUpdater.Hash(otherPath)!=otherHash||!File.Exists(legacy)||LocalUpdater.Hash(Path.Combine(App.Store.DataDirectory,"state.json"))!=stateHash)throw new Exception("迁移影响了其他入口或收纳配置。");
             }
             finally{Microsoft.Win32.Registry.CurrentUser.DeleteSubKeyTree(reg,false);}
@@ -67,7 +84,7 @@ internal static class BrandVerification
         }
         finally{Marshal.FinalReleaseComObject(shell);}
         checks.Add("Start-menu rename migrates only matching legacy target and preserves unrelated links");
-        File.WriteAllText(Path.Combine(App.Store.DesktopRoots[0],"一处收纳示例.txt"),"isolated fixture");
+        File.WriteAllText(Path.Combine(App.Store.DesktopRoots[0],"随手收纳示例.txt"),"isolated fixture");
         var hash=LocalUpdater.Hash(Path.Combine(App.Store.DataDirectory,"state.json"));
         var collect=new CollectWindow(App.Store,App.Store.DefaultCategoryId){Owner=owner};
         try
@@ -127,6 +144,28 @@ internal static class BrandVerification
         finally{edit.Close();}
         if(hash!=LocalUpdater.Hash(Path.Combine(App.Store.DataDirectory,"state.json")))throw new Exception("预览弹窗修改了收纳配置。");
         checks.Add("Branded collect, checkboxes, category dropdown and rename dialog work without changing collection data");
+    }
+
+    private static byte[] IconPixels(string path)
+    {
+        var large = new IntPtr[1];
+        var small = new IntPtr[1];
+        ExtractIconExW(path, 0, large, small, 1);
+        try
+        {
+            if (large[0] == IntPtr.Zero) throw new IOException("无法提取图标：" + Path.GetFileName(path));
+            var source = System.Windows.Interop.Imaging.CreateBitmapSourceFromHIcon(large[0], Int32Rect.Empty,
+                BitmapSizeOptions.FromEmptyOptions());
+            var bitmap = new FormatConvertedBitmap(source, PixelFormats.Bgra32, null, 0);
+            var pixels = new byte[bitmap.PixelWidth * bitmap.PixelHeight * 4];
+            bitmap.CopyPixels(pixels, bitmap.PixelWidth * 4, 0);
+            return pixels;
+        }
+        finally
+        {
+            if (large[0] != IntPtr.Zero) DestroyIcon(large[0]);
+            if (small[0] != IntPtr.Zero && small[0] != large[0]) DestroyIcon(small[0]);
+        }
     }
     private static IEnumerable<T> Find<T>(DependencyObject parent) where T:DependencyObject
     {

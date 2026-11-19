@@ -1,7 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
     <OutputType>WinExe</OutputType><TargetFramework>net10.0-windows</TargetFramework><UseWPF>true</UseWPF>
-    <AssemblyName>DesktopNook</AssemblyName><RootNamespace>DesktopNook.App</RootNamespace><Version>0.19.0</Version><Product>DesktopNook</Product><Title>一处</Title><AssemblyTitle>一处</AssemblyTitle><Description>一处 — 让常用与灵感，都在一处。</Description>
+    <AssemblyName>DesktopNook</AssemblyName><RootNamespace>DesktopNook.App</RootNamespace><Version>0.19.1</Version><Product>DesktopNook</Product><Title>随手</Title><AssemblyTitle>随手</AssemblyTitle><Description>随手 — 让常用随手取，灵感随手记。</Description>
     <ApplicationIcon>Assets\AppIcon.ico</ApplicationIcon><ApplicationManifest>app.manifest</ApplicationManifest>
   </PropertyGroup>
   <PropertyGroup>

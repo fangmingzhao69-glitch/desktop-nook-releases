@@ -33,7 +33,7 @@ internal sealed class SettingsWindow : Window
         var brand = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(8, 8, 0, 16) };
         brand.Children.Add(new Image { Width = 24, Height = 24, Margin = new Thickness(0, 0, 8, 0),
             Source = new System.Windows.Media.Imaging.BitmapImage(new Uri("pack://application:,,,/Assets/AppIcon.png")) });
-        var brandName = Text("一处", 16);
+        var brandName = Text("随手", 16);
         brandName.FontWeight = FontWeights.SemiBold;
         brand.Children.Add(brandName);
         sidebar.Children.Add(brand);
@@ -133,8 +133,8 @@ internal sealed class SettingsWindow : Window
                     foreground: "DangerBrush");
                 break;
             case "关于与更新":
-                Info($"一处  {MainWindow.CurrentVersionLabel}");
-                Info("常用与灵感，都在一处。");
+                Info($"随手  {MainWindow.CurrentVersionLabel}");
+                Info("常用随手取，灵感随手记。");
                 ButtonRow("检查在线更新", () => ContinueWith(ActionAfterClose.CheckUpdate), primary: true);
                 ButtonRow("从本地文件更新", () => ContinueWith(ActionAfterClose.LocalUpdate));
                 ButtonRow("打开官方发布页", () => ContinueWith(ActionAfterClose.Releases));

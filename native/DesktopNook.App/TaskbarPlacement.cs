@@ -74,7 +74,7 @@ internal static class TaskbarPlacement
                 foreach(AutomationElement element in elements)
                 {
                     var info=element.Cached;
-                    if(!info.AutomationId.Contains("DesktopNook.DesktopNook",StringComparison.OrdinalIgnoreCase) && !info.Name.Contains("一处",StringComparison.OrdinalIgnoreCase) && !info.Name.Contains("轻匣",StringComparison.OrdinalIgnoreCase) && !info.Name.Contains("桌面小筑",StringComparison.OrdinalIgnoreCase))continue;
+                    if(!info.AutomationId.Contains("DesktopNook.DesktopNook",StringComparison.OrdinalIgnoreCase) && !info.Name.Contains("随手",StringComparison.OrdinalIgnoreCase) && !info.Name.Contains("一处",StringComparison.OrdinalIgnoreCase) && !info.Name.Contains("轻匣",StringComparison.OrdinalIgnoreCase) && !info.Name.Contains("桌面小筑",StringComparison.OrdinalIgnoreCase))continue;
                     if(info.ControlType!=ControlType.Button && info.ControlType!=ControlType.ListItem)continue;
                     var bounds=info.BoundingRectangle;if(bounds.IsEmpty || bounds.Width<5 || bounds.Height<5 || info.IsOffscreen)continue;
                     candidates.Add(Anchor(tray,bounds));

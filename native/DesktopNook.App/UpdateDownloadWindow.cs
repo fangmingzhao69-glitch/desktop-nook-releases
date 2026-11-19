@@ -10,7 +10,7 @@ internal sealed class UpdateDownloadWindow : Window
     private readonly CancellationTokenSource _cancel=new();
     internal UpdateDownloadWindow(Window owner,OnlineRelease release,string dataRoot)
     {
-        Owner=owner;Title="更新一处";Width=Math.Clamp(owner.ActualWidth-40,280,440);SizeToContent=SizeToContent.Height;ShowInTaskbar=false;ResizeMode=ResizeMode.NoResize;WindowStartupLocation=WindowStartupLocation.CenterOwner;
+        Owner=owner;Title="更新随手";Width=Math.Clamp(owner.ActualWidth-40,280,440);SizeToContent=SizeToContent.Height;ShowInTaskbar=false;ResizeMode=ResizeMode.NoResize;WindowStartupLocation=WindowStartupLocation.CenterOwner;
         var body=new StackPanel{Margin=new Thickness(16,12,16,16)};
         var message=new TextBlock{Text=$"当前版本 {MainWindow.CurrentVersionLabel} → v{release.Version.ToString(3)}\n校验通过后自动重启。",FontSize=13,LineHeight=20,TextWrapping=TextWrapping.Wrap,Foreground=ThemePalette.Brush("TextPrimaryBrush"),Margin=new Thickness(0,0,0,16)};
         var bar=new ProgressBar{Minimum=0,Maximum=100,Height=8};

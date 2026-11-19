@@ -32,7 +32,7 @@ internal static class OleDragVerification
         GetCursorPos(out var originalCursor);
         void Progress(string stage)=>File.WriteAllText(Path.Combine(Path.GetDirectoryName(App.Store.DataDirectory)!,"ole-"+kind+"-progress.txt"),stage);
         var hostLeft=main.Left>=225?main.Left-225:Math.Min(SystemParameters.WorkArea.Right-220,main.Left+main.Width+16);
-        var host=new Window{Title="一处隔离拖放验证",Width=210,Height=105,Left=hostLeft,Top=Math.Max(10,main.Top),ShowInTaskbar=false,Topmost=true,ResizeMode=ResizeMode.NoResize};
+        var host=new Window{Title="随手隔离拖放验证",Width=210,Height=105,Left=hostLeft,Top=Math.Max(10,main.Top),ShowInTaskbar=false,Topmost=true,ResizeMode=ResizeMode.NoResize};
         var source=new Button{Content="独立测试目录",FontSize=12};host.Content=source;
         try
         {

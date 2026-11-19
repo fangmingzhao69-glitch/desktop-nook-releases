@@ -149,6 +149,15 @@ internal static class ShellIntegration
             return true;
         },IntPtr.Zero);
     }
+
+    internal static void RefreshShortcut(string path)
+    {
+        const uint updateItem = 0x00002000;
+        const uint unicodePath = 0x0005;
+        var pointer = Marshal.StringToHGlobalUni(path);
+        try { SHChangeNotify(updateItem, unicodePath, pointer, IntPtr.Zero); }
+        finally { Marshal.FreeHGlobal(pointer); }
+    }
     public static bool ContainsRecycleBin(IDataObject data)
     {
         if(!data.GetDataPresent("Shell IDList Array")) return false;

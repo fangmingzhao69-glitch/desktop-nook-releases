@@ -91,7 +91,7 @@ catch {
     $failure=$_.Exception
     $cause=$failure;while($cause.InnerException){$cause=$cause.InnerException}
     if($script:runtimeUserCancelled -or ($cause -is [ComponentModel.Win32Exception] -and $cause.NativeErrorCode -eq 1223)){$exitCode=1602}
-    else {Write-Error -Message $failure.Message -ErrorAction Continue;if($form){[Windows.Forms.MessageBox]::Show('必要组件安装未完成。现有程序和数据保留。'+"`r`n"+$failure.Message,'一处',[Windows.Forms.MessageBoxButtons]::OK,[Windows.Forms.MessageBoxIcon]::Information)|Out-Null};$exitCode=24}
+    else {Write-Error -Message $failure.Message -ErrorAction Continue;if($form){[Windows.Forms.MessageBox]::Show('必要组件安装未完成。现有程序和数据保留。'+"`r`n"+$failure.Message,'随手',[Windows.Forms.MessageBoxButtons]::OK,[Windows.Forms.MessageBoxIcon]::Information)|Out-Null};$exitCode=24}
 }
 finally {
     foreach($resource in @($outputStream,$inputStream,$response,$client)){if($resource){$resource.Dispose()}}
