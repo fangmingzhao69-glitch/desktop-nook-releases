@@ -103,7 +103,7 @@ public partial class MainWindow
             _notesStatus.ToolTip = _notesStatus.Text;
         }
     }
-    private void TrackComposition(TextBox editor)
+    private void TrackComposition(TextBoxBase editor)
     {
         TextCompositionManager.AddPreviewTextInputStartHandler(editor,(_,e)=>{if(e.TextComposition.CompositionText.Length>0)_notesComposing=true;});
         TextCompositionManager.AddPreviewTextInputUpdateHandler(editor,(_,e)=>_notesComposing=e.TextComposition.CompositionText.Length>0);
@@ -150,9 +150,10 @@ public partial class MainWindow
         if(NoteProject is null||NoteProject.Archived)return;
         ChangeNotes(()=>{
             var note=new ProjectNote{ProjectId=NoteProject.Id,Kind="todo",Title="待办清单"};
-            note.Tasks.Add(new());NotesDraft.Notes.Add(note);NoteProject.Search="";NoteProject.SelectedNote=note.Id;
+            note.Tasks.Add(new());NotesDraft.Notes.Add(note);NoteProject.Search="";NoteProject.SelectedNote=note.Id;NoteProject.EditorKey="task-0";
+            NoteProject.Caret=0;NoteProject.SelectionLength=0;
         });
-        Dispatcher.BeginInvoke(()=>{var box=FindVisualChildren<TextBox>(_noteCards).LastOrDefault();box?.Focus();box?.BringIntoView();},DispatcherPriority.Loaded);
+        Dispatcher.BeginInvoke(() => FindNoteEditor(NoteProject?.SelectedNote, "task-0")?.BringIntoView(), DispatcherPriority.Loaded);
     }
     internal void RenderNotes()
     {
@@ -190,8 +191,29 @@ public partial class MainWindow
         }
         finally{_renderingNotes=false;}
         var offset=NoteProject?.Scroll??0;
-        Dispatcher.BeginInvoke(()=>{_renderingNotes=true;try{var p=NoteProject;var box=FindVisualChildren<TextBox>(_noteCards).FirstOrDefault(b=>b.Tag as string==p?.SelectedNote+":"+p?.EditorKey);if(box is not null&&p is not null){box.Focus();box.Select(Math.Min(p.Caret,box.Text.Length),Math.Min(p.SelectionLength,box.Text.Length-Math.Min(p.Caret,box.Text.Length)));}_notesScroll.ScrollToVerticalOffset(offset);}finally{_renderingNotes=false;}},DispatcherPriority.Loaded);
+        Dispatcher.BeginInvoke(() =>
+        {
+            _renderingNotes = true;
+            try
+            {
+                if (NoteProject is { } p && FindNoteEditor(p.SelectedNote, p.EditorKey) is { } box)
+                {
+                    box.Focus();
+                    if (box is NoteTaskEditor task) task.SelectCharacters(p.Caret, p.SelectionLength);
+                    else if (box is TextBox text)
+                    {
+                        int start = Math.Min(p.Caret, text.Text.Length);
+                        text.Select(start, Math.Min(p.SelectionLength, text.Text.Length - start));
+                    }
+                }
+                _notesScroll.ScrollToVerticalOffset(offset);
+            }
+            finally { _renderingNotes = false; }
+        }, DispatcherPriority.Loaded);
     }
+
+    private TextBoxBase? FindNoteEditor(string? noteId, string key) =>
+        FindVisualChildren<TextBoxBase>(_noteCards).FirstOrDefault(editor => editor.Tag as string == noteId + ":" + key);
     private void UpdateNoteCounts()
     {
         var notes=NotesDraft.Notes.Where(n=>n.ProjectId==NoteProject?.Id&&!n.Archived).ToList();
@@ -227,24 +249,55 @@ public partial class MainWindow
             if(NoteProject is null)_noteCards.Children.Add(NotesButton("＋ 新建分类",_=>NewNoteProject(),true));
         }
     }
-    private TextBox NoteEditor(string text,ProjectNote note,Action<string> changed,bool multiline=false,string key="title",Action? delete=null,bool readOnly=false)
+    private TextBox NoteEditor(string text,ProjectNote note,Action<string> changed,bool multiline=false,string key="title",bool readOnly=false)
     {
         var editor=new TextBox{Text=text,FontSize=12,Padding=new Thickness(4),BorderThickness=new Thickness(0),Background=Brushes.Transparent,
             AcceptsReturn=multiline,TextWrapping=TextWrapping.Wrap,IsReadOnly=readOnly,MinHeight=26};
-        editor.Tag=note.Id+":"+key;
-        editor.ContextMenu=new ContextMenu();
-        editor.ContextMenuOpening+=(_,e)=>{
-            e.Handled=true;
-            Popup(editor,[Menu("剪切",()=>editor.Cut(),!editor.IsReadOnly&&editor.SelectionLength>0),
-                Menu("复制",()=>editor.Copy(),editor.SelectionLength>0),
-                Menu("粘贴",()=>editor.Paste(),!editor.IsReadOnly&&Clipboard.ContainsText()),new Separator(),
-                Menu(delete is null?"删除便签…":"删除此项",delete??(()=>DeleteNote(note)),!editor.IsReadOnly)]);
+        ConfigureNoteEditor(editor, note, key, null);
+        editor.TextChanged+=(_,_)=>{changed(editor.Text);NotesChanged(true,note);UpdateNoteCounts();};
+        return editor;
+    }
+
+    private void ConfigureNoteEditor(TextBoxBase editor, ProjectNote note, string key, Action? delete)
+    {
+        editor.Tag = note.Id + ":" + key;
+        editor.ContextMenu = new ContextMenu();
+        (int Start, int Length) ReadSelection() => editor is NoteTaskEditor task
+            ? task.CharacterSelection()
+            : (((TextBox)editor).SelectionStart, ((TextBox)editor).SelectionLength);
+
+        editor.ContextMenuOpening += (_, e) =>
+        {
+            e.Handled = true;
+            bool hasSelection = ReadSelection().Length > 0;
+            var entries = new List<object>
+            {
+                Menu("剪切", editor.Cut, !editor.IsReadOnly && hasSelection),
+                Menu("复制", editor.Copy, hasSelection),
+                Menu("粘贴", editor.Paste, !editor.IsReadOnly && Clipboard.ContainsText())
+            };
+            if (editor is NoteTaskEditor task)
+                entries.Add(Menu(task.SelectionIsStruck() ? "取消删除线" : "添加删除线",
+                    task.ToggleStrike, !editor.IsReadOnly && hasSelection));
+            entries.Add(new Separator());
+            entries.Add(Menu(delete is null ? "删除便签…" : "删除此项", delete ?? (() => DeleteNote(note)), !editor.IsReadOnly));
+            Popup(editor, entries);
         };
         TrackComposition(editor);
-        editor.SelectionChanged+=(_,_)=>{if(_renderingNotes||_showNotesArchive||!editor.IsKeyboardFocused||NoteProject is null)return;NoteProject.EditorKey=key;NoteProject.Caret=editor.SelectionStart;NoteProject.SelectionLength=editor.SelectionLength;NotesChanged();};
-        editor.TextChanged+=(_,_)=>{changed(editor.Text);NotesChanged(true,note);UpdateNoteCounts();};
-        editor.GotKeyboardFocus+=(_,_)=>{if(!_showNotesArchive&&NoteProject is not null){NoteProject.SelectedNote=note.Id;NoteProject.EditorKey=key;NotesChanged();}};
-        return editor;
+        editor.SelectionChanged += (_, _) =>
+        {
+            if (_renderingNotes || _showNotesArchive || !editor.IsKeyboardFocused || NoteProject is not { } project) return;
+            project.EditorKey = key;
+            (project.Caret, project.SelectionLength) = ReadSelection();
+            NotesChanged();
+        };
+        editor.GotKeyboardFocus += (_, _) =>
+        {
+            if (_showNotesArchive || NoteProject is not { } project) return;
+            project.SelectedNote = note.Id;
+            project.EditorKey = key;
+            NotesChanged();
+        };
     }
     private void AddNoteCard(ProjectNote note, int number, bool readOnly)
     {
@@ -266,32 +319,7 @@ public partial class MainWindow
         {
             var body=NoteEditor(note.Text,note,t=>note.Text=t,true,"body",readOnly:readOnly);body.MinHeight=65;AutomationProperties.SetName(body,"文字记录正文");content.Children.Add(body);
         }
-        else
-        {
-            var rows=new StackPanel();content.Children.Add(rows);
-            void BuildRows(int focus=-1)
-            {
-                rows.Children.Clear();
-                foreach(var task in note.Tasks)
-                {
-                    var row=new DockPanel{Margin=new Thickness(0,3,0,0)};
-                    var check=new CheckBox{IsChecked=task.Done,VerticalAlignment=VerticalAlignment.Top,Margin=new Thickness(2,7,6,0),IsEnabled=!readOnly};
-                    AutomationProperties.SetName(check,"完成待办");DockPanel.SetDock(check,Dock.Left);row.Children.Add(check);
-                    var input=NoteEditor(task.Text,note,t=>task.Text=t,key:"task-"+note.Tasks.IndexOf(task),delete:()=>ChangeNotes(()=>{note.Tasks.Remove(task);note.ModifiedUtc=DateTime.UtcNow;}),readOnly:readOnly);input.TextDecorations=task.Done?TextDecorations.Strikethrough:null;input.Foreground=Brush(task.Done?"#8998A6":"#35566E");
-                    check.Click+=(_,_)=>{task.Done=check.IsChecked==true;input.TextDecorations=task.Done?TextDecorations.Strikethrough:null;input.Foreground=Brush(task.Done?"#8998A6":"#35566E");NotesChanged(true,note);UpdateNoteCounts();};
-                    input.PreviewKeyDown+=(_,e)=>{
-                        if(_notesComposing||input.IsReadOnly||e.Key==Key.ImeProcessed)return;
-                        var index=note.Tasks.IndexOf(task);
-                        if(e.Key==Key.Enter){e.Handled=true;note.Tasks.Insert(index+1,new());NotesChanged(true,note);BuildRows(index+1);}
-                        else if(e.Key==Key.Back&&input.Text.Length==0&&note.Tasks.Count>1){e.Handled=true;note.Tasks.Remove(task);NotesChanged(true,note);BuildRows(Math.Max(0,index-1));}
-                    };
-                    row.Children.Add(input);rows.Children.Add(row);
-                }
-                if(focus>=0)Dispatcher.BeginInvoke(()=>{var box=FindVisualChildren<TextBox>(rows).ElementAtOrDefault(focus);box?.Focus();box?.BringIntoView();});
-            }
-            BuildRows();
-            if(!readOnly)content.Children.Add(NotesButton("＋ 添加待办",_=>{if(_notesComposing)return;note.Tasks.Add(new());NotesChanged(true,note);BuildRows(note.Tasks.Count-1);}));
-        }
+        else AddNoteTasks(note, content, header, readOnly);
         border.ContextMenu=new ContextMenu();
         border.ContextMenuOpening+=(_,e)=>{e.Handled=true;NoteCardMenu(border,note);};
         _noteCards.Children.Add(border);
@@ -325,7 +353,8 @@ public partial class MainWindow
             }
             entries.Add(type);
             entries.Add(Menu(note.Favorite ? "取消常用" : "设为常用", () => ChangeNotes(() => note.Favorite = !note.Favorite)));
-            var order = ActiveCategoryNotes().Where(MatchesNote).ToList();
+            var order = ActiveCategoryNotes().Where(candidate =>
+                candidate.IsCompletedChecklist() == note.IsCompletedChecklist() && MatchesNote(candidate)).ToList();
             int index = order.IndexOf(note);
             bool canReorder = CanReorderNotes && index >= 0;
             entries.Add(Menu("上移一位", () => ChangeNotes(() => NotesStore.ReorderNote(NotesDraft, note, order[index - 1], false)), canReorder && index > 0));
@@ -396,7 +425,8 @@ public partial class MainWindow
         _notesStatus.Text = "归档";
         foreach (var project in NotesDraft.Projects)
         {
-            var records = NotesDraft.Notes.Where(note => note.ProjectId == project.Id && (project.Archived || note.Archived)).ToList();
+            var records = NotesDraft.Notes.Where(note => note.ProjectId == project.Id && (project.Archived || note.Archived))
+                .OrderBy(note => note.IsCompletedChecklist()).ToList();
             if (records.Count == 0 && !project.Archived) continue;
 
             var section = new DockPanel { Margin = new Thickness(0, 6, 0, 8) };

@@ -211,7 +211,7 @@ internal static class TaskbarAppearanceVerification
                 }
             }
 
-            Check(MainWindow.CurrentVersionLabel == "v0.17.6", "正式候选在更新菜单显示完整版本");
+            Check(MainWindow.CurrentVersionLabel == "v0.17.7", "正式候选在更新菜单显示完整版本");
 
             var originalExe = Environment.ProcessPath!;
             var target = Path.Combine(root, "update-target.exe");

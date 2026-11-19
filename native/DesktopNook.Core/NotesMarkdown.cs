@@ -6,6 +6,34 @@ public static class NotesMarkdown
 {
     private static string Heading(string value) => value.Replace("\r", " ").Replace("\n", " ").Replace("\\", "\\\\").Replace("#", "\\#").Replace("*", "\\*").Replace("_", "\\_").Replace("[", "\\[").Replace("]", "\\]").Replace("`", "\\`");
 
+    private static string TaskText(NoteTask task)
+    {
+        if (task.Strikes is not { Length: > 0 } marks) return task.Text.ReplaceLineEndings("\n");
+        var output = new StringBuilder();
+        int cursor = 0;
+        foreach (var mark in marks)
+        {
+            output.Append(task.Text, cursor, mark.Start - cursor);
+            var parts = task.Text.Substring(mark.Start, mark.Length).ReplaceLineEndings("\n").Split('\n');
+            for (int index = 0; index < parts.Length; index++)
+            {
+                if (index > 0) output.Append('\n');
+                string part = parts[index];
+                string trimmed = part.Trim();
+                if (trimmed.Length == 0)
+                {
+                    output.Append(part);
+                    continue;
+                }
+                int leading = part.Length - part.TrimStart().Length;
+                output.Append(part, 0, leading).Append("~~").Append(trimmed.Replace("~", "\\~")).Append("~~")
+                    .Append(part, leading + trimmed.Length, part.Length - leading - trimmed.Length);
+            }
+            cursor = mark.Start + mark.Length;
+        }
+        return output.Append(task.Text, cursor, task.Text.Length - cursor).ToString().ReplaceLineEndings("\n");
+    }
+
     public static string Export(NotesState state, ProjectNote? note = null, NoteProject? project = null)
     {
         var output = new StringBuilder();
@@ -15,9 +43,9 @@ public static class NotesMarkdown
             if (record.Archived) output.AppendLine("（已归档）");
             output.AppendLine();
             if (record.Kind == "text") output.AppendLine(record.Text);
-            else foreach (var task in record.Tasks)
+            else foreach (var task in record.TasksInDisplayOrder())
             {
-                var lines = task.Text.Replace("\r\n", "\n").Replace('\r', '\n').Split('\n');
+                var lines = TaskText(task).Split('\n');
                 output.Append(task.Done ? "- [x] " : "- [ ] ").AppendLine(lines[0]);
                 foreach (var line in lines.Skip(1)) output.Append("      ").AppendLine(line);
             }
@@ -32,7 +60,8 @@ public static class NotesMarkdown
                 output.Append("## ").AppendLine(Heading(category.Name));
                 if (category.Archived) output.AppendLine("（已归档分类）");
                 output.AppendLine();
-                foreach (var record in state.Notes.Where(n => n.ProjectId == category.Id)) Record(record, 3);
+                foreach (var record in state.Notes.Where(n => n.ProjectId == category.Id).OrderBy(n => n.IsCompletedChecklist()))
+                    Record(record, 3);
             }
         }
         return output.ToString();

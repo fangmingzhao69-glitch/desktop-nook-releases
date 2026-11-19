@@ -17,7 +17,8 @@ public partial class MainWindow
     private DispatcherTimer? _noteDragScroll;
 
     private List<ProjectNote> ActiveCategoryNotes() =>
-        NotesDraft.Notes.Where(note => note.ProjectId == NoteProject?.Id && !note.Archived).ToList();
+        NotesDraft.Notes.Where(note => note.ProjectId == NoteProject?.Id && !note.Archived)
+            .OrderBy(note => note.IsCompletedChecklist()).ToList();
 
     private bool CanReorderNotes =>
         !_showNotesArchive && !_notesComposing && NoteProject is { Archived: false };
@@ -98,7 +99,13 @@ public partial class MainWindow
         if (pointer.X < 0 || pointer.X >= _notesScroll.ViewportWidth ||
             pointer.Y < 0 || pointer.Y >= _notesScroll.ViewportHeight) return null;
 
-        var cards = _noteCards.Children.OfType<Border>().Where(card => card.Tag is ProjectNote).ToList();
+        var cards = _noteCards.Children.OfType<Border>()
+            .Where(card => card.Tag is ProjectNote note && note.IsCompletedChecklist() == source.IsCompletedChecklist())
+            .ToList();
+        var bounds = _noteCards.Children.OfType<Border>()
+            .FirstOrDefault(card => card.Tag is ProjectNote note && note.IsCompletedChecklist());
+        if (bounds is not null && (Mouse.GetPosition(_noteCards).Y >= bounds.TranslatePoint(new Point(), _noteCards).Y)
+            != source.IsCompletedChecklist()) return null;
         int sourceIndex = cards.FindIndex(card => card.Tag == source);
         if (cards.Count < 2 || sourceIndex < 0) return null;
         var y = Mouse.GetPosition(_noteCards).Y;

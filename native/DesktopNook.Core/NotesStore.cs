@@ -20,12 +20,28 @@ public sealed class NoteProject
 
     internal NoteProject Copy() => (NoteProject)MemberwiseClone();
 }
+public readonly record struct NoteStrikeRange(int Start, int Length);
+
 public sealed class NoteTask
 {
     public string Text { get; set; } = "";
     public bool Done { get; set; }
+    public NoteStrikeRange[]? Strikes { get; set; }
 
-    internal NoteTask Copy() => (NoteTask)MemberwiseClone();
+    internal NoteTask Copy() => new() { Text = Text, Done = Done, Strikes = Strikes?.ToArray() };
+
+    internal bool HasValidStrikes()
+    {
+        int end = 0;
+        foreach (var range in Strikes ?? [])
+        {
+            if (range.Start < end || range.Start > Text.Length || range.Length <= 0 ||
+                range.Length > Text.Length - range.Start)
+                return false;
+            end = range.Start + range.Length;
+        }
+        return true;
+    }
 }
 public sealed class ProjectNote
 {
@@ -41,6 +57,10 @@ public sealed class ProjectNote
     public DateTime ModifiedUtc { get; set; } = DateTime.UtcNow;
     public DateTime? DeletedUtc { get; set; }
     public string? DeleteBatch { get; set; }
+
+    public bool IsCompletedChecklist() => Kind == "todo" && Tasks.Count > 0 && Tasks.All(task => task.Done);
+
+    public IEnumerable<NoteTask> TasksInDisplayOrder() => Tasks.OrderBy(task => task.Done);
 
     internal ProjectNote Copy()
     {
@@ -226,7 +246,8 @@ public sealed class NotesStore
         foreach (var n in state.Notes)
             if (n is null || (state.Format == 2 && (n.DeletedUtc is not null || n.DeleteBatch is not null)) || !Guid.TryParseExact(n.Id, "N", out _) || !noteIds.Add(n.Id) ||
                 n.ProjectId is null || !projects.TryGetValue(n.ProjectId, out var project) ||
-                n.Kind is not ("text" or "todo") || n.Title is null || n.Text is null || n.Tasks is null || n.Tasks.Any(t => t is null || t.Text is null) ||
+                n.Kind is not ("text" or "todo") || n.Title is null || n.Text is null || n.Tasks is null ||
+                n.Tasks.Any(t => t is null || t.Text is null || !t.HasValidStrikes()) ||
                 (n.DeletedUtc is null && project.DeletedUtc is not null))
                 throw new IOException("便签记录或分类归属无效。");
     }

@@ -4,6 +4,7 @@ using System.Windows;
 using System.Windows.Automation;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
+using System.Windows.Documents;
 using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
@@ -33,6 +34,15 @@ internal static class NotesVerification
             return window.LastMenu!.Items.OfType<MenuItem>().Single(entry => Equals(entry.Header, item));
         }
         async Task Layout(){window.UpdateLayout();await window.Dispatcher.InvokeAsync(()=>{},System.Windows.Threading.DispatcherPriority.ContextIdle);window.UpdateLayout();}
+        NoteTaskEditor[] TaskEditors(ProjectNote note) => Find<NoteTaskEditor>(window.NotesHost)
+            .Where(editor => editor.Tag is string key && key.StartsWith(note.Id + ":task-", StringComparison.Ordinal)).ToArray();
+        ContextMenu OpenEditorMenu(NoteTaskEditor editor)
+        {
+            editor.RaiseEvent((ContextMenuEventArgs)Activator.CreateInstance(typeof(ContextMenuEventArgs),
+                System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic, null,
+                new object[] { editor, true }, null)!);
+            return window.LastMenu!;
+        }
         void Snapshot(string name)
         {
             var bitmap=new RenderTargetBitmap((int)window.ActualWidth,(int)window.ActualHeight,96,96,PixelFormats.Pbgra32);bitmap.Render(window);
@@ -97,18 +107,75 @@ internal static class NotesVerification
                 "便签标题和编辑框共用轻匣字体，面板标题字号和字重一致");
             var customTitle=Find<TextBox>(window.NotesHost).Last(b=>AutomationProperties.GetName(b)=="记录标题");customTitle.Text="可编辑清单名称";
             Check(window.FlushNotes(false)&&new NotesStore(App.Store.DataDirectory).State.Notes.Last().Title=="可编辑清单名称","自定义清单名称持久保存");
-            var taskBox=Find<TextBox>(window.NotesHost).Last();taskBox.Text="确认设计方案";
+            var checklist = window.NotesDraft.Notes.Last();
+            var taskBox = TaskEditors(checklist).Single();
+            taskBox.Selection.Text = "确认设计方案";
+            taskBox.Focus();
+            taskBox.SelectCharacters(2, 2);
+            var strike = OpenEditorMenu(taskBox).Items.OfType<MenuItem>().Single(item => Equals(item.Header, "添加删除线"));
+            ClickMenu(strike);
+            Check(taskBox.ReadContent().Strikes?.SequenceEqual([new NoteStrikeRange(2, 2)]) == true &&
+                taskBox.PlainText == "确认设计方案" && !checklist.Tasks.Single().Done, "所选文字加删除线且待办仍未完成");
+            taskBox.SelectCharacters(2, 2);
+            var removeStrike = OpenEditorMenu(taskBox).Items.OfType<MenuItem>().Single(item => Equals(item.Header, "取消删除线"));
+            ClickMenu(removeStrike);
+            Check(taskBox.ReadContent().Strikes is null, "已标记文字可从同一右键菜单取消删除线");
+            taskBox.SelectCharacters(2, 2);
+            ClickMenu(OpenEditorMenu(taskBox).Items.OfType<MenuItem>().Single(item => Equals(item.Header, "添加删除线")));
+            Check(window.FlushNotes(false) && new NotesStore(App.Store.DataDirectory).State.Notes.Last().Tasks.Single()
+                .Strikes?.SequenceEqual([new NoteStrikeRange(2, 2)]) == true, "部分删除线独立保存");
+            window.RenderNotes();
+            await Layout();
+            taskBox = TaskEditors(checklist).Single();
+            Check(taskBox.ReadContent().Strikes?.SequenceEqual([new NoteStrikeRange(2, 2)]) == true &&
+                taskBox.FontFamily.Equals(launcherHeading.FontFamily), "重开编辑器重现部分删除线并沿用字体");
+            var addTask = Find<Button>(window.NotesHost).Single(button => AutomationProperties.GetName(button) == "添加待办");
+            Check(ReferenceEquals(addTask.Parent, Find<TextBox>(window.NotesHost).Last(b =>
+                AutomationProperties.GetName(b) == "记录标题").Parent), "添加待办与清单标题同一行");
+            addTask.RaiseEvent(new RoutedEventArgs(Button.ClickEvent)); await Layout();
+            Check(TaskEditors(checklist).Select(editor => editor.PlainText).SequenceEqual(["", "确认设计方案"]) &&
+                TaskEditors(checklist)[0].IsKeyboardFocused, "点击添加在第一行创建并聚焦新待办");
+            TaskEditors(checklist)[0].Selection.Text = "整理项目资料";
+            var firstCheck = Find<CheckBox>(window.NotesHost).First();
+            firstCheck.IsChecked = true;
+            firstCheck.RaiseEvent(new RoutedEventArgs(Button.ClickEvent)); await Layout();
+            var reordered = TaskEditors(checklist);
+            Check(reordered.Select(editor => editor.PlainText).SequenceEqual(["确认设计方案", "整理项目资料"]) &&
+                ((Paragraph)reordered[1].Document.Blocks.FirstBlock!).TextDecorations.Count > 0,
+                "勾选的待办移到底部并显示整行删除线");
+            Snapshot("notes-checklist-complete-order");
+            var lastCheck = Find<CheckBox>(window.NotesHost).Last();
+            lastCheck.IsChecked = false;
+            lastCheck.RaiseEvent(new RoutedEventArgs(Button.ClickEvent)); await Layout();
+            Check(TaskEditors(checklist).Select(editor => editor.PlainText).SequenceEqual(["整理项目资料", "确认设计方案"]),
+                "取消勾选恢复未完成区和原先相对顺序");
+            taskBox = TaskEditors(checklist)[0];
             taskBox.RaiseEvent(new KeyEventArgs(Keyboard.PrimaryDevice,PresentationSource.FromVisual(window),0,Key.Enter){RoutedEvent=Keyboard.PreviewKeyDownEvent});await Layout();
-            Check(window.NotesDraft.Notes.Last().Tasks.Count==2,"待办回车新增一项");
-            Find<TextBox>(window.NotesHost).Last().Text="整理项目资料";
-            var disposable=Find<TextBox>(window.NotesHost).Last();
-            disposable.RaiseEvent((ContextMenuEventArgs)Activator.CreateInstance(typeof(ContextMenuEventArgs),System.Reflection.BindingFlags.Instance|System.Reflection.BindingFlags.NonPublic,null,new object[]{disposable,true},null)!);
-            Check(window.LastMenu is not null&&window.LastMenu.Items.OfType<MenuItem>().Select(m=>m.Header?.ToString()).SequenceEqual(new[]{"剪切","复制","粘贴","删除此项"}),"明细右键使用统一菜单并包含删除");
-            window.LastMenu!.IsOpen=false;
-            window.LastMenu.Items.OfType<MenuItem>().Last().RaiseEvent(new RoutedEventArgs(MenuItem.ClickEvent));await Layout();
+            Check(TaskEditors(checklist).Select(editor => editor.PlainText).SequenceEqual(["", "整理项目资料", "确认设计方案"]),
+                "待办回车也在第一行新增一项");
+            var disposable = TaskEditors(checklist)[0];
+            var editMenu = OpenEditorMenu(disposable);
+            Check(editMenu.Items.OfType<MenuItem>().Select(m=>m.Header?.ToString()).SequenceEqual(
+                ["剪切","复制","粘贴","添加删除线","删除此项"]), "明细右键保持统一菜单并包含删除线和删除");
+            ClickMenu(editMenu.Items.OfType<MenuItem>().Last()); await Layout();
+            ClickMenu(OpenEditorMenu(TaskEditors(checklist)[0]).Items.OfType<MenuItem>().Last()); await Layout();
             Check(window.FlushNotes(false)&&new NotesStore(App.Store.DataDirectory).State.Notes.Last().Tasks.Count==1,"右键删除实际移除细项并保存");
+            var later = new ProjectNote { ProjectId = checklist.ProjectId, Title = "后面的文字记录" };
+            window.NotesDraft.Notes.Add(later);
+            window.NotesStore.Commit(window.NotesDraft);
+            window.RenderNotes();
+            await Layout();
+            ProjectNote[] Cards() => Find<Border>(window.NotesHost).Select(border => border.Tag).OfType<ProjectNote>().ToArray();
+            Check(Array.IndexOf(Cards(), checklist) < Array.IndexOf(Cards(), later), "待办清单未完成时保持手动顺序");
             var check=Find<CheckBox>(window.NotesHost).First();check.IsChecked=true;check.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
-            Check(window.FlushNotes(false)&&new NotesStore(App.Store.DataDirectory).State.Notes.Last().Tasks[0].Done,"待办勾选及正文持久保存");
+            await Layout();
+            Check(ReferenceEquals(Cards().Last(), checklist), "最后一项勾选后整份清单移到未完成记录之后");
+            window.NotesDraft.Notes.Remove(later);
+            window.NotesStore.Commit(window.NotesDraft);
+            window.RenderNotes();
+            await Layout();
+            Check(window.FlushNotes(false) && new NotesStore(App.Store.DataDirectory).State.Notes.Last().Tasks.Single() is
+                { Done: true, Strikes.Length: 1 }, "整项勾选时仍保留原部分删除线");
             var typeMenu = OpenLastCardMenu("便签类型");
             ClickMenu(typeMenu.Items.OfType<MenuItem>().Single(item => Equals(item.Header, "文字记录")));
             await Layout();
@@ -118,7 +185,8 @@ internal static class NotesVerification
             typeMenu = OpenLastCardMenu("便签类型");
             ClickMenu(typeMenu.Items.OfType<MenuItem>().Single(item => Equals(item.Header, "待办清单")));
             await Layout();
-            Check(window.NotesDraft.Notes.Last().Tasks.Single().Done, "切回待办后保留未修改条目的勾选状态");
+            Check(window.NotesDraft.Notes.Last().Tasks.Single() is { Done: true, Strikes.Length: 1 },
+                "切回待办后保留未修改条目的勾选状态和部分删除线");
             Field("搜索当前分类的记录").Text="需求沟通";await Task.Delay(500);await Layout();
             Check(!Find<CheckBox>(window.NotesHost).Any(),"项目内搜索按记录内容过滤");
             window.AddProjectNote();await Layout();Check(Field("搜索当前分类的记录").Text=="","搜索状态下新建清除筛选使新记录可见");

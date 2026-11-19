@@ -282,6 +282,39 @@ Test("Markdown exports names, categories, text and standard task checkboxes",roo
     var category=NotesMarkdown.Export(state,project:p);Assert(!category.Contains("其他分类"),"category export is scoped");
     var single=NotesMarkdown.Export(state,n);Assert(single.StartsWith("# 自定义清单")&&!single.Contains("工作分类"),"single record uses custom title");
 });
+Test("Partial task strike ranges persist independently and export in display order", root =>
+{
+    var store = new NotesStore(root);
+    var draft = store.Draft();
+    var category = NotesStore.AddProject(draft, "项目 A");
+    var completed = new ProjectNote { ProjectId = category.Id, Title = "完成清单", Kind = "todo", Tasks = [new() { Text = "已验收", Done = true }] };
+    var pending = new ProjectNote
+    {
+        ProjectId = category.Id, Title = "处理中", Kind = "todo", Tasks =
+        [
+            new() { Text = "已提交", Done = true },
+            new() { Text = "确认设计方案", Strikes = [new(2, 2)] }
+        ]
+    };
+    draft.Notes.AddRange([completed, pending]);
+    store.Commit(draft);
+    var reopened = new NotesStore(root);
+    var saved = reopened.State.Notes.Last();
+    Assert(completed.IsCompletedChecklist() && !saved.IsCompletedChecklist() &&
+        saved.TasksInDisplayOrder().Select(task => task.Done).SequenceEqual([false, true]), "completion groups are derived without changing saved order");
+    Assert(saved.Tasks.Last().Strikes?.SequenceEqual([new NoteStrikeRange(2, 2)]) == true, "partial formatting survives reload");
+    var export = NotesMarkdown.Export(reopened.State);
+    Assert(export.Contains("- [ ] 确认~~设计~~方案") && export.IndexOf("处理中", StringComparison.Ordinal) < export.IndexOf("完成清单", StringComparison.Ordinal) &&
+        export.IndexOf("确认~~设计~~方案", StringComparison.Ordinal) < export.IndexOf("已提交", StringComparison.Ordinal),
+        "Markdown preserves exact struck text and pending-first order");
+
+    var invalid = reopened.Draft();
+    invalid.Notes.Last().Tasks.Last().Strikes![0] = new(2, 100);
+    Assert(saved.Tasks.Last().Strikes![0] == new NoteStrikeRange(2, 2), "draft formatting is isolated");
+    try { reopened.Commit(invalid); throw new Exception("invalid formatting accepted"); }
+    catch (IOException) { }
+    Assert(new NotesStore(root).State.Notes.Last().Tasks.Last().Strikes![0].Length == 2, "invalid range leaves saved text intact");
+});
 Test("Notes duplicate names, dangling references and stale revisions are rejected",root=>{
     var store=new NotesStore(root);var draft=store.Draft();var a=NotesStore.AddProject(draft," 项目A ");store.Commit(draft);var stale=store.Draft();
     try{NotesStore.AddProject(draft,"项目A");throw new Exception("duplicate accepted");}catch(ArgumentException){}

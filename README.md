@@ -2,7 +2,7 @@
 
 轻匣是 Windows 桌面收纳工具。用一个任务栏入口打开收纳面板，左侧整理软件、文件和文件夹，右侧记录便签和待办。
 
-[下载 0.17.6 安装包](https://github.com/fangmingzhao69-glitch/desktop-nook-releases/releases/download/v0.17.6/DesktopNook-Setup.exe) · [最新正式版](https://github.com/fangmingzhao69-glitch/desktop-nook-releases/releases/latest) · [使用说明](docs/使用说明.md)
+[下载 0.17.7 安装包](https://github.com/fangmingzhao69-glitch/desktop-nook-releases/releases/download/v0.17.7/DesktopNook-Setup.exe) · [最新正式版](https://github.com/fangmingzhao69-glitch/desktop-nook-releases/releases/latest) · [使用说明](docs/使用说明.md)
 
 ![轻匣收纳与便签双栏界面](docs/images/overview-0.16.png)
 
@@ -11,7 +11,7 @@
 | 功能 | 能做什么 |
 | --- | --- |
 | 桌面收纳 | 批量添加桌面快捷方式、文件和文件夹，也可直接拖入面板。按分类显示，支持拖拽排序、移动分类、右键操作和移回桌面。系统回收站入口可收纳，回收站内容由 Windows 管理。 |
-| 便签与待办 | 按分类管理文字和待办，支持搜索、自动保存、重命名和勾选。拖动分类标签或便签顶部排序栏即可调整顺序。可归档便签或整个分类，细项、清单和分类可直接删除。单条、分类及全部便签均可导出为 Markdown（`.md`）。 |
+| 便签与待办 | 按分类管理文字和待办，支持搜索、自动保存、重命名和排序。新增待办在第一行，勾选完成后移到下方，可给选中的部分文字加删除线。支持归档、删除和 Markdown 导出。 |
 | 面板与任务栏 | 固定到任务栏后单击打开或收起。支持开机自启、窗口尺寸、左右分栏比例、动画开关和关闭行为设置。 |
 | 任务栏外观 | 支持系统默认、透明、纯色、模糊和亚克力。桌面与六种动态场景可分别配置颜色和细线。可见窗口和最大化场景支持窗口规则。可预览和恢复默认。 |
 | 图标台球 | 支持单人练习、本机双人和好友邀请房间。可选中八、斯诺克、九球追分和十五球追分球组，支持辅助线、音效及成绩记录。 |
@@ -27,7 +27,7 @@
 | --- | --- |
 | `DesktopNook-Setup.exe` | 首次安装或直接覆盖升级。缺少运行时时，安装器会提示补装。 |
 | `DesktopNook-win-x64.exe` | 免安装版。请先安装桌面运行时，再放到固定目录运行。 |
-| `DesktopNook-v0.17.6-source.zip` | 与本版对应的源码、构建脚本、源依赖和许可证。 |
+| `DesktopNook-v0.17.7-source.zip` | 与本版对应的源码、构建脚本、源依赖和许可证。 |
 | `SHA256SUMS.txt` | 所有发行文件的校验值。 |
 
 升级可在轻匣的「更多 → 检查在线更新」操作。完整迁移或备份请复制整个数据目录，可从「更多 → 打开数据目录」进入。
