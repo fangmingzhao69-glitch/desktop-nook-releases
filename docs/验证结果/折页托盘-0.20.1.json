@@ -1,0 +1,73 @@
+{
+  "Version": "0.20.1",
+  "DisplayName": "折页",
+  "Date": "2026-11-20",
+  "SourceCommit": "88ccfbd44641b15547e0308fe1e85ba1a25c032f",
+  "ReleaseUrl": "https://github.com/fangmingzhao69-glitch/desktop-nook-releases/releases/tag/v0.20.1",
+  "Latest": true,
+  "Assets": [
+    {
+      "Name": "DesktopNook-Setup.exe",
+      "Size": 558055,
+      "SHA256": "3b19bea987fb3f6f433939ae56e05ebc273fe6316f7c0dee1a77984808ff3fb2"
+    },
+    {
+      "Name": "DesktopNook-v0.20.1-source.zip",
+      "Size": 3289226,
+      "SHA256": "b3e11eecf6818170efb0a599c3397e392ca330fc9e8917af62bc5d30c12c9ff1"
+    },
+    {
+      "Name": "DesktopNook-win-x64.exe",
+      "Size": 1336906,
+      "SHA256": "7e62c8f2ddaa34bd32c94198eaf2c03106fdd0394411f7bb630a951cf75fc67d"
+    },
+    {
+      "Name": "SHA256SUMS.txt",
+      "Size": 278,
+      "SHA256": "864993cfe8552f68aadf4b8da60628b887fe65a5ad3294f7656c9c9b68f10cc1"
+    }
+  ],
+  "Checks": {
+    "Tray": 7,
+    "Interface": 126,
+    "OnlineUpdate": 13
+  },
+  "TrayChecks": [
+    "Windows 注册托盘入口并返回其位置",
+    "最小化启动时托盘仍可用",
+    "释放窗口绘制资源时仍保留托盘",
+    "托盘激活可唤醒已收起的折页",
+    "再次激活可收起折页并保留托盘",
+    "只向沙箱窗口发送任务栏重建消息即可恢复托盘入口",
+    "注销后 Windows 不再返回托盘入口"
+  ],
+  "IsolatedUpgrade": {
+    "success": true,
+    "helperExit": 0,
+    "oldVersion": "0.20.0.0",
+    "newVersion": "0.20.1.0",
+    "notesRetained": true,
+    "notesBackupRetained": true,
+    "deletedCategoryRetained": true,
+    "uncheckedPreferenceRetained": true,
+    "collectViewRetained": true,
+    "motionModeRetained": true,
+    "categoryOrdersRetained": true,
+    "orderedCategories": 3,
+    "configurationHashUnchanged": true,
+    "payloadUnchanged": true,
+    "newProcessConfirmed": true
+  },
+  "IsolatedInstaller": {
+    "Installed": true,
+    "Upgraded": true,
+    "UserStateHashPreserved": true,
+    "UserPreferencesHashPreserved": true,
+    "DisplayName": "折页",
+    "Uninstalled": true,
+    "RemainingItems": 0,
+    "RecoveredFiles": 11,
+    "LiveUserDataTouched": false
+  },
+  "InstalledAppUpdated": false
+}
