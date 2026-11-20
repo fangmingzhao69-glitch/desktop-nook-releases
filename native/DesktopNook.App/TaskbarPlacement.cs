@@ -5,7 +5,7 @@ using System.Windows.Interop;
 
 namespace DesktopNook.App;
 
-internal sealed record TaskbarAnchor(Rect Button,Rect Tray,Rect Work,double Dpi);
+internal sealed record TaskbarAnchor(Rect Button,Rect Tray,Rect Work,double Dpi,string? AppCaption = null);
 internal static class TaskbarPlacement
 {
     [StructLayout(LayoutKind.Sequential)] private struct NativeRect { public int Left,Top,Right,Bottom; public readonly Rect ToRect()=>new(Left,Top,Right-Left,Bottom-Top); }
@@ -77,10 +77,15 @@ internal static class TaskbarPlacement
                     if(!info.AutomationId.Contains("DesktopNook.DesktopNook",StringComparison.OrdinalIgnoreCase) && !info.Name.Contains("折页",StringComparison.OrdinalIgnoreCase) && !info.Name.Contains("随手",StringComparison.OrdinalIgnoreCase) && !info.Name.Contains("一处",StringComparison.OrdinalIgnoreCase) && !info.Name.Contains("轻匣",StringComparison.OrdinalIgnoreCase) && !info.Name.Contains("桌面小筑",StringComparison.OrdinalIgnoreCase))continue;
                     if(info.ControlType!=ControlType.Button && info.ControlType!=ControlType.ListItem)continue;
                     var bounds=info.BoundingRectangle;if(bounds.IsEmpty || bounds.Width<5 || bounds.Height<5 || info.IsOffscreen)continue;
-                    candidates.Add(Anchor(tray,bounds));
+                    var anchor = Anchor(tray, bounds);
+                    bool exactId = info.AutomationId.Equals("Appid: " + ShortcutInstaller.ApplicationId, StringComparison.OrdinalIgnoreCase) ||
+                        info.AutomationId.Equals(ShortcutInstaller.ApplicationId, StringComparison.OrdinalIgnoreCase);
+                    candidates.Add(exactId ? anchor with { AppCaption = info.Name } : anchor);
                 }
             }
-            return candidates.FirstOrDefault(c=>c.Tray.Contains(new System.Windows.Point(mouse.X,mouse.Y)))??candidates.FirstOrDefault();
+            var exact = candidates.Where(candidate => candidate.AppCaption is not null).ToArray();
+            IEnumerable<TaskbarAnchor> options = exact.Length > 0 ? exact : candidates;
+            return options.FirstOrDefault(c=>c.Tray.Contains(new System.Windows.Point(mouse.X,mouse.Y)))??options.FirstOrDefault();
         }
         catch{return null;}
     }

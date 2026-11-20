@@ -86,13 +86,16 @@
        </Grid>
        <Border Grid.Row="3" Background="{DynamicResource SurfaceSubtleBrush}" BorderBrush="{DynamicResource LineBrush}" BorderThickness="0,1,0,0" CornerRadius="0,0,0,17">
         <Grid Margin="20,0">
-         <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+         <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
          <TextBlock x:Name="Summary" FontSize="11" Foreground="{DynamicResource TextSecondaryBrush}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
          <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center" Margin="10,0,0,0">
           <Ellipse Width="5" Height="5" Fill="{DynamicResource AccentInkBrush}" Margin="0,0,6,0"/>
           <TextBlock x:Name="Status" Text="已保存" FontSize="11" Foreground="{DynamicResource TextSecondaryBrush}" VerticalAlignment="Center" MaxWidth="200" TextTrimming="CharacterEllipsis"/>
          </StackPanel>
-         <Button x:Name="UpdateAvailableButton" Grid.Column="2" Visibility="Collapsed" Click="OnUpdateAvailable" AutomationProperties.Name="发现新版本，点击更新"
+         <Button x:Name="TaskbarNameHelp" Grid.Column="2" Visibility="Collapsed" Click="OnTaskbarNameHelp"
+          FontSize="11" Foreground="{DynamicResource AccentInkBrush}" Background="{DynamicResource SelectionBrush}" Padding="8,4"
+          Margin="8,0,0,0" VerticalAlignment="Center" Content="修复任务栏旧名称"/>
+         <Button x:Name="UpdateAvailableButton" Grid.Column="3" Visibility="Collapsed" Click="OnUpdateAvailable" AutomationProperties.Name="发现新版本，点击更新"
           FontSize="11" Foreground="{DynamicResource AccentInkBrush}" Background="{DynamicResource SelectionBrush}" Padding="8,4"
           Margin="8,0,0,0" VerticalAlignment="Center" ToolTip="查看 GitHub 更新说明，确认后下载更新"/>
         </Grid>

@@ -133,7 +133,7 @@ internal sealed class SettingsWindow : Window
                 Pick("添加图标默认视图", null, _options.DefaultCollectView,
                     [("icons", "图标"), ("details", "详细列表")], value => _options.DefaultCollectView = value);
                 ButtonRow("创建或刷新程序入口", () => ContinueWith(ActionAfterClose.RefreshEntry), enabled: !App.IsSandbox);
-                ButtonRow("如何固定到任务栏", () => ContinueWith(ActionAfterClose.PinHelp));
+                ButtonRow("任务栏固定与名称修复", () => ContinueWith(ActionAfterClose.PinHelp));
                 if (_owner.BilliardsRunning) ButtonRow("退出台球", () => ContinueWith(ActionAfterClose.StopGame));
                 ButtonRow("退出并结束进程", () => ContinueWith(ActionAfterClose.Quit));
                 break;

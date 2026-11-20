@@ -64,6 +64,12 @@ public partial class MainWindow : Window
         UpdateAvailableButton.Visibility=release is null?Visibility.Collapsed:Visibility.Visible;
     }
     private async void OnUpdateAvailable(object sender,RoutedEventArgs e)=>await CheckOnlineUpdateAsync(true);
+    internal void RefreshTaskbarPlacement()
+    {
+        TaskbarPlacement.Invalidate();
+        Place();
+    }
+
     private async void Place()
     {
         if(_resizing || _notesSplitting || KeepOpenForVerification || !IsLoaded || WindowState!=WindowState.Normal)return;
@@ -71,7 +77,20 @@ public partial class MainWindow : Window
         var fallback=TaskbarPlacement.Fallback();if(TaskbarPlacement.WouldMove(this,fallback,PreferredWindowSize))UiMotion.StopReveal(Surface);
         TaskbarPlacement.Apply(this,fallback,PreferredWindowSize);
         var anchor=await TaskbarPlacement.FindAsync();
-        if(anchor is not null && version==_placementVersion && !_resizing && !_notesSplitting && !KeepOpenForVerification && WindowState==WindowState.Normal){if(TaskbarPlacement.WouldMove(this,anchor,PreferredWindowSize))UiMotion.StopReveal(Surface);TaskbarPlacement.Apply(this,anchor,PreferredWindowSize);}
+        if(anchor is not null && version==_placementVersion && !_resizing && !_notesSplitting && !KeepOpenForVerification && WindowState==WindowState.Normal)
+        {
+            if(TaskbarPlacement.WouldMove(this,anchor,PreferredWindowSize)) UiMotion.StopReveal(Surface);
+            TaskbarPlacement.Apply(this,anchor,PreferredWindowSize);
+            if (!App.IsSandbox && anchor.AppCaption is not null)
+            {
+                var visible = ShortcutInstaller.IsLegacyTaskbarCaption(anchor.AppCaption) ? Visibility.Visible : Visibility.Collapsed;
+                if (TaskbarNameHelp.Visibility != visible)
+                {
+                    TaskbarNameHelp.Visibility = visible;
+                    _shutter.InvalidateSnapshot();
+                }
+            }
+        }
     }
     public void ShowPanel() { EnsurePanelContent();bool reverse=_hidePending;WindowState=WindowState.Normal;Show();Place();if(reverse)OpenPanelMotion();Activate(); }
     public void TogglePanel(){if(_hidePending)ShowPanel();else if(WindowState==WindowState.Normal&&IsVisible)BeginHidePanel();else ShowPanel();}
@@ -203,14 +222,21 @@ public partial class MainWindow : Window
         if (App.IsSandbox) return;
         ShortcutInstaller.Install();
         BrandMigration.RefreshAfterUpgrade(Store.DataDirectory);
+        RefreshTaskbarPlacement();
     }, "程序入口已刷新，可从开始菜单固定到任务栏");
 
-    private void ShowPinHelp()
+    private void OnTaskbarNameHelp(object sender, RoutedEventArgs args) => ShowPinHelp(legacyName: true);
+
+    private void ShowPinHelp(bool legacyName = false)
     {
         _interactions++;
         try
         {
-            UiDialogs.Show(this, "右键任务栏上的折页图标，选择“固定到任务栏”。\n固定后点击同一个入口即可打开或收起面板。", "固定到任务栏");
+            const string replace = "如果 Windows 仍显示旧名称，请右键旧入口，选择「从任务栏取消固定」。\n" +
+                "然后在开始菜单搜索「折页」，右键选择「固定到任务栏」，再把图标拖回原位置。";
+            string message = legacyName ? replace :
+                "右键任务栏上的折页图标，选择「固定到任务栏」。\n\n" + replace;
+            UiDialogs.Show(this, message, legacyName ? "修复任务栏旧名称" : "固定到任务栏");
         }
         finally { _interactions--; }
     }

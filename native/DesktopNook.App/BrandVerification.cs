@@ -70,6 +70,21 @@ internal static class BrandVerification
                 if (!IconPixels(Environment.ProcessPath!).SequenceEqual(IconPixels(expectedIcon)))
                     throw new Exception("Windows 从 EXE 提取的图标与入口使用的 ICO 不一致。");
                 checks.Add("Executable shell icon and refreshed shortcut ICO contain the same artwork");
+                ShortcutInstaller.SetIdentity(ownedPath, expectedIcon + ",0", Environment.ProcessPath!, "--outdated-fixture");
+                BrandMigration.Refresh(App.Store.DataDirectory,folder,pinned,reg,publicIcons);
+                if (ShortcutInstaller.SetIdentity(ownedPath, expectedIcon + ",0", Environment.ProcessPath!, args))
+                    throw new Exception("仅启动属性过期时仍应更新固定入口。");
+                var repairedHash = LocalUpdater.Hash(ownedPath);
+                BrandMigration.Refresh(App.Store.DataDirectory,folder,pinned,reg,publicIcons);
+                if (LocalUpdater.Hash(ownedPath) != repairedHash)
+                    throw new Exception("重复执行升级刷新不应重写已正确的固定入口。");
+                if (!ShortcutInstaller.IsLegacyTaskbarCaption("轻匣 (2) - 1 个运行窗口 已固定") ||
+                    !ShortcutInstaller.IsLegacyTaskbarCaption("随手 已固定") ||
+                    ShortcutInstaller.IsLegacyTaskbarCaption("折页 - 1 个运行窗口 已固定") ||
+                    ShortcutInstaller.IsLegacyTaskbarCaption("轻匣工具"))
+                    throw new Exception("旧任务栏名称识别异常。");
+                ShortcutInstaller.SetWindowIdentity(new System.Windows.Interop.WindowInteropHelper(owner).Handle, Environment.ProcessPath!);
+                checks.Add("Upgrade repairs stale relaunch metadata alone, is idempotent, and recognizes only legacy captions");
                 dynamic updatedPin=shell.CreateShortcut(ownedPath);
                 try{if((string)updatedPin.TargetPath!=Environment.ProcessPath||(string)updatedPin.Arguments!=args||(string)updatedPin.WorkingDirectory!=root||(string)updatedPin.IconLocation!=expectedIcon+",0")throw new Exception("固定入口迁移未保留目标或参数。");updatedPin.IconLocation=Environment.ProcessPath+",0";updatedPin.Save();}finally{Marshal.FinalReleaseComObject(updatedPin);}
                 var pinBefore=LocalUpdater.Hash(ownedPath);var pinTime=File.GetLastWriteTimeUtc(ownedPath);var startBefore=LocalUpdater.Hash(renamed);

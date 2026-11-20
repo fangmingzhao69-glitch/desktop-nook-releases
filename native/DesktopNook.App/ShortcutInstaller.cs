@@ -5,7 +5,10 @@ namespace DesktopNook.App;
 
 internal static class ShortcutInstaller
 {
+    internal const string ApplicationId = "DesktopNook.DesktopNook";
+    internal const string DisplayName = "折页";
     internal static readonly string[] LegacyNames = ["随手.lnk", "一处.lnk", "轻匣.lnk", "桌面小筑.lnk"];
+    private static readonly Guid AppUserModelFormat = new("9F4C2855-9F79-4B39-A8D0-E1D42DE1D5F3");
     [StructLayout(LayoutKind.Sequential)]private struct PropertyKey {public Guid Format;public uint Id;}
     [StructLayout(LayoutKind.Explicit,Size=24)]private struct Variant {[FieldOffset(0)]public ushort Type;[FieldOffset(8)]public IntPtr Text;}
     [ComImport,Guid("886D8EEB-8CF2-4446-8D02-CDBA1DBDCF99"),InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
@@ -14,6 +17,11 @@ internal static class ShortcutInstaller
         uint GetCount();void GetAt(uint index,out PropertyKey key);void GetValue(ref PropertyKey key,out Variant value);void SetValue(ref PropertyKey key,ref Variant value);void Commit();
     }
     [DllImport("shell32.dll",CharSet=CharSet.Unicode)]private static extern int SHGetPropertyStoreFromParsingName(string path,IntPtr bind,uint flags,ref Guid iid,[MarshalAs(UnmanagedType.Interface)]out IPropertyStore store);
+    [DllImport("shell32.dll")]
+    private static extern int SHGetPropertyStoreForWindow(IntPtr window, ref Guid iid, [MarshalAs(UnmanagedType.Interface)] out IPropertyStore store);
+    [DllImport("ole32.dll")]
+    private static extern int PropVariantClear(ref Variant value);
+
     public static string Install(string? folderOverride=null)
     {
         var program=Environment.ProcessPath??throw new IOException("无法确定程序位置。");
@@ -64,6 +72,19 @@ internal static class ShortcutInstaller
         finally { Marshal.FinalReleaseComObject(shell); }
     }
 
+    internal static bool IsLegacyTaskbarCaption(string caption)
+    {
+        foreach (var link in LegacyNames)
+        {
+            string name = Path.GetFileNameWithoutExtension(link);
+            if (!caption.StartsWith(name, StringComparison.Ordinal)) continue;
+            if (caption.Length == name.Length || char.IsWhiteSpace(caption[name.Length]) ||
+                caption[name.Length] is '-' or '–' or '—' or '(' or '（')
+                return true;
+        }
+        return false;
+    }
+
     private static bool Owned(dynamic shell, string link, string program)
     {
         if (!File.Exists(link)) return false;
@@ -71,19 +92,71 @@ internal static class ShortcutInstaller
         try { return string.Equals((string)entry.TargetPath, program, StringComparison.OrdinalIgnoreCase); }
         finally { Marshal.FinalReleaseComObject(entry); }
     }
-    internal static void SetIdentity(string link,string icon,string program,string arguments)
+    internal static bool SetIdentity(string link, string icon, string program, string arguments)
     {
-        var iid=typeof(IPropertyStore).GUID;Marshal.ThrowExceptionForHR(SHGetPropertyStoreFromParsingName(link,IntPtr.Zero,2,ref iid,out var store));
+        var iid = typeof(IPropertyStore).GUID;
+        Marshal.ThrowExceptionForHR(SHGetPropertyStoreFromParsingName(link, IntPtr.Zero, 2, ref iid, out var store));
+        try { return UpdateIdentity(store, icon, program, arguments); }
+        finally { Marshal.FinalReleaseComObject(store); }
+    }
+
+    internal static void SetWindowIdentity(IntPtr window, string program)
+    {
+        var iid = typeof(IPropertyStore).GUID;
+        Marshal.ThrowExceptionForHR(SHGetPropertyStoreForWindow(window, ref iid, out var store));
+        System.Windows.Interop.HwndSource.FromHwnd(window)?.AddHook(ClearWindowIdentity);
+        try { UpdateIdentity(store, program + ",0", program, ""); }
+        finally { Marshal.FinalReleaseComObject(store); }
+    }
+
+    private static IntPtr ClearWindowIdentity(IntPtr window, int message, IntPtr wParam, IntPtr lParam, ref bool handled)
+    {
+        const int destroy = 2;
+        if (message != destroy) return IntPtr.Zero;
+        var iid = typeof(IPropertyStore).GUID;
+        if (SHGetPropertyStoreForWindow(window, ref iid, out var store) < 0) return IntPtr.Zero;
         try
         {
-            void Set(uint id,string text)
+            for (uint id = 2; id <= 5; id++)
             {
-                var key=new PropertyKey{Format=new Guid("9F4C2855-9F79-4B39-A8D0-E1D42DE1D5F3"),Id=id};
-                var value=new Variant{Type=31,Text=Marshal.StringToCoTaskMemUni(text)};
-                try{store.SetValue(ref key,ref value);}finally{Marshal.FreeCoTaskMem(value.Text);}
+                var key = new PropertyKey { Format = AppUserModelFormat, Id = id };
+                Variant empty = default;
+                store.SetValue(ref key, ref empty);
             }
-            Set(5,"DesktopNook.DesktopNook");Set(4,"折页");Set(3,icon);Set(2,"\""+program+"\""+(arguments.Length>0?" "+arguments:""));store.Commit();
         }
-        finally{Marshal.FinalReleaseComObject(store);}
+        catch (COMException) { }
+        finally { Marshal.FinalReleaseComObject(store); }
+        return IntPtr.Zero;
+    }
+
+    private static bool UpdateIdentity(IPropertyStore store, string icon, string program, string arguments)
+    {
+        string command = "\"" + program + "\"" + (arguments.Length > 0 ? " " + arguments : "");
+        if (Matches(2, command) && Matches(3, icon) && Matches(4, DisplayName) && Matches(5, ApplicationId))
+            return false;
+
+        Set(2, command);
+        Set(3, icon);
+        Set(4, DisplayName);
+        // The shell can refresh the entry when AppUserModelID is assigned.
+        Set(5, ApplicationId);
+        store.Commit();
+        return true;
+
+        bool Matches(uint id, string text)
+        {
+            var key = new PropertyKey { Format = AppUserModelFormat, Id = id };
+            store.GetValue(ref key, out var value);
+            try { return value.Type == 31 && Marshal.PtrToStringUni(value.Text) == text; }
+            finally { PropVariantClear(ref value); }
+        }
+
+        void Set(uint id, string text)
+        {
+            var key = new PropertyKey { Format = AppUserModelFormat, Id = id };
+            var value = new Variant { Type = 31, Text = Marshal.StringToCoTaskMemUni(text) };
+            try { store.SetValue(ref key, ref value); }
+            finally { PropVariantClear(ref value); }
+        }
     }
 }

@@ -2,7 +2,7 @@
 
 常用与灵感，折页之间。折页是 Windows 桌面收纳工具。用一个任务栏入口打开收纳面板，左侧整理软件、文件和文件夹，右侧记录便签和待办。
 
-[下载 0.20.1 安装包](https://github.com/fangmingzhao69-glitch/desktop-nook-releases/releases/download/v0.20.1/DesktopNook-Setup.exe) · [最新正式版](https://github.com/fangmingzhao69-glitch/desktop-nook-releases/releases/latest) · [使用说明](docs/使用说明.md)
+[下载 0.20.2 安装包](https://github.com/fangmingzhao69-glitch/desktop-nook-releases/releases/download/v0.20.2/DesktopNook-Setup.exe) · [最新正式版](https://github.com/fangmingzhao69-glitch/desktop-nook-releases/releases/latest) · [使用说明](docs/使用说明.md)
 
 ![折页收纳与便签双栏界面](docs/images/zheye-overview.png)
 
@@ -27,7 +27,7 @@
 | --- | --- |
 | `DesktopNook-Setup.exe` | 首次安装或直接覆盖升级。缺少运行时时，安装器会提示补装。 |
 | `DesktopNook-win-x64.exe` | 免安装版。请先安装桌面运行时，再放到固定目录运行。 |
-| `DesktopNook-v0.20.1-source.zip` | 与本版对应的源码、构建脚本、源依赖和许可证。 |
+| `DesktopNook-v0.20.2-source.zip` | 与本版对应的源码、构建脚本、源依赖和许可证。 |
 | `SHA256SUMS.txt` | 所有发行文件的校验值。 |
 
 升级可在折页的「设置 → 关于与更新 → 检查在线更新」操作。完整迁移或备份请复制整个数据目录，可从「设置 → 数据与恢复 → 打开数据目录」进入。

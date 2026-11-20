@@ -115,15 +115,26 @@ public partial class App : Application
             showTray |= IsSandbox && e.Args.Contains("--tray-self-test");
 #endif
             if (showTray) window.InitializeTray(IsSandbox ? root : null);
+            if (!IsSandbox)
+                window.SourceInitialized += (_, _) =>
+                {
+                    try { ShortcutInstaller.SetWindowIdentity(new System.Windows.Interop.WindowInteropHelper(window).Handle, Environment.ProcessPath!); }
+                    catch (Exception ex) when (ex is System.Runtime.InteropServices.COMException or UnauthorizedAccessException)
+                    { window.SetStatus("窗口入口名称更新失败，可在设置中刷新程序入口。"); }
+                };
             if(!IsSandbox)Dispatcher.BeginInvoke(() =>
             {
                 try
                 {
-                    if (resumeIndex >= 0) BrandMigration.RefreshAfterUpgrade(Store.DataDirectory);
+                    if (resumeIndex >= 0)
+                    {
+                        BrandMigration.RefreshAfterUpgrade(Store.DataDirectory);
+                        window.RefreshTaskbarPlacement();
+                    }
                     else BrandMigration.Refresh(Store.DataDirectory);
                 }
                 catch (Exception) { window.SetStatus("入口图标刷新未完成，可在设置中刷新程序入口。"); }
-            }, System.Windows.Threading.DispatcherPriority.ContextIdle);
+            }, resumeIndex >= 0 ? System.Windows.Threading.DispatcherPriority.Loaded : System.Windows.Threading.DispatcherPriority.ContextIdle);
             window.KeepOpenForVerification=IsSandbox&&e.Args.Contains("--keep-open-verification");
             if(e.Args.Contains("--autostart")){window.ShowActivated=false;window.WindowState=WindowState.Minimized;}
             window.Show();

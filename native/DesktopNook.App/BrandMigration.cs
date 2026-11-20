@@ -73,11 +73,18 @@ internal static class BrandMigration
                 dynamic entry=shell.CreateShortcut(link);
                 try
                 {
-                    if(string.Equals((string)entry.IconLocation,iconLocation,StringComparison.OrdinalIgnoreCase)&&(string)entry.Description=="折页")return;
-                    var arguments=(string)entry.Arguments;
+                    var arguments = (string)entry.Arguments;
+                    bool saved = !string.Equals((string)entry.IconLocation, iconLocation, StringComparison.OrdinalIgnoreCase) ||
+                        (string)entry.Description != ShortcutInstaller.DisplayName;
                     // Preserve target, arguments, working directory, file name and pin order.
-                    entry.IconLocation=iconLocation;entry.Description="折页";entry.Save();
-                    ShortcutInstaller.SetIdentity(link,iconLocation,program,arguments);
+                    if (saved)
+                    {
+                        entry.IconLocation = iconLocation;
+                        entry.Description = ShortcutInstaller.DisplayName;
+                        entry.Save();
+                    }
+                    bool updatedIdentity = ShortcutInstaller.SetIdentity(link, iconLocation, program, arguments);
+                    if (!saved && !updatedIdentity) return;
                     ShellIntegration.RefreshShortcut(link);
                     changed++;
                 }
