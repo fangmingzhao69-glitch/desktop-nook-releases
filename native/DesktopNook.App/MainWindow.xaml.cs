@@ -78,7 +78,7 @@ public partial class MainWindow : Window
     private void OnStateChanged(object? sender,EventArgs e) { if(WindowState!=WindowState.Minimized){Place();if(IsLoaded||ContentParked)OpenPanelMotion();}else {FinishPanelMotion();UiMotion.CancelAll();ScheduleIdleRelease();} }
     private void OnDeactivated(object? sender,EventArgs e)
     {
-        if(HoldVisibleForMotionProbe||TaskbarPlacement.PointerOverButton())return;
+        if(HoldVisibleForMotionProbe||TaskbarPlacement.PointerOverButton()||_tray?.PointerOverIcon()==true)return;
         Dispatcher.BeginInvoke(()=>{if(!HoldVisibleForMotionProbe&&!KeepOpenForVerification&&!IsActive&&_interactions==0&&!_dragging&&_menus==0&&WindowState!=WindowState.Minimized)BeginHidePanel();},System.Windows.Threading.DispatcherPriority.Background);
     }
     private void OnClosing(object? sender,CancelEventArgs e)

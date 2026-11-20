@@ -110,6 +110,11 @@ public partial class App : Application
             ThemePalette.Apply(Options.ThemeMode, Options.ColorTheme);
             ThemePalette.Watch(this);
             var window = new MainWindow(deferNoteVisuals: e.Args.Contains("--autostart")); MainWindow = window;
+            bool showTray = !IsSandbox;
+#if NOOK_UI_VERIFICATION
+            showTray |= IsSandbox && e.Args.Contains("--tray-self-test");
+#endif
+            if (showTray) window.InitializeTray(IsSandbox ? root : null);
             if(!IsSandbox)Dispatcher.BeginInvoke(() =>
             {
                 try
@@ -145,6 +150,7 @@ public partial class App : Application
                 var archive = taskbarTest + 1 < e.Args.Length ? Path.GetFullPath(e.Args[taskbarTest + 1]) : null;
                 Dispatcher.BeginInvoke(async () => await TaskbarAppearanceVerification.Run(window, root, archive), System.Windows.Threading.DispatcherPriority.Loaded);
             }
+            if (IsSandbox && e.Args.Contains("--tray-self-test")) Dispatcher.BeginInvoke(async () => await TrayVerification.Run(window, root), System.Windows.Threading.DispatcherPriority.Loaded);
             if (e.Args.Contains("--ui-self-test")) Dispatcher.BeginInvoke(async () => await NativeVerification.Run(window, root), System.Windows.Threading.DispatcherPriority.Loaded);
             if (e.Args.Contains("--friend-self-test")) Dispatcher.BeginInvoke(async () => await FriendVerification.Run(window, root), System.Windows.Threading.DispatcherPriority.Loaded);
             if (e.Args.Contains("--billiards-self-test")) Dispatcher.BeginInvoke(async () => await BilliardsVerification.Run(window, root), System.Windows.Threading.DispatcherPriority.Loaded);
