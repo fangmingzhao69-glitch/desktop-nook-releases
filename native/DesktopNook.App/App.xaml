@@ -176,6 +176,48 @@
         </Setter.Value>
       </Setter>
     </Style>
+    <Style x:Key="SettingsNavigationButton" TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">
+      <Setter Property="Background" Value="{DynamicResource SurfaceBrush}"/>
+      <Setter Property="Foreground" Value="{DynamicResource TextPrimaryBrush}"/>
+      <Setter Property="BorderBrush" Value="{DynamicResource LineBrush}"/>
+      <Setter Property="BorderThickness" Value="1"/>
+      <Setter Property="Padding" Value="10,7"/>
+      <Setter Property="MinHeight" Value="40"/>
+      <Setter Property="FontSize" Value="14"/>
+      <Setter Property="Template">
+        <Setter.Value>
+          <ControlTemplate TargetType="Button">
+            <Border x:Name="Chrome" Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}"
+                BorderThickness="{TemplateBinding BorderThickness}" CornerRadius="8">
+              <ContentPresenter Margin="{TemplateBinding Padding}" HorizontalAlignment="Left" VerticalAlignment="Center"/>
+            </Border>
+            <ControlTemplate.Triggers>
+              <MultiTrigger>
+                <MultiTrigger.Conditions>
+                  <Condition Property="IsMouseOver" Value="True"/>
+                  <Condition Property="Selector.IsSelected" Value="False"/>
+                </MultiTrigger.Conditions>
+                <Setter TargetName="Chrome" Property="Background" Value="{DynamicResource SelectionHoverBrush}"/>
+                <Setter TargetName="Chrome" Property="BorderBrush" Value="{DynamicResource FoldEdgeBrush}"/>
+              </MultiTrigger>
+              <Trigger Property="IsKeyboardFocused" Value="True">
+                <Setter TargetName="Chrome" Property="BorderBrush" Value="{DynamicResource TextPrimaryBrush}"/>
+                <Setter TargetName="Chrome" Property="BorderThickness" Value="2"/>
+              </Trigger>
+              <Trigger Property="IsPressed" Value="True"><Setter Property="Opacity" Value=".85"/></Trigger>
+            </ControlTemplate.Triggers>
+          </ControlTemplate>
+        </Setter.Value>
+      </Setter>
+      <Style.Triggers>
+        <Trigger Property="Selector.IsSelected" Value="True">
+          <Setter Property="Background" Value="{DynamicResource PrimaryBrush}"/>
+          <Setter Property="Foreground" Value="{DynamicResource SettingsSelectionTextBrush}"/>
+          <Setter Property="BorderBrush" Value="{DynamicResource PrimaryBrush}"/>
+          <Setter Property="FontWeight" Value="SemiBold"/>
+        </Trigger>
+      </Style.Triggers>
+    </Style>
     <Style x:Key="CategoryTab" TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">
       <Setter Property="MinHeight" Value="32"/>
       <Setter Property="Template"><Setter.Value><ControlTemplate TargetType="Button">

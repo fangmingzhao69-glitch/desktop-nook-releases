@@ -2,12 +2,19 @@ using System.ComponentModel;
 using System.Windows;
 using System.Windows.Automation;
 using System.Windows.Controls;
+using System.Windows.Controls.Primitives;
+using System.Windows.Data;
 using System.Windows.Media;
 
 namespace DesktopNook.App;
 
 internal sealed class SettingsWindow : Window
 {
+    private static readonly Size PreferredSize = new(820, 540);
+    private const double SidebarWidth = 204;
+    private const double CompactWidth = 590;
+    private const double CompactHeight = 350;
+    private const double WorkAreaInset = 12;
     internal const string TaskbarPage = "任务栏外观设置";
     internal enum ActionAfterClose { None, RefreshEntry, PinHelp, StopGame, Quit, Restore, OpenData, CheckUpdate, LocalUpdate, Releases, License, GameLicense }
     private readonly MainWindow _owner;
@@ -34,36 +41,57 @@ internal sealed class SettingsWindow : Window
         _taskbarSession = taskbarSession;
         Owner = owner;
         Title = "设置";
-        Width = 820;
-        Height = 540;
+        Width = PreferredSize.Width;
+        Height = PreferredSize.Height;
         ShowInTaskbar = false;
         ResizeMode = ResizeMode.NoResize;
-        WindowStartupLocation = WindowStartupLocation.CenterOwner;
+        WindowStartupLocation = WindowStartupLocation.Manual;
         FontSize = 13;
 
         var root = new Grid { Margin = new Thickness(0, 12, 0, 0) };
-        root.ColumnDefinitions.Add(new() { Width = new(180) });
+        var sidebarColumn = new ColumnDefinition { Width = new(SidebarWidth) };
+        root.ColumnDefinitions.Add(sidebarColumn);
         root.ColumnDefinitions.Add(new());
-        var sidebar = new StackPanel { Margin = new Thickness(12) };
-        var brand = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(8, 8, 0, 16) };
+        root.RowDefinitions.Add(new() { Height = GridLength.Auto });
+        root.RowDefinitions.Add(new());
+        var sidebar = new StackPanel { Margin = new Thickness(12, 12, 10, 12) };
+        var brand = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(2, 0, 0, 9) };
         var mark = new Image { Width = 24, Height = 24, Margin = new Thickness(0, 0, 8, 0) };
         mark.SetResourceReference(Image.SourceProperty, "FoldMark");
         brand.Children.Add(mark);
-        var brandName = Text("折页", 16);
+        var brandName = Text("设置菜单", 16, "TextPrimaryBrush");
         brandName.FontWeight = FontWeights.SemiBold;
         brand.Children.Add(brandName);
         sidebar.Children.Add(brand);
+        var navigation = new WrapPanel();
+        var groupLabels = new List<TextBlock>();
+        sidebar.Children.Add(navigation);
         AddNavigationLabel("偏好设置");
-        AddNavigation("常规"); AddNavigation("外观"); AddNavigation(TaskbarPage);
+        AddNavigation("常规", "M2,4 H14 M2,8 H14 M2,12 H14 M6,2 V6 M10,6 V10 M5,10 V14");
+        AddNavigation("外观", "M3,3 H13 V13 H3 Z M6,3 V13 M6,9 L11,3 M7,13 L13,7");
+        AddNavigation(TaskbarPage, "M2,3 H14 V13 H2 Z M2,10 H14 M6,11.5 H10");
         AddNavigationLabel("支持");
-        AddNavigation("数据与恢复"); AddNavigation("关于与更新");
-        root.Children.Add(new Border { Background = ThemePalette.Brush("CanvasSubtleBrush"), CornerRadius = new CornerRadius(0,0,0,13),
-            Child = new ScrollViewer { Content = sidebar, VerticalScrollBarVisibility = ScrollBarVisibility.Auto } });
+        AddNavigation("数据与恢复", "M2,5 H7 L8,6 H14 V13 H2 Z M2,5 V3 H7 L8,5");
+        AddNavigation("关于与更新", "M8,2 A6,6 0 1 1 8,14 A6,6 0 1 1 8,2 M8,7 V11 M8,5 V5.1");
+        var navigationScroll = new ScrollViewer
+        {
+            Content = sidebar, VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
+            HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled
+        };
+        AutomationProperties.SetAutomationId(navigationScroll, "Settings-Navigation");
+        var navigationSurface = new Border
+        {
+            Background = ThemePalette.Brush("CanvasSubtleBrush"), BorderBrush = ThemePalette.Brush("FoldEdgeBrush"),
+            Child = navigationScroll
+        };
+        root.Children.Add(navigationSurface);
         _content.Margin = new Thickness(24, 8, 24, 20);
         _scroller = new ScrollViewer { Content = _content, VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
             HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled };
         Grid.SetColumn(_scroller, 1);
         Grid.SetColumn(_taskbarContent, 1);
+        Grid.SetRow(_scroller, 1);
+        Grid.SetRow(_taskbarContent, 1);
         root.Children.Add(_scroller);
         root.Children.Add(_taskbarContent);
         Content = root;
@@ -71,41 +99,94 @@ internal sealed class SettingsWindow : Window
         SelectPage("常规");
         Closing += OnClosing;
         Closed += (_, _) => _taskbarPage?.StopPreviewTimer();
+        bool? compact = null;
+        root.SizeChanged += (_, args) => LayOutNavigation(args.NewSize);
         SourceInitialized += (_, _) =>
         {
             var work = TaskbarPlacement.WorkArea(owner);
-            MaxWidth = Math.Max(1, work.Width * .92);
-            MaxHeight = Math.Max(1, work.Height * .92);
-            Width = Math.Min(820, MaxWidth);
-            Height = Math.Min(540, MaxHeight);
+            var origin = new Point(double.IsFinite(owner.Left) ? owner.Left : work.Left,
+                double.IsFinite(owner.Top) ? owner.Top : work.Top);
+            var bounds = InitialBounds(new Rect(origin, new Size(owner.ActualWidth, owner.ActualHeight)), work);
+            MaxWidth = Math.Max(1, work.Width - WorkAreaInset * 2);
+            MaxHeight = Math.Max(1, work.Height - WorkAreaInset * 2);
+            Width = bounds.Width;
+            Height = bounds.Height;
+            Left = bounds.Left;
+            Top = bounds.Top;
+            LayOutNavigation(bounds.Size);
         };
 
-        void AddNavigation(string page)
+        void LayOutNavigation(Size available)
         {
-            var button = new Button { Content = page, MinHeight = 34, Margin = new Thickness(0, 0, 0, 4) };
+            bool top = available.Width < CompactWidth || available.Height < CompactHeight;
+            if (compact != top)
+            {
+                compact = top;
+                sidebarColumn.Width = new GridLength(top ? 0 : SidebarWidth);
+                Grid.SetRow(navigationSurface, top ? 0 : 1);
+                Grid.SetColumnSpan(navigationSurface, top ? 2 : 1);
+                navigationSurface.BorderThickness = top ? new Thickness(0, 0, 0, 1) : new Thickness(0, 0, 1, 0);
+                navigationSurface.CornerRadius = top ? new CornerRadius(0) : new CornerRadius(0, 0, 0, 13);
+                navigation.ItemWidth = top ? double.NaN : 175;
+                foreach (var label in groupLabels) label.Visibility = top ? Visibility.Collapsed : Visibility.Visible;
+                _content.Margin = top ? new Thickness(14, 12, 14, 16) : new Thickness(24, 8, 24, 20);
+            }
+            navigationScroll.MaxHeight = top
+                ? Math.Min(available.Height * .55, Math.Max(155, available.Height * .42))
+                : double.PositiveInfinity;
+        }
+
+        void AddNavigation(string page, string geometry)
+        {
+            var button = new Button
+            {
+                Style = (Style)FindResource("SettingsNavigationButton"),
+                Margin = new Thickness(0, 0, 6, 5)
+            };
+            var content = new StackPanel { Orientation = Orientation.Horizontal };
+            var glyph = DesignGlyphs.Path(geometry);
+            glyph.Margin = new Thickness(0, 0, 8, 0);
+            glyph.SetBinding(System.Windows.Shapes.Shape.StrokeProperty, new Binding("Foreground") { Source = button });
+            content.Children.Add(glyph);
+            content.Children.Add(new TextBlock { Text = page, VerticalAlignment = VerticalAlignment.Center });
+            button.Content = content;
             AutomationProperties.SetAutomationId(button, "SettingsPage-" + page);
+            AutomationProperties.SetName(button, page);
             button.Click += async (_, _) =>
             {
                 if (page == TaskbarPage || await LeaveTaskbarAsync()) SelectPage(page);
             };
-            sidebar.Children.Add(button);
+            navigation.Children.Add(button);
             _navigation.Add(page, button);
         }
         void AddNavigationLabel(string label)
         {
-            var text = Text(label, 11, "TextSecondaryBrush");
-            text.Margin = new Thickness(8, 10, 0, 6);
-            sidebar.Children.Add(text);
+            var text = Text(label, 12, "TextSecondaryBrush");
+            text.FontWeight = FontWeights.SemiBold;
+            text.Margin = new Thickness(4, 8, 0, 5);
+            groupLabels.Add(text);
+            navigation.Children.Add(text);
         }
+    }
+
+    internal static Rect InitialBounds(Rect owner, Rect work)
+    {
+        var width = Math.Min(PreferredSize.Width, Math.Max(1, work.Width - WorkAreaInset * 2));
+        var height = Math.Min(PreferredSize.Height, Math.Max(1, work.Height - WorkAreaInset * 2));
+        var horizontalInset = Math.Min(WorkAreaInset, Math.Max(0, (work.Width - width) / 2));
+        var verticalInset = Math.Min(WorkAreaInset, Math.Max(0, (work.Height - height) / 2));
+        var left = Math.Clamp(owner.X + (owner.Width - width) / 2,
+            work.Left + horizontalInset, Math.Max(work.Left + horizontalInset, work.Right - horizontalInset - width));
+        var top = Math.Clamp(owner.Y + (owner.Height - height) / 2,
+            work.Top + verticalInset, Math.Max(work.Top + verticalInset, work.Bottom - verticalInset - height));
+        return new Rect(left, top, width, height);
     }
 
     internal void SelectPage(string page)
     {
         foreach (var (name, button) in _navigation)
         {
-            button.Background = name == page ? ThemePalette.Brush("SelectionBrush") : Brushes.Transparent;
-            button.Foreground = ThemePalette.Brush(name == page ? "AccentInkBrush" : "TextPrimaryBrush");
-            button.FontWeight = name == page ? FontWeights.SemiBold : FontWeights.Normal;
+            Selector.SetIsSelected(button, name == page);
             AutomationProperties.SetItemStatus(button, name == page ? "当前页" : "");
         }
         _taskbarSelected = page == TaskbarPage;

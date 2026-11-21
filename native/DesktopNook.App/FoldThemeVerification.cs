@@ -2,6 +2,7 @@ using System.IO;
 using System.Windows;
 using System.Windows.Automation;
 using System.Windows.Controls;
+using System.Windows.Controls.Primitives;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using System.Windows.Threading;
@@ -25,12 +26,50 @@ internal static class FoldThemeVerification
             Check(main.Title == "折页" && new DesktopNook.Core.NotesState().LeftFraction == .61,
                 "折页窗口显示新品牌，新便签默认按 61:39 分栏");
             settings.Show();
+            await settings.Dispatcher.InvokeAsync(() => { }, DispatcherPriority.ContextIdle);
+            var work = TaskbarPlacement.WorkArea(main);
+            var windowBounds = new Rect(settings.Left, settings.Top, settings.ActualWidth, settings.ActualHeight);
+            Check(work.Contains(windowBounds), "设置窗口首次打开时完整落在工作区");
+            var narrowWork = new Rect(-480, 80, 480, 550);
+            var nearEdge = new Rect(-630, 450, 220, 160);
+            var fitted = SettingsWindow.InitialBounds(nearEdge, narrowWork);
+            Check(narrowWork.Contains(fitted) && fitted.Left >= narrowWork.Left + 12 &&
+                fitted.Bottom <= narrowWork.Bottom - 12, "设置窗口贴边或在左侧副屏时完整显示");
+
+            var menu = Find<ScrollViewer>(settings).Single(item =>
+                AutomationProperties.GetAutomationId(item)=="Settings-Navigation");
+            var items = Find<Button>(settings).Where(button =>
+                AutomationProperties.GetAutomationId(button).StartsWith("SettingsPage-", StringComparison.Ordinal)).ToArray();
+            Check(items.Length == 5 && items.Count(Selector.GetIsSelected) == 1 &&
+                items.Single(Selector.GetIsSelected).Background == ThemePalette.Brush("PrimaryBrush") &&
+                items.All(button => button.FontSize >= 14), "设置菜单有五个可辨认的入口和高亮当前页");
+            var oldWidth = settings.Width;
+            var oldHeight = settings.Height;
+            settings.Width = 450;
+            settings.Height = 480;
+            await settings.Dispatcher.InvokeAsync(() => { }, DispatcherPriority.ContextIdle);
+            settings.UpdateLayout();
+            Check(menu.ActualWidth > settings.ActualWidth * .95 && items.All(button =>
+            {
+                var origin = button.TranslatePoint(new Point(), menu);
+                return origin.X >= 0 && origin.Y >= 0 &&
+                    origin.X + button.ActualWidth <= menu.ActualWidth + 1 &&
+                    origin.Y + button.ActualHeight <= menu.ActualHeight + 1;
+            }), "窄窗口把五个菜单移到顶部，首屏可见");
+            await Save(settings, "zheye-settings-navigation-compact.png");
+            settings.Width = oldWidth;
+            settings.Height = oldHeight;
+            await settings.Dispatcher.InvokeAsync(() => { }, DispatcherPriority.ContextIdle);
+            Check(menu.ActualWidth < settings.ActualWidth / 2, "恢复宽窗口后菜单回到左侧");
+            await Save(settings, "zheye-settings-navigation.png");
             foreach (var page in new[] { "常规", "外观", SettingsWindow.TaskbarPage, "数据与恢复", "关于与更新" })
             {
                 settings.SelectPage(page);
                 settings.UpdateLayout();
                 Check(Find<TextBlock>(settings).Any(text => text.Text == page && text.FontSize >= 17),
                     "设置页可打开：" + page);
+                Check(AutomationProperties.GetAutomationId(items.Single(Selector.GetIsSelected)) == "SettingsPage-" + page,
+                    "设置菜单随页面高亮：" + page);
             }
             var sourceControl=Find<ComboBox>(settings).Single(item =>
                 AutomationProperties.GetAutomationId(item)=="Settings-UpdateChannel");
@@ -80,6 +119,10 @@ internal static class FoldThemeVerification
                         (SystemParameters.HighContrast ||
                          boundBrush.Color == (Color)ColorConverter.ConvertFromString(expected.Accent)),
                         family.Name + "在" + (mode == "dark" ? "深色" : "浅色") + "模式实时更新颜色");
+                    var selectedMenu = items.Single(Selector.GetIsSelected);
+                    Check(SystemParameters.HighContrast ||
+                        (selectedMenu.Background is SolidColorBrush background && selectedMenu.Foreground is SolidColorBrush foreground &&
+                         Contrast(background.Color, foreground.Color) >= 4.5), family.Name + "的设置菜单文字与选中底色清晰区分");
                     await Save(main, $"zheye-{family.Id}-{mode}.png");
                 }
             }
@@ -142,6 +185,14 @@ internal static class FoldThemeVerification
             using var output = File.Create(Path.Combine(root, name));
             encoder.Save(output);
         }
+    }
+
+    private static double Contrast(Color a, Color b)
+    {
+        static double Luminance(Color color) => .2126 * color.ScR + .7152 * color.ScG + .0722 * color.ScB;
+        var first = Luminance(a);
+        var second = Luminance(b);
+        return (Math.Max(first, second) + .05) / (Math.Min(first, second) + .05);
     }
 
     private static IEnumerable<T> Find<T>(DependencyObject root) where T : DependencyObject
