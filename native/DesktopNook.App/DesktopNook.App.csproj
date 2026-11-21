@@ -1,7 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
     <OutputType>WinExe</OutputType><TargetFramework>net10.0-windows</TargetFramework><UseWPF>true</UseWPF>
-    <AssemblyName>DesktopNook</AssemblyName><RootNamespace>DesktopNook.App</RootNamespace><Version>0.21.1</Version><Product>DesktopNook</Product><Title>折页</Title><AssemblyTitle>折页</AssemblyTitle><Description>折页 — 常用与灵感，折页之间。</Description>
+    <AssemblyName>DesktopNook</AssemblyName><RootNamespace>DesktopNook.App</RootNamespace><Version>0.21.2</Version><Product>DesktopNook</Product><Title>折页</Title><AssemblyTitle>折页</AssemblyTitle><Description>折页 — 常用与灵感，折页之间。</Description>
     <ApplicationIcon>Assets\AppIcon.ico</ApplicationIcon><ApplicationManifest>app.manifest</ApplicationManifest>
     <GiteeMirrorRepository>zfmdx/desktop-nook-releases</GiteeMirrorRepository>
   </PropertyGroup>
@@ -15,12 +15,13 @@
   </ItemGroup>
   <ItemGroup>
     <EmbeddedResource Include="..\..\LICENSE" LogicalName="DesktopNook.GplLicense" />
-    <EmbeddedResource Include="..\artifacts\dock\ZheyeDock.zip" LogicalName="DesktopNook.FloatingTaskbar" />
-    <EmbeddedResource Include="..\FloatingTaskbar\LICENSE" LogicalName="DesktopNook.FloatingTaskbarLicense" />
+    <EmbeddedResource Include="..\artifacts\native-shape\Qingxia-TaskbarCore-win-x64.zip"
+      LogicalName="DesktopNook.NativeTaskbarPackage"
+      Condition="Exists('..\artifacts\native-shape\Qingxia-TaskbarCore-win-x64.zip')" />
     <AssemblyMetadata Include="GiteeMirrorRepository" Value="$(GiteeMirrorRepository)" Condition="'$(GiteeMirrorRepository)' != ''" />
   </ItemGroup>
-  <Target Name="BuildFloatingTaskbar" BeforeTargets="PrepareForBuild" Condition="'$(DesignTimeBuild)' != 'true' And '$(SkipFloatingTaskbarBuild)' != 'true'">
-    <Exec Command="pwsh -NoProfile -File &quot;$(MSBuildProjectDirectory)\..\scripts\Build-Dock.ps1&quot;" />
-  </Target>
+  <ItemGroup>
+    <Compile Remove="MainWindow.FloatingTaskbar.cs;FloatingTaskbar*.cs;TaskbarSettingsPage.cs;DockScreens.cs" />
+  </ItemGroup>
   <ItemGroup><Page Remove="Assets\AppIconDrawing.xaml;Assets\AppIconSmallDrawing.xaml" /><Resource Include="Assets\AppIconDrawing.xaml" /><None Include="Assets\AppIconSmallDrawing.xaml" /><ProjectReference Include="..\DesktopNook.Core\DesktopNook.Core.csproj" /><Resource Include="Assets\AppIcon.png" /><Resource Include="Assets\AppIcon.ico" /><ProjectReference Include="..\DesktopNook.Games.Core\DesktopNook.Games.Core.csproj" /><EmbeddedResource Include="..\ThirdPartyNotices\DesktopIconBilliards-MIT.txt" LogicalName="DesktopNook.BilliardsLicense" /><EmbeddedResource Include="..\ThirdPartyNotices\BilliardsAudio-CC0.txt" LogicalName="DesktopNook.BilliardsAudioLicense" /><ProjectReference Include="..\DesktopNook.Games.Network\DesktopNook.Games.Network.csproj" /></ItemGroup>
 </Project>

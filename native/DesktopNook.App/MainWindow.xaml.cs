@@ -55,7 +55,7 @@ public partial class MainWindow : Window
     private void OnLoaded(object sender,RoutedEventArgs e)
     {
         if(_loadedOnce){if(WindowState==WindowState.Normal){Place();int revision=_hideRevision;Dispatcher.BeginInvoke(()=>{if(WindowState==WindowState.Normal&&revision==_hideRevision)OpenPanelMotion();},System.Windows.Threading.DispatcherPriority.Loaded);if(!App.IsSandbox&&DateTime.UtcNow-_lastUpdateCheck>TimeSpan.FromMinutes(15))_=CheckOnlineUpdateAsync(false);}return;}
-        _loadedOnce=true;InitializeFloatingTaskbar();PanelVisualStyle.Apply(this);TaskbarPlacement.EnableToggle(this);Place();if(WindowState==WindowState.Normal)OpenPanelMotion();if(Store.RecoveryMessages.Count>0)SetStatus(Store.RecoveryMessages.Last());if(!App.IsSandbox){_updateTimer.Start();_=CheckOnlineUpdateAsync(false);InitializeTaskbarAppearance();}
+        _loadedOnce=true;PanelVisualStyle.Apply(this);TaskbarPlacement.EnableToggle(this);Place();if(WindowState==WindowState.Normal)OpenPanelMotion();if(Store.RecoveryMessages.Count>0)SetStatus(Store.RecoveryMessages.Last());if(!App.IsSandbox){_updateTimer.Start();_=CheckOnlineUpdateAsync(false);InitializeTaskbarAppearance();}
     }
     internal void SetAvailableRelease(OnlineRelease? release)
     {
@@ -113,15 +113,15 @@ public partial class MainWindow : Window
         if(_allowExit)return;e.Cancel=true;
         if(!FlushNotes())return;
         if(_dragging||_interactions>0)return;
-        if(App.Options.CloseEndsProcess){if(!StopBilliards()||!StopFloatingTaskbar()||!StopTaskbarAppearance())return;_allowExit=true;e.Cancel=false;Dispatcher.BeginInvoke(()=>Application.Current.Shutdown());}else BeginHidePanel();
+        if(App.Options.CloseEndsProcess){if(!StopBilliards()||!StopTaskbarAppearance())return;_allowExit=true;e.Cancel=false;Dispatcher.BeginInvoke(()=>Application.Current.Shutdown());}else BeginHidePanel();
     }
     private void OnCloseButton(object sender,RoutedEventArgs e)=>Close();
     private void OnMinimizeButton(object sender,RoutedEventArgs e)=>BeginHidePanel();
-    public void Quit() { if(!FlushNotes()||!StopBilliards()||!StopFloatingTaskbar()||!StopTaskbarAppearance())return;_idleRelease.Stop();FinishPanelMotion();_shutter.ReleaseBuffer();UiMotion.CancelAll();_allowExit=true; Application.Current.Shutdown(); }
+    public void Quit() { if(!FlushNotes()||!StopBilliards()||!StopTaskbarAppearance())return;_idleRelease.Stop();FinishPanelMotion();_shutter.ReleaseBuffer();UiMotion.CancelAll();_allowExit=true; Application.Current.Shutdown(); }
     internal void QuitForMaintenance(){if(!_dragging&&_interactions==0)Quit();}
     private bool _storageMoving;
-    internal bool TryBeginStorageMove(){if(_dragging||_interactions>0||_menus>0||_onlineBusy||!FlushNotes()||!StopBilliards()||!StopFloatingTaskbar()||!StopTaskbarAppearance())return false;_storageMoving=true;_interactions++;IsEnabled=false;return true;}
-    internal void EndStorageMove(){_storageMoving=false;_interactions--;IsEnabled=true;if(!NotesStore.DirectoryPath.Equals(System.IO.Path.Combine(Store.DataDirectory,"Notes"),StringComparison.OrdinalIgnoreCase)){NotesStore=new(Store.DataDirectory);NotesDraft=NotesStore.Draft();RenderNotes();}_taskbarAppearance=null;_floatingTaskbar?.Dispose();_floatingTaskbar=null;Render();InitializeTaskbarAppearance();}
+    internal bool TryBeginStorageMove(){if(_dragging||_interactions>0||_menus>0||_onlineBusy||!FlushNotes()||!StopBilliards()||!StopTaskbarAppearance())return false;_storageMoving=true;_interactions++;IsEnabled=false;return true;}
+    internal void EndStorageMove(){_storageMoving=false;_interactions--;IsEnabled=true;if(!NotesStore.DirectoryPath.Equals(System.IO.Path.Combine(Store.DataDirectory,"Notes"),StringComparison.OrdinalIgnoreCase)){NotesStore=new(Store.DataDirectory);NotesDraft=NotesStore.Draft();RenderNotes();}_taskbarAppearance=null;Render();InitializeTaskbarAppearance();}
     public void SetStatus(string message) { _shutter.InvalidateSnapshot();Status.Text=message;Status.ToolTip=message; }
     public void Render()
     {
@@ -267,10 +267,6 @@ public partial class MainWindow : Window
             case SettingsWindow.ActionAfterClose.StopGame: StopBilliards(); break;
             case SettingsWindow.ActionAfterClose.Quit: Quit(); break;
             case SettingsWindow.ActionAfterClose.GameLicense: ShowBilliardsLicense(); break;
-            case SettingsWindow.ActionAfterClose.TaskbarLicense:
-                using (var reader = new StreamReader(typeof(MainWindow).Assembly.GetManifestResourceStream("DesktopNook.FloatingTaskbarLicense")!))
-                    UiDialogs.Show(this, "悬浮任务栏基于 Atrium Desktop 的 MIT 开源核心适配。\nhttps://github.com/wynter-yaxley/atrium-desktop\n\n" + reader.ReadToEnd(), "悬浮任务栏许可");
-                break;
             case SettingsWindow.ActionAfterClose.Restore: RestoreAll(); break;
             case SettingsWindow.ActionAfterClose.OpenData: OpenDataDirectory(); break;
             case SettingsWindow.ActionAfterClose.CheckUpdate: _ = CheckOnlineUpdateAsync(true); break;
@@ -394,7 +390,7 @@ public partial class MainWindow : Window
     {
         var siblings=Store.State.Items.Where(i=>i.CategoryId==item.CategoryId).ToList();var index=siblings.FindIndex(i=>i.Id==item.Id);
         var move=new MenuItem{Header="移动到分类"};foreach(var cat in Store.State.Categories)move.Items.Add(Menu(cat.Name,()=>Run(()=>Store.MoveItem(item.Id,cat.Id),"已移动分类")));
-        var own=new List<object>{Menu("固定到悬浮任务栏",async()=>{try{await FloatingTaskbar.AddPinAsync(item);SetStatus("已固定到悬浮任务栏");}catch(Exception ex){ShowFailure(ex);}},_floatingTaskbar?.Running==true&&item.Kind!="recycle-bin"),Menu("移回桌面",()=>RestoreItem(item.Id)),move,Menu("修改显示名称",()=>Rename()),Menu("前移",()=>Run(()=>Store.OrderItem(item.Id,-1)),index>0),Menu("后移",()=>Run(()=>Store.OrderItem(item.Id,1)),index<siblings.Count-1),new Separator()};
+        var own=new List<object>{Menu("移回桌面",()=>RestoreItem(item.Id)),move,Menu("修改显示名称",()=>Rename()),Menu("前移",()=>Run(()=>Store.OrderItem(item.Id,-1)),index>0),Menu("后移",()=>Run(()=>Store.OrderItem(item.Id,1)),index<siblings.Count-1),new Separator()};
         void Rename(){var name=Ask("显示名称","图标在折页中的名称",item.Name);if(name is not null)Run(()=>Store.RenameItem(item.Id,name));}
         try
         {

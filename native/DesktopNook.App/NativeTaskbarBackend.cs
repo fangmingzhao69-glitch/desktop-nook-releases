@@ -11,11 +11,12 @@ internal sealed class NativeTaskbarBackend(string storePath, bool sandbox, bool 
 {
     private readonly string _configuration = Path.Combine(storePath, "Native", "RoamingState", "settings.json");
     private readonly TaskbarAppearancePackage _package = new(storePath);
+    private NativeTaskbarShape? _shape;
     private NativeTaskbarModule? _module;
     private Worker? _worker;
     private bool _starting;
 
-    public bool Running => _worker is { Running: true };
+    public bool Running => _worker is { Running: true } || _shape is not null;
     public bool NeedsDownload => !_package.HasArchive;
 
     public string? Restriction
@@ -44,33 +45,58 @@ internal sealed class NativeTaskbarBackend(string storePath, bool sandbox, bool 
         if (_starting) throw new IOException("任务栏外观组件正在启动。");
         if (Restriction is { } reason) throw new IOException(reason);
 
-        Directory.CreateDirectory(Path.GetDirectoryName(_configuration)!);
-        TaskbarAppearanceStore.WriteComponentSettings(_configuration, settings);
-        if (Running) return;
-        if (!Stop()) throw new IOException("无法清理已退出的外观组件。");
-
         _starting = true;
         try
         {
-            if (_module is null)
+            if (settings.UsesMaterialComponent || dryRun)
             {
-                string directory = await _package.PrepareAsync(allowDownload);
-                _module = await Task.Run(() => NativeTaskbarModule.Load(directory));
+                Directory.CreateDirectory(Path.GetDirectoryName(_configuration)!);
+                TaskbarAppearanceStore.WriteComponentSettings(_configuration, settings);
+                if (_worker is not { Running: true })
+                {
+                    if (!StopWorker()) throw new IOException("无法清理已退出的外观组件。");
+                    if (_module is null)
+                    {
+                        string directory = await _package.PrepareAsync(allowDownload);
+                        _module = await Task.Run(() => NativeTaskbarModule.Load(directory));
+                    }
+                    if (Restriction is { } changed) throw new IOException(changed);
+                    var worker = new Worker(_module, Path.Combine(storePath, "Native"), dryRun);
+                    _worker = worker;
+                    await worker.WaitForStartAsync();
+                }
             }
-            if (Restriction is { } changed) throw new IOException(changed);
-            var worker = new Worker(_module, Path.Combine(storePath, "Native"), dryRun);
-            _worker = worker;
-            await worker.WaitForStartAsync();
+            else if (!StopWorker())
+                throw new IOException("任务栏材质组件尚未退出。");
+
+            if (settings.FloatingLayout && !dryRun)
+            {
+                _shape ??= new();
+                await _shape.StartAsync();
+            }
+            else StopShape();
         }
         catch
         {
+            StopShape();
             StopWorker();
             throw;
         }
         finally { _starting = false; }
     }
 
-    public bool Stop() => !_starting && StopWorker();
+    public bool Stop()
+    {
+        if (_starting) return false;
+        StopShape();
+        return StopWorker();
+    }
+
+    private void StopShape()
+    {
+        _shape?.Stop();
+        _shape = null;
+    }
 
     private bool StopWorker()
     {

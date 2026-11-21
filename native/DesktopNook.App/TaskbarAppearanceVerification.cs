@@ -192,8 +192,18 @@ internal static class TaskbarAppearanceVerification
                         "从固定版本发行页下载任务栏组件");
                     return new HttpResponseMessage(HttpStatusCode.OK) { Content = new StreamContent(File.OpenRead(archivePath)) };
                 }));
-                try { await download.PrepareAsync(allowDownload: false); throw new InvalidOperationException("启动阶段自动下载安装组件"); }
-                catch (IOException) { checks.Add("启动阶段保留显式下载授权"); }
+                if (download.HasArchive)
+                {
+                    var local = new TaskbarAppearancePackage(Path.Combine(root, "embedded-check"));
+                    await local.PrepareAsync(allowDownload: false);
+                    Check(File.ReadAllBytes(local.ArchivePath).SequenceEqual(File.ReadAllBytes(archivePath)),
+                        "内置组件不需联网，并通过与发行附件相同的摘要校验");
+                }
+                else
+                {
+                    try { await download.PrepareAsync(allowDownload: false); throw new InvalidOperationException("启动阶段自动下载安装组件"); }
+                    catch (IOException) { checks.Add("启动阶段保留显式下载授权"); }
+                }
                 await download.DownloadAsync(transport);
                 await download.PrepareAsync(allowDownload: false);
                 Check(SHA256.HashData(File.ReadAllBytes(download.ArchivePath)).SequenceEqual(SHA256.HashData(File.ReadAllBytes(archivePath))),
@@ -206,7 +216,7 @@ internal static class TaskbarAppearanceVerification
                 try { await damaged.DownloadAsync(wrongBytes); throw new InvalidOperationException("损坏下载未拒绝"); }
                 catch (IOException)
                 {
-                    Check(!damaged.HasArchive && !Directory.EnumerateFiles(Path.GetDirectoryName(damaged.ArchivePath)!).Any(),
+                    Check(!File.Exists(damaged.ArchivePath) && !Directory.EnumerateFiles(Path.GetDirectoryName(damaged.ArchivePath)!).Any(),
                         "下载文件长度相同但摘要错误时拒绝并移除半成品");
                 }
             }
@@ -231,7 +241,7 @@ internal static class TaskbarAppearanceVerification
                 try
                 {
                     if (dialog is null) throw new InvalidOperationException("未从主窗口打开设置。");
-                    var tab = Find<Button>(dialog).Single(button => Equals(button.Content, SettingsWindow.TaskbarPage));
+                    var tab = Find<Button>(dialog).Single(button => AutomationProperties.GetAutomationId(button) == "SettingsPage-" + SettingsWindow.TaskbarPage);
                     tab.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
                     dialog.UpdateLayout();
                     Check(Find<TaskbarAppearancePage>(dialog).Single() is { IsVisible: true } &&
@@ -246,6 +256,9 @@ internal static class TaskbarAppearanceVerification
 
                     var scenes = Find<ComboBox>(dialog).Single(item => AutomationProperties.GetAutomationId(item) == "AppearanceScene");
                     var styles = Find<ComboBox>(dialog).Single(item => AutomationProperties.GetAutomationId(item) == "AppearanceStyle");
+                    var layout = Find<ComboBox>(dialog).Single(item => AutomationProperties.GetAutomationId(item) == "NativeTaskbarLayout");
+                    Check(layout.Items.Cast<string>().SequenceEqual(new[] { "系统布局", "原生悬浮胶囊" }),
+                        "任务栏形态使用原生布局设置");
                     var blur = Find<Slider>(dialog).Single(item => AutomationProperties.GetAutomationId(item) == "AppearanceBlurRadius");
                     var opacity = Find<Slider>(dialog).Single(item => AutomationProperties.GetAutomationId(item) == "AppearanceOpacity");
                     var apply = Find<Button>(dialog).Single(item => AutomationProperties.GetAutomationId(item) == "AppearanceApply");
@@ -315,14 +328,14 @@ internal static class TaskbarAppearanceVerification
                     var previewButton = Find<Button>(uniformDialog).Single(item => Equals(item.Content, "预览"));
                     previewButton.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
                     Check(uniformSession.HasPreview, "内嵌预览启动并保留临时状态");
-                    var general = Find<Button>(uniformDialog).Single(item => Equals(item.Content, "常规"));
+                    var general = Find<Button>(uniformDialog).Single(item => AutomationProperties.GetAutomationId(item) == "SettingsPage-常规");
                     general.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
                     Check(!uniformSession.HasPreview && uniformProbe.LastAppearance == uniformSession.Saved,
                         "切换设置页恢复已保存的外观");
                     uniformDialog.UpdateLayout();
                     Check(Find<Button>(uniformDialog).Any(item => Equals(item.Content, "退出并结束进程") && item.IsVisible),
                         "常规页保留退出入口");
-                    Find<Button>(uniformDialog).Single(item => Equals(item.Content, SettingsWindow.TaskbarPage))
+                    Find<Button>(uniformDialog).Single(item => AutomationProperties.GetAutomationId(item) == "SettingsPage-" + SettingsWindow.TaskbarPage)
                         .RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
                     uniformDialog.UpdateLayout();
                     var button = Find<Button>(uniformDialog).Single(item => AutomationProperties.GetAutomationId(item) == "AppearanceUniform");

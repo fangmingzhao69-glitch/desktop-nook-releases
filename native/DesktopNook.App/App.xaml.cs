@@ -20,6 +20,12 @@ public partial class App : Application
     {
         try
         {
+            if (e.Args is ["--watch-native-taskbar-shape", string guardKey, string guardPid, string guardStart])
+            {
+                Shutdown(int.TryParse(guardPid, out int pid) && long.TryParse(guardStart, out long creationTime)
+                    ? NativeTaskbarShape.RunGuard(guardKey, pid, creationTime) : 64);
+                return;
+            }
             ThemePalette.Apply("light");
             var game=Array.IndexOf(e.Args,"--icon-billiards");
             if(game>=0)
@@ -34,9 +40,18 @@ public partial class App : Application
             }
             bool interactiveVerification = e.Args.Any(arg =>
                 (arg.EndsWith("-self-test", StringComparison.Ordinal) && arg != "--storage-self-test")
-                || arg is "--billiards-parent-probe" or "--billiards-perf-test" or "--verification-marker" or "--floating-taskbar-parent-probe");
+                || arg is "--billiards-parent-probe" or "--billiards-perf-test" or "--verification-marker" or "--native-taskbar-shape-parent-probe");
 #if NOOK_UI_VERIFICATION
             if (interactiveVerification && !e.Args.Contains("--sandbox")) throw new IOException("界面自检必须使用沙箱。");
+            if (e.Args.Contains("--native-taskbar-shape-self-test") || e.Args.Contains("--native-taskbar-shape-parent-probe"))
+            {
+                int sandbox = Array.IndexOf(e.Args, "--sandbox");
+                if (sandbox < 0 || sandbox + 1 >= e.Args.Length) { Shutdown(64); return; }
+                var isolated = Path.GetFullPath(e.Args[sandbox + 1]);
+                bool parentProbe = e.Args.Contains("--native-taskbar-shape-parent-probe");
+                Dispatcher.BeginInvoke(async () => Shutdown(await NativeTaskbarShapeVerification.RunAsync(isolated, parentProbe)));
+                return;
+            }
             if (e.Args.Contains("--native-taskbar-self-test") || e.Args.Contains("--native-taskbar-live-self-test"))
             {
                 var nativeSandbox = Array.IndexOf(e.Args, "--sandbox");
@@ -150,8 +165,6 @@ public partial class App : Application
             DispatcherUnhandledException += (_, args) => { args.Handled = true; window.ShowFailure(args.Exception); };
 #if NOOK_UI_VERIFICATION
             if(e.Args.Contains("--brand-self-test"))Dispatcher.BeginInvoke(async()=>{var checks=new List<string>();string failure="";try{window.KeepOpenForVerification=true;await BrandVerification.Run(window,root,checks);}catch(Exception ex){failure=ex.ToString();}File.WriteAllText(Path.Combine(root,"brand-verification.json"),System.Text.Json.JsonSerializer.Serialize(new{passed=checks.Count,failure,checks}));Shutdown(failure.Length==0?0:1);},System.Windows.Threading.DispatcherPriority.Loaded);
-            if (IsSandbox && e.Args.Contains("--floating-taskbar-parent-probe")) Dispatcher.BeginInvoke(async () => await FloatingTaskbarVerification.ParentProbe(window, root), System.Windows.Threading.DispatcherPriority.Loaded);
-            if (IsSandbox && e.Args.Contains("--floating-taskbar-self-test")) Dispatcher.BeginInvoke(async () => await FloatingTaskbarVerification.Run(window, root), System.Windows.Threading.DispatcherPriority.Loaded);
             if (IsSandbox && e.Args.Contains("--notes-self-test")) Dispatcher.BeginInvoke(async () => await NotesVerification.Run(window, root), System.Windows.Threading.DispatcherPriority.Loaded);
             var taskbarTest = Array.IndexOf(e.Args, "--taskbar-appearance-self-test");
             if (IsSandbox && taskbarTest >= 0)

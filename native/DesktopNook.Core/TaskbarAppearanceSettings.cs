@@ -20,12 +20,16 @@ public sealed record TaskbarAppearanceSettings : TaskbarAppearanceProfile
     });
 
     public int Format { get; init; } = 1;
+    public bool FloatingLayout { get; init; }
     public bool FollowScenes { get; init; } = true;
     public IReadOnlyDictionary<string, TaskbarAppearanceProfile>? Profiles { get; init; }
     public JsonElement? IgnoredWindows { get; init; }
 
     [JsonIgnore]
-    public bool UsesComponent => Enabled && (Style != "normal" || ShowLine.HasValue || ShowPeek.HasValue ||
+    public bool UsesComponent => Enabled && (FloatingLayout || UsesMaterialComponent);
+
+    [JsonIgnore]
+    public bool UsesMaterialComponent => Enabled && (Style != "normal" || ShowLine.HasValue || ShowPeek.HasValue ||
         FollowScenes && Profiles?.Values.Any(profile => profile.Enabled) == true);
 
     public TaskbarAppearanceSettings Validate()
@@ -120,6 +124,7 @@ public sealed class TaskbarAppearanceStore(string dataRoot)
             ["hide_tray"] = true,
             ["disable_saving"] = true,
             ["copy_dlls"] = false,
+            ["floating_layout"] = settings.FloatingLayout,
             ["verbosity"] = "off"
         };
         foreach (var scene in TaskbarAppearanceSettings.Scenes)

@@ -10,6 +10,7 @@ internal sealed class TaskbarAppearancePackage(string storePath)
     internal const string ReleaseTag = "v0.17.6";
     internal const string PackageFile = "Qingxia-TaskbarCore-win-x64.zip";
     private const int Size = 811773;
+    private const string ResourceName = "DesktopNook.NativeTaskbarPackage";
     private const string Sha256 = "8315C4B8E00ACF04815A672BE9A671BDC242D38EAEE9B4F89A9A95F3A9FAD092";
     private static readonly Uri Source = new($"https://github.com/{OnlineUpdater.Repository}/releases/download/{ReleaseTag}/{PackageFile}");
     internal static readonly IReadOnlyList<string> Files = Array.AsReadOnly(new[]
@@ -20,13 +21,14 @@ internal sealed class TaskbarAppearancePackage(string storePath)
     private static string PackageName => Path.GetFileNameWithoutExtension(PackageFile) + "-" + ReleaseTag;
     internal string ArchivePath => Path.Combine(storePath, "components", PackageName + ".zip");
     private string ComponentDirectory => Path.Combine(storePath, "components", PackageName);
-    internal bool HasArchive => File.Exists(ArchivePath);
+    internal bool HasArchive => File.Exists(ArchivePath) ||
+        typeof(TaskbarAppearancePackage).Assembly.GetManifestResourceInfo(ResourceName) is not null;
 
     internal async Task<string> PrepareAsync(bool allowDownload, CancellationToken token = default)
     {
         var archive = ArchivePath;
         PrepareCache();
-        if (!File.Exists(archive))
+        if (!File.Exists(archive) && !await TryExtractEmbeddedArchiveAsync(archive, token).ConfigureAwait(false))
         {
             if (!allowDownload) throw new IOException("首次启用需要下载任务栏外观组件。");
             using var client = OnlineUpdater.CreateClient();
@@ -42,6 +44,22 @@ internal sealed class TaskbarAppearancePackage(string storePath)
             else await DownloadAsync(client, token).ConfigureAwait(false);
         }
         return await Task.Run(() => VerifyAndExtract(archive, ComponentDirectory), token).ConfigureAwait(false);
+    }
+
+    private static async Task<bool> TryExtractEmbeddedArchiveAsync(string path, CancellationToken token)
+    {
+        using var embedded = typeof(TaskbarAppearancePackage).Assembly.GetManifestResourceStream(ResourceName);
+        if (embedded is null) return false;
+        var temp = path + "." + Guid.NewGuid().ToString("N") + ".partial";
+        try
+        {
+            using (var output = new FileStream(temp, FileMode.CreateNew, FileAccess.Write, FileShare.None))
+                await embedded.CopyToAsync(output, token).ConfigureAwait(false);
+            using (OpenVerifiedArchive(temp)) { }
+            File.Move(temp, path, overwrite: false);
+            return true;
+        }
+        finally { if (File.Exists(temp)) File.Delete(temp); }
     }
 
     private void PrepareCache()

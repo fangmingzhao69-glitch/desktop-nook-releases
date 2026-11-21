@@ -20,6 +20,7 @@ internal sealed class TaskbarAppearancePage : UserControl
     private readonly ComboBox _scene = new() { DisplayMemberPath = "Name" };
     private readonly CheckBox _sceneEnabled = new() { Content = "为此场景启用单独的外观" };
     private readonly TextBlock _sceneHint = new() { FontSize = 12, TextWrapping = TextWrapping.Wrap };
+    private readonly ComboBox _layout = new();
     private readonly ComboBox _style = new();
     private readonly TextBox _color = new() { Width = 112, Height = 34, Padding = new Thickness(8, 4, 8, 4), VerticalContentAlignment = VerticalAlignment.Center };
     private readonly Border _colorSample = new() { Width = 22, Height = 22, CornerRadius = new CornerRadius(5), BorderThickness = new Thickness(1) };
@@ -45,6 +46,9 @@ internal sealed class TaskbarAppearancePage : UserControl
         _owner = owner;
         _session = session;
         _draft = session.Saved;
+        _layout.Items.Add("系统布局");
+        _layout.Items.Add("原生悬浮胶囊");
+        AutomationProperties.SetAutomationId(_layout, "NativeTaskbarLayout");
         _style.Items.Add(new ComboBoxItem { Content = "系统默认", Tag = "normal" });
         _style.Items.Add(new ComboBoxItem { Content = "透明", Tag = "clear" });
         _style.Items.Add(new ComboBoxItem { Content = "纯色", Tag = "opaque" });
@@ -67,6 +71,8 @@ internal sealed class TaskbarAppearancePage : UserControl
         _body.Children.Add(Card(sceneCard));
 
         var appearanceCard = new StackPanel();
+        _layout.ToolTip = "悬浮胶囊保留 Windows 的开始菜单、固定图标和托盘。可搭配亚克力或模糊材质。";
+        appearanceCard.Children.Add(FieldRow("任务栏形态", _layout));
         appearanceCard.Children.Add(FieldRow("样式", _style));
         var colorControls = new StackPanel { Orientation = Orientation.Horizontal };
         _colorSample.BorderBrush = ThemePalette.Brush("OutlineBrush");
@@ -142,6 +148,16 @@ internal sealed class TaskbarAppearancePage : UserControl
             HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled
         });
         Content = layout;
+        _layout.SelectionChanged += (_, _) =>
+        {
+            if (_loading || _layout.SelectedIndex != 1) return;
+            _enabled.IsChecked = true;
+            if (_activeScene.Key == TaskbarAppearanceSettings.DesktopScene &&
+                (_style.SelectedItem as ComboBoxItem)?.Tag as string == "clear")
+            {
+                _style.SelectedIndex = 0;
+            }
+        };
         AutomationProperties.SetAutomationId(_scene, "AppearanceScene");
         AutomationProperties.SetAutomationId(_sceneEnabled, "AppearanceSceneEnabled");
         AutomationProperties.SetAutomationId(_followScenes, "AppearanceFollowScenes");
@@ -260,6 +276,8 @@ internal sealed class TaskbarAppearancePage : UserControl
     private void LoadFields(TaskbarAppearanceSettings settings)
     {
         _draft = settings;
+        _loading = true;
+        _layout.SelectedIndex = settings.FloatingLayout ? 1 : 0;
         _enabled.IsChecked = settings.Enabled;
         _followScenes.IsChecked = settings.FollowScenes;
         LoadScene(TaskbarAppearanceSettings.Scenes[0]);
@@ -372,6 +390,7 @@ internal sealed class TaskbarAppearancePage : UserControl
         return (_draft.WithProfile(_activeScene.Key, profile) with
         {
             Enabled = _enabled.IsChecked == true,
+            FloatingLayout = _layout.SelectedIndex == 1,
             FollowScenes = _followScenes.IsChecked == true
         }).Validate();
     }
@@ -437,7 +456,7 @@ internal sealed class TaskbarAppearancePage : UserControl
             _message.Text = restriction;
             return false;
         }
-        if (_session.NeedsDownload && !_downloadApproved)
+        if (settings.UsesMaterialComponent && _session.NeedsDownload && !_downloadApproved)
         {
             _downloadApproved = UiDialogs.Show(_owner, "首次启用需从 GitHub 下载并校验任务栏组件（约 0.8 MB）。", SettingsWindow.TaskbarPage,
                 MessageBoxButton.OKCancel) == MessageBoxResult.OK;
