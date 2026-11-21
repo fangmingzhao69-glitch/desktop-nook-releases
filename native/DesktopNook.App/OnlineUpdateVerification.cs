@@ -107,7 +107,7 @@ internal static class OnlineUpdateVerification
                 {
                     using var mirrorClient=OnlineUpdater.CreateClient(allowRedirects:false);
                     using var offlineGitHub=new HttpClient(new Handler(_=>throw new Exception("Gitee 实测期间请求了 GitHub。")));
-                    var mirrored=await OnlineUpdater.CheckWithMirrorAsync(offlineGitHub,mirrorClient,mirror,new Version(0,7,1),CancellationToken.None);
+                    var mirrored=await mirror.CheckAsync(mirrorClient,new Version(0,7,1),CancellationToken.None);
                     if (mirrored is null || mirrored.Mirror != mirror || mirrored.Version != version)
                         throw new Exception("真实 Gitee 发行与候选版本不一致。");
                     var mirroredFile=await OnlineUpdater.DownloadWithMirrorAsync(offlineGitHub,mirrorClient,mirrored,output,null,CancellationToken.None);
@@ -133,6 +133,8 @@ internal static class OnlineUpdateVerification
         var tag=GiteeUpdateSource.VersionTag(version);
         var download=mirror.Attachment(tag,OnlineUpdater.AssetName);
         var checksum=mirror.Attachment(tag,"SHA256SUMS.txt");
+        var intermediateDownload=new Uri("https://gitee.com/fold-mirror/fixture/attach_files/3775890/download/" + OnlineUpdater.AssetName);
+        var intermediateChecksum=new Uri("https://gitee.com/fold-mirror/fixture/attach_files/3775892/download/SHA256SUMS.txt");
         var cdn=new Uri("https://foruda.gitee.com/attach_file/fixture/desktopnook-win-x64.exe");
         var checksumCdn=new Uri("https://foruda.gitee.com/attach_file/fixture/sha256sums.txt");
         var older=new Version(0,7,1);
@@ -174,7 +176,9 @@ internal static class OnlineUpdateVerification
         using var badAttachment = new HttpClient(new Handler(request =>
             Reply(request,downloadUrl:new Uri("https://gitee.com/unrelated/fixture/releases/download/" + tag + "/" + OnlineUpdater.AssetName))));
         using var badRedirect = new HttpClient(new Handler(request => Reply(request,redirect:new Uri("https://example.org/update.exe"))));
-        foreach (var invalid in new[] {badAttachment,badRedirect})
+        using var outsideIntermediate = new HttpClient(new Handler(request => Reply(request,redirect:
+            new Uri("https://gitee.com/unrelated/fixture/attach_files/3775890/download/" + OnlineUpdater.AssetName))));
+        foreach (var invalid in new[] {badAttachment,badRedirect,outsideIntermediate})
         {
             var fromGitHub=await OnlineUpdater.CheckWithMirrorAsync(github,invalid,mirror,older,CancellationToken.None);
             if (fromGitHub is null || fromGitHub.Mirror is not null) throw new Exception("Gitee 的外部仓库或 CDN 未拒绝");
@@ -198,9 +202,11 @@ internal static class OnlineUpdateVerification
         {
             if (request.RequestUri==mirror.Latest)
                 return new(HttpStatusCode.OK) { Content=new StringContent(Metadata(downloadUrl??download)) };
-            if (request.RequestUri==checksum) return Redirect(checksumCdn);
+            if (request.RequestUri==checksum) return Redirect(intermediateChecksum);
+            if (request.RequestUri==intermediateChecksum) return Redirect(checksumCdn);
             if (request.RequestUri==checksumCdn) return new(HttpStatusCode.OK) { Content=new StringContent(sums) };
-            if (request.RequestUri==download) return Redirect(redirect??cdn);
+            if (request.RequestUri==download) return Redirect(redirect??intermediateDownload);
+            if (request.RequestUri==intermediateDownload) return Redirect(cdn);
             if (request.RequestUri==cdn)
             {
                 var binary = new HttpResponseMessage(HttpStatusCode.OK)

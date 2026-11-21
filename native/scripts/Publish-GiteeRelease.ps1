@@ -58,15 +58,16 @@ function Get-Release {
 }
 
 function Send-Gitee([string]$Method,[string]$RequestUri,[hashtable]$Fields,[switch]$FileUpload) {
-    $parameters = @{ Uri=$RequestUri; Method=$Method; SkipHttpErrorCheck=$true; MaximumRedirection=0; TimeoutSec=90 }
-    $Fields.access_token = $token
+    $parameters = @{
+        Uri=$RequestUri; Method=$Method; Headers=@{Authorization="token $token"}
+        SkipHttpErrorCheck=$true; MaximumRedirection=0; TimeoutSec=90
+    }
     if ($FileUpload) { $parameters.Form = $Fields }
     else {
         $parameters.ContentType = 'application/json'
         $parameters.Body = [Text.Encoding]::UTF8.GetBytes(($Fields | ConvertTo-Json -Compress))
     }
-    try { $response = Invoke-WebRequest @parameters }
-    finally { $Fields.Remove('access_token') }
+    $response = Invoke-WebRequest @parameters
     if ($response.StatusCode -lt 200 -or $response.StatusCode -ge 300) {
         throw "Gitee 发布请求失败（HTTP $($response.StatusCode)）。"
     }

@@ -100,7 +100,8 @@ internal sealed partial class GiteeUpdateSource
                 if (location is null || redirects >= MaximumRedirects)
                     throw new IOException("Gitee 附件重定向无效。");
                 var next = new Uri(url, location);
-                if (!IsAttachment(next, tag, name) && !IsStorageAttachment(next, name))
+                if (!IsAttachment(next, tag, name) && !IsRepositoryAttachmentRedirect(next, name) &&
+                    !IsStorageAttachment(next, name))
                     throw new IOException("Gitee 附件重定向到了未授权的地址。");
                 url = next;
             }
@@ -116,6 +117,16 @@ internal sealed partial class GiteeUpdateSource
     private bool IsAttachment(Uri url, string tag, string name) =>
         Secure(url) && url.Host == "gitee.com" && string.IsNullOrEmpty(url.Query) &&
         url.AbsolutePath == Attachment(tag, name).AbsolutePath;
+
+    private bool IsRepositoryAttachmentRedirect(Uri url, string name)
+    {
+        if (!Secure(url) || url.Host != "gitee.com" || !string.IsNullOrEmpty(url.Query)) return false;
+        var prefix = $"/{_repository}/attach_files/";
+        if (!url.AbsolutePath.StartsWith(prefix, StringComparison.Ordinal)) return false;
+        var parts = url.AbsolutePath[prefix.Length..].Split('/');
+        return parts.Length == 3 && parts[0].Length > 0 && parts[0].All(char.IsAsciiDigit) &&
+            parts[1] == "download" && parts[2] == name;
+    }
 
     private static bool IsStorageAttachment(Uri url, string name)
     {
