@@ -123,7 +123,7 @@ internal static class ThemePalette
     private static Color AccessibleColor(string key) => key switch
     {
         "PrimaryBrush" or "PrimaryHoverBrush" or "PrimaryPressedBrush" or "SelectionBrush" or "SelectionHoverBrush" or "FoldMintBrush" or "FoldCoralBrush" => SystemColors.HighlightColor,
-        "OnPrimaryBrush" or "OnCoralBrush" or "OnMintBrush" or "OnTooltipBrush" or "SettingsSelectionTextBrush" => SystemColors.HighlightTextColor,
+        "OnPrimaryBrush" or "OnCoralBrush" or "OnMintBrush" or "OnTooltipBrush" => SystemColors.HighlightTextColor,
         "TextPrimaryBrush" or "TextSecondaryBrush" or "AccentInkBrush" or "LineBrush" or "OutlineBrush" or "DangerBrush" or "WarningBrush" or "SuccessBrush" or
             "SettingsNavigationBorderBrush" => SystemColors.WindowTextColor,
         "DisabledInkBrush" or "TextFaintBrush" => SystemColors.GrayTextColor,

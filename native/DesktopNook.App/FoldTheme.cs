@@ -36,7 +36,7 @@ internal sealed record FoldTheme(string Id, string Name, FoldTheme.Paper Light, 
         byte Mix(byte x, byte y) => (byte)Math.Round(x * (1 - t) + y * t);
         return Color.FromRgb(Mix(a.R,b.R), Mix(a.G,b.G), Mix(a.B,b.B));
     }
-    private static Color LabelOn(Color color, Color? darkInk = null)
+    private static Color LabelOn(Color color)
     {
         static double Linear(byte channel)
         {
@@ -44,7 +44,7 @@ internal sealed record FoldTheme(string Id, string Name, FoldTheme.Paper Light, 
             return value <= .04045 ? value / 12.92 : Math.Pow((value + .055) / 1.055, 2.4);
         }
         double luminance = .2126 * Linear(color.R) + .7152 * Linear(color.G) + .0722 * Linear(color.B);
-        return luminance > .18 ? darkInk ?? Parse("#101422") : Colors.White;
+        return luminance > .18 ? Parse("#101422") : Colors.White;
     }
 
     internal Dictionary<string, Color> ColorsFor(bool dark)
@@ -54,7 +54,7 @@ internal sealed record FoldTheme(string Id, string Name, FoldTheme.Paper Light, 
         var muted=Parse(p.Muted); var primary=Parse(p.Accent); var coral=Parse(p.Coral);
         var mint=Parse(p.Mint); var line=Parse(p.Line); var onPrimary=LabelOn(primary);
         var danger=Parse(dark ? "#FF9FAE" : "#A13349");
-        var navigation=Blend(surface,primary,dark ? .14 : .21);
+        var navigation=Blend(surface,primary,dark ? .09 : .11);
         return new()
         {
             ["CanvasBrush"]=canvas, ["CanvasSubtleBrush"]=Blend(canvas,line,.2), ["SurfaceBrush"]=surface,
@@ -63,11 +63,11 @@ internal sealed record FoldTheme(string Id, string Name, FoldTheme.Paper Light, 
             ["LineBrush"]=line, ["OutlineBrush"]=Blend(line,ink,dark ? .28 : .38),
             ["PrimaryBrush"]=primary, ["PrimaryHoverBrush"]=Blend(primary,onPrimary,.08),
             ["PrimaryPressedBrush"]=Blend(primary,onPrimary,.16), ["OnPrimaryBrush"]=onPrimary,
-            ["SettingsSelectionTextBrush"]=LabelOn(primary,Colors.Black),
             ["SettingsNavigationBrush"]=navigation,
-            ["SettingsNavigationButtonBrush"]=Blend(surface,primary,.035),
-            ["SettingsNavigationHoverBrush"]=Blend(surface,primary,.17),
-            ["SettingsNavigationBorderBrush"]=Blend(line,primary,.75),
+            ["SettingsNavigationHoverBrush"]=Blend(surface,primary,dark ? .16 : .17),
+            ["SettingsNavigationSelectedBrush"]=Blend(surface,primary,dark ? .27 : .23),
+            ["SettingsNavigationGlyphBrush"]=Blend(surface,primary,dark ? .25 : .16),
+            ["SettingsNavigationBorderBrush"]=Blend(line,primary,dark ? .30 : .35),
             ["AccentInkBrush"]=dark ? primary : Blend(primary,ink,.32),
             ["SelectionBrush"]=Blend(canvas,primary,dark ? .23 : .15), ["SelectionHoverBrush"]=Blend(canvas,primary,dark ? .16 : .09),
             ["PeachBrush"]=coral, ["PeachSoftBrush"]=Blend(canvas,coral,.15),

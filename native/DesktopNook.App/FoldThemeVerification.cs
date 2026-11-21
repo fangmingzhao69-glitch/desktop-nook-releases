@@ -42,20 +42,21 @@ internal static class FoldThemeVerification
             var items = Find<Button>(settings).Where(button =>
                 AutomationProperties.GetAutomationId(button).StartsWith("SettingsPage-", StringComparison.Ordinal)).ToArray();
             Check(items.Length == 5 && items.Count(Selector.GetIsSelected) == 1 &&
-                items.Single(Selector.GetIsSelected).Background == ThemePalette.Brush("PrimaryBrush") &&
+                items.Single(Selector.GetIsSelected).Background == ThemePalette.Brush("SettingsNavigationSelectedBrush") &&
                 items.All(button => button.FontSize >= 14), "设置菜单有五个可辨认的入口和高亮当前页");
             var currentMenu = items.Single(Selector.GetIsSelected);
             Check(ReferenceEquals(FocusManager.GetFocusedElement(settings), currentMenu), "打开设置后焦点位于当前菜单");
             var side = (Border)menu.Parent;
-            Check(side.BorderThickness.Right >= 2 && ReferenceEquals(side.BorderBrush, ThemePalette.Brush("SettingsNavigationBorderBrush")),
-                "设置菜单与内容区有独立的主题色分隔线");
+            Check(side.CornerRadius.TopLeft >= 12 && side.Margin.Left > 0 &&
+                ReferenceEquals(side.BorderBrush, ThemePalette.Brush("SettingsNavigationBorderBrush")),
+                "设置菜单以独立浅色圆角区域和内容区分隔");
             var oldWidth = settings.Width;
             var oldHeight = settings.Height;
             settings.Width = 450;
             settings.Height = 480;
             await settings.Dispatcher.InvokeAsync(() => { }, DispatcherPriority.ContextIdle);
             settings.UpdateLayout();
-            Check(menu.ActualWidth > settings.ActualWidth * .95 && items.All(button =>
+            Check(menu.ActualWidth >= settings.ActualWidth - 30 && items.All(button =>
             {
                 var origin = button.TranslatePoint(new Point(), menu);
                 return origin.X >= 0 && origin.Y >= 0 &&
@@ -76,6 +77,12 @@ internal static class FoldThemeVerification
                     "设置页可打开：" + page);
                 Check(AutomationProperties.GetAutomationId(items.Single(Selector.GetIsSelected)) == "SettingsPage-" + page,
                     "设置菜单随页面高亮：" + page);
+                Check(items.All(button =>
+                {
+                    button.ApplyTemplate();
+                    return button.Template.FindName("SelectedMark", button) is Border marker &&
+                        (marker.Visibility == Visibility.Visible) == Selector.GetIsSelected(button);
+                }), "选中细条随菜单切换：" + page);
             }
             var sourceControl=Find<ComboBox>(settings).Single(item =>
                 AutomationProperties.GetAutomationId(item)=="Settings-UpdateChannel");
@@ -130,15 +137,16 @@ internal static class FoldThemeVerification
                     {
                         var navigation = ((SolidColorBrush)side.Background).Color;
                         var page = ((SolidColorBrush)((Border)settings.Content).Background).Color;
-                        Check(Luminance(navigation) >= .65 && Contrast(navigation, page) >= 1.15,
+                        Check(Luminance(navigation) >= .75 && Contrast(navigation, page) >= 1.07,
                             family.Name + "的浅色设置菜单使用可辨认的主题浅底");
                     }
                     Check(SystemParameters.HighContrast ||
                         (selectedMenu.Background is SolidColorBrush background && selectedMenu.Foreground is SolidColorBrush foreground &&
                          Contrast(background.Color, foreground.Color) >= 4.5), family.Name + "的设置菜单文字与选中底色清晰区分");
-                    Check(SystemParameters.HighContrast || items.Where(button => !Selector.GetIsSelected(button)).All(button =>
-                        button.Background is SolidColorBrush itemBackground && button.Foreground is SolidColorBrush itemText &&
-                        Contrast(itemBackground.Color, itemText.Color) >= 4.5), family.Name + "的其他设置菜单入口清晰可读");
+                    Check(SystemParameters.HighContrast || (side.Background is SolidColorBrush navBackground &&
+                        items.Where(button => !Selector.GetIsSelected(button)).All(button =>
+                            button.Background == Brushes.Transparent && button.Foreground is SolidColorBrush itemText &&
+                            Contrast(navBackground.Color, itemText.Color) >= 4.5)), family.Name + "的其他设置菜单入口清晰可读");
                     await Save(main, $"zheye-{family.Id}-{mode}.png");
                 }
             }

@@ -3,7 +3,6 @@ using System.Windows;
 using System.Windows.Automation;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
-using System.Windows.Data;
 using System.Windows.Input;
 using System.Windows.Media;
 
@@ -55,13 +54,14 @@ internal sealed class SettingsWindow : Window
         root.ColumnDefinitions.Add(new());
         root.RowDefinitions.Add(new() { Height = GridLength.Auto });
         root.RowDefinitions.Add(new());
-        var sidebar = new StackPanel { Margin = new Thickness(12, 12, 10, 12) };
-        var brand = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(2, 0, 0, 9) };
-        var mark = new Image { Width = 24, Height = 24, Margin = new Thickness(0, 0, 8, 0) };
+        var sidebar = new StackPanel { Margin = new Thickness(10, 14, 8, 12) };
+        var brand = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(8, 0, 0, 12) };
+        var mark = new Image { Width = 27, Height = 27, Margin = new Thickness(0, 0, 9, 0) };
         mark.SetResourceReference(Image.SourceProperty, "FoldMark");
         brand.Children.Add(mark);
-        var brandName = Text("设置菜单", 19, "TextPrimaryBrush");
+        var brandName = Text("设置菜单", 18, "TextPrimaryBrush");
         brandName.FontWeight = FontWeights.SemiBold;
+        brandName.VerticalAlignment = VerticalAlignment.Center;
         brand.Children.Add(brandName);
         sidebar.Children.Add(brand);
         var navigation = new WrapPanel();
@@ -84,6 +84,7 @@ internal sealed class SettingsWindow : Window
         var navigationSurface = new Border
         {
             Background = ThemePalette.Brush("SettingsNavigationBrush"), BorderBrush = ThemePalette.Brush("SettingsNavigationBorderBrush"),
+            BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(14),
             Child = navigationScroll
         };
         root.Children.Add(navigationSurface);
@@ -132,9 +133,8 @@ internal sealed class SettingsWindow : Window
                 sidebarColumn.Width = new GridLength(top ? 0 : SidebarWidth);
                 Grid.SetRow(navigationSurface, top ? 0 : 1);
                 Grid.SetColumnSpan(navigationSurface, top ? 2 : 1);
-                navigationSurface.BorderThickness = top ? new Thickness(0, 0, 0, 2) : new Thickness(0, 0, 2, 0);
-                navigationSurface.CornerRadius = top ? new CornerRadius(0) : new CornerRadius(0, 0, 0, 13);
-                navigation.ItemWidth = top ? double.NaN : SidebarWidth - 29;
+                navigationSurface.Margin = top ? new Thickness(12, 0, 12, 0) : new Thickness(12, 1, 0, 14);
+                navigation.ItemWidth = top ? double.NaN : SidebarWidth - 34;
                 foreach (var label in groupLabels) label.Visibility = top ? Visibility.Collapsed : Visibility.Visible;
                 _content.Margin = top ? new Thickness(14, 12, 14, 16) : new Thickness(24, 8, 24, 20);
             }
@@ -152,9 +152,13 @@ internal sealed class SettingsWindow : Window
             };
             var content = new StackPanel { Orientation = Orientation.Horizontal };
             var glyph = DesignGlyphs.Path(geometry);
-            glyph.Margin = new Thickness(0, 0, 8, 0);
-            glyph.SetBinding(System.Windows.Shapes.Shape.StrokeProperty, new Binding("Foreground") { Source = button });
-            content.Children.Add(glyph);
+            glyph.HorizontalAlignment = HorizontalAlignment.Center;
+            glyph.VerticalAlignment = VerticalAlignment.Center;
+            content.Children.Add(new Border
+            {
+                Width = 29, Height = 29, CornerRadius = new CornerRadius(8), Margin = new Thickness(0, 0, 9, 0),
+                Background = ThemePalette.Brush("SettingsNavigationGlyphBrush"), Child = glyph
+            });
             content.Children.Add(new TextBlock { Text = page, VerticalAlignment = VerticalAlignment.Center });
             button.Content = content;
             AutomationProperties.SetAutomationId(button, "SettingsPage-" + page);
