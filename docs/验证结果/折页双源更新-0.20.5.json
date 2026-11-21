@@ -1,0 +1,63 @@
+{
+  "Version": "0.20.5",
+  "Date": "2026-11-21",
+  "SourceCommit": "1b6383c90e66fc8015ebf3ca6ed44527e0e0f439",
+  "GiteeRelease": "https://gitee.com/zfmdx/desktop-nook-releases/releases/tag/v0.20.5",
+  "GitHubRelease": "https://github.com/fangmingzhao69-glitch/desktop-nook-releases/releases/tag/v0.20.5",
+  "Assets": [
+    {
+      "Name": "DesktopNook-Setup.exe",
+      "Size": 569016,
+      "SHA256": "10fe08e3fac4e910d3e76b448510a8efb8829a06c9d75f1201331c6049318dd0"
+    },
+    {
+      "Name": "DesktopNook-v0.20.5-source.zip",
+      "Size": 3308762,
+      "SHA256": "6c32ee0dc9376253026d351253e13a271955ad5319a2a489a1ad18dae2f7caf2"
+    },
+    {
+      "Name": "DesktopNook-win-x64.exe",
+      "Size": 1369674,
+      "SHA256": "0771dd7b0c4e84a991dd1a4947331d7b2d8f97db30ae6d2516f55aebbba86bc1"
+    },
+    {
+      "Name": "SHA256SUMS.txt",
+      "Size": 278,
+      "SHA256": "465cad981df6f21afbc196f9bc2cf4b7786e17849578aa7ba544d395fd2c0971"
+    }
+  ],
+  "GiteeComponent": {
+    "Name": "Qingxia-TaskbarCore-win-x64.zip",
+    "SHA256": "8315c4b8e00acf04815a672be9a671bdc242d38eaee9b4f89a9a95f3a9fad092"
+  },
+  "ClientLiveChecks": 21,
+  "PreviousClientLiveChecks": 14,
+  "IsolatedUpgrade": {
+    "success": true,
+    "helperExit": 0,
+    "oldVersion": "0.20.3.0",
+    "newVersion": "0.20.5.0",
+    "notesRetained": true,
+    "notesBackupRetained": true,
+    "deletedCategoryRetained": true,
+    "uncheckedPreferenceRetained": true,
+    "collectViewRetained": true,
+    "motionModeRetained": true,
+    "categoryOrdersRetained": true,
+    "orderedCategories": 3,
+    "configurationHashUnchanged": true,
+    "payloadUnchanged": true,
+    "newProcessConfirmed": true
+  },
+  "IsolatedInstaller": {
+    "Installed": true,
+    "Upgraded": true,
+    "UserStateHashPreserved": true,
+    "UserPreferencesHashPreserved": true,
+    "DisplayName": "折页",
+    "Uninstalled": true,
+    "RemainingItems": 0,
+    "RecoveredFiles": 0,
+    "LiveUserDataTouched": false
+  }
+}
