@@ -55,7 +55,7 @@ internal sealed class TaskbarAppearancePackage(string storePath)
     internal Task DownloadAsync(HttpClient client, CancellationToken token = default) =>
         DownloadFromAsync(client, null, token);
 
-    private async Task DownloadFromAsync(HttpClient client, GiteeUpdateSource? mirror, CancellationToken token)
+    internal async Task DownloadFromAsync(HttpClient client, GiteeUpdateSource? mirror, CancellationToken token)
     {
         PrepareCache();
         string finalPath = ArchivePath;

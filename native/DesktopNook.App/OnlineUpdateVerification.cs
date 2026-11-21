@@ -100,9 +100,26 @@ internal static class OnlineUpdateVerification
             }
             if(live)
             {
-                using var remote=OnlineUpdater.CreateClient();var published=await OnlineUpdater.CheckAsync(remote,new Version(0,7,1))??throw new Exception("线上未发现发行版。");
+                using var remote=OnlineUpdater.CreateClient();var published=await OnlineUpdater.CheckGitHubAsync(remote,new Version(0,7,1))??throw new Exception("GitHub 未发现发行版。");
                 var actual=await OnlineUpdater.DownloadAsync(remote,published,output,null,CancellationToken.None);
                 if(LocalUpdater.Hash(actual)!=digest)throw new Exception("线上资产与本地产物不同。");checks.Add("真实 GitHub 公共接口与发行包下载校验通过");
+                if (GiteeUpdateSource.Configured is { } mirror)
+                {
+                    using var mirrorClient=OnlineUpdater.CreateClient(allowRedirects:false);
+                    using var offlineGitHub=new HttpClient(new Handler(_=>throw new Exception("Gitee 实测期间请求了 GitHub。")));
+                    var mirrored=await OnlineUpdater.CheckWithMirrorAsync(offlineGitHub,mirrorClient,mirror,new Version(0,7,1),CancellationToken.None);
+                    if (mirrored is null || mirrored.Mirror != mirror || mirrored.Version != version)
+                        throw new Exception("真实 Gitee 发行与候选版本不一致。");
+                    var mirroredFile=await OnlineUpdater.DownloadWithMirrorAsync(offlineGitHub,mirrorClient,mirrored,output,null,CancellationToken.None);
+                    if (LocalUpdater.Hash(mirroredFile)!=digest) throw new Exception("真实 Gitee 更新附件与候选 EXE 不一致。");
+                    checks.Add("真实 Gitee 发行接口、官方 CDN 和 SHA-256 验证通过，更新过程无需 GitHub");
+                    var component=new TaskbarAppearancePackage(Path.Combine(output,"gitee-taskbar"));
+                    await component.DownloadFromAsync(mirrorClient,mirror,CancellationToken.None);
+                    var componentDirectory=await component.PrepareAsync(allowDownload:false);
+                    if (TaskbarAppearancePackage.Files.Any(file=>!File.Exists(Path.Combine(componentDirectory,file))))
+                        throw new Exception("Gitee 任务栏外观组件未通过提取验证。");
+                    checks.Add("真实任务栏外观组件通过下载、固定哈希和提取验证");
+                }
             }
         }
         catch(Exception ex){failure=ex.ToString();}
