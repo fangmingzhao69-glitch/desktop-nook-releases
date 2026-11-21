@@ -1,0 +1,86 @@
+{
+  "Version": "0.20.11",
+  "Date": "2026-11-21",
+  "SourceCommit": "64cb28b15f0ff5d50eaa20f0297972159491a109",
+  "GiteeRelease": "https://gitee.com/zfmdx/desktop-nook-releases/releases/tag/v0.20.11",
+  "GitHubRelease": "https://github.com/fangmingzhao69-glitch/desktop-nook-releases/releases/tag/v0.20.11",
+  "Assets": [
+    {
+      "Name": "DesktopNook-Setup.exe",
+      "Size": 599444,
+      "SHA256": "e9632c6d282b6fb0c239789c7a6f83fcf49ef1b5460117cdc457fe198f576a09",
+      "GiteeAnonymousDownloadVerified": true
+    },
+    {
+      "Name": "DesktopNook-v0.20.11-source.zip",
+      "Size": 3327983,
+      "SHA256": "99ceac9a010c97b33ede9b3337d7dddd07c2920030adc7b59d8bdacc043ab76d",
+      "GiteeAnonymousDownloadVerified": true
+    },
+    {
+      "Name": "DesktopNook-win-x64.exe",
+      "Size": 1381964,
+      "SHA256": "ae40ca20d2eef21c8b7abc3e2e53359388ce7a28fecf4ab02799fbeb880e128b",
+      "GiteeAnonymousDownloadVerified": true
+    },
+    {
+      "Name": "SHA256SUMS.txt",
+      "Size": 279,
+      "SHA256": "171ea630715d407004e8ab0f181fadf8fc94f2097bf3b02b0ec225e1209973a3",
+      "GiteeAnonymousDownloadVerified": true
+    }
+  ],
+  "GiteeComponent": {
+    "Name": "Qingxia-TaskbarCore-win-x64.zip",
+    "SHA256": "8315c4b8e00acf04815a672be9a671bdc242d38eaee9b4f89a9a95f3a9fad092",
+    "AnonymousDownloadVerified": true
+  },
+  "GitHubLiveUpdatesVerified": true,
+  "GiteeAnonymousUpdateApiHttpStatus": 403,
+  "ClientChecksPassed": 22,
+  "PreviousClientChecksPassed": 22,
+  "InterfaceChecks": 167,
+  "NavigationChecks": [
+    "设置菜单以独立浅色圆角区域和内容区分隔",
+    "窄窗口把五个菜单移到顶部，首屏可见",
+    "选中细条随菜单切换：常规",
+    "选中细条随菜单切换：外观",
+    "选中细条随菜单切换：任务栏外观设置",
+    "选中细条随菜单切换：数据与恢复",
+    "选中细条随菜单切换：关于与更新",
+    "葡萄气泡的浅色设置菜单使用可辨认的主题浅底",
+    "西瓜冰棍的浅色设置菜单使用可辨认的主题浅底",
+    "青柠电波的浅色设置菜单使用可辨认的主题浅底",
+    "蓝莓苏打的浅色设置菜单使用可辨认的主题浅底"
+  ],
+  "IsolatedUpgrade": {
+    "success": true,
+    "helperExit": 0,
+    "oldVersion": "0.20.10.0",
+    "newVersion": "0.20.11.0",
+    "notesRetained": true,
+    "notesBackupRetained": true,
+    "deletedCategoryRetained": true,
+    "uncheckedPreferenceRetained": true,
+    "collectViewRetained": true,
+    "motionModeRetained": true,
+    "updateSourceRetained": true,
+    "categoryOrdersRetained": true,
+    "orderedCategories": 3,
+    "configurationHashUnchanged": true,
+    "payloadUnchanged": true,
+    "newProcessConfirmed": true
+  },
+  "IsolatedInstaller": {
+    "Installed": true,
+    "Upgraded": true,
+    "UserStateHashPreserved": true,
+    "UserPreferencesHashPreserved": true,
+    "DisplayName": "折页",
+    "InstallerAndUninstallerIconsMatch": true,
+    "Uninstalled": true,
+    "RemainingItems": 0,
+    "RecoveredFiles": 0,
+    "LiveUserDataTouched": false
+  }
+}
