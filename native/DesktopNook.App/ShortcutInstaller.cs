@@ -100,12 +100,12 @@ internal static class ShortcutInstaller
         finally { Marshal.FinalReleaseComObject(store); }
     }
 
-    internal static void SetWindowIdentity(IntPtr window, string program)
+    internal static void SetWindowIdentity(IntPtr window, string program, string? iconLocation = null, bool attachCleanup = true)
     {
         var iid = typeof(IPropertyStore).GUID;
         Marshal.ThrowExceptionForHR(SHGetPropertyStoreForWindow(window, ref iid, out var store));
-        System.Windows.Interop.HwndSource.FromHwnd(window)?.AddHook(ClearWindowIdentity);
-        try { UpdateIdentity(store, program + ",0", program, ""); }
+        if (attachCleanup) System.Windows.Interop.HwndSource.FromHwnd(window)?.AddHook(ClearWindowIdentity);
+        try { UpdateIdentity(store, iconLocation ?? program + ",0", program, ""); }
         finally { Marshal.FinalReleaseComObject(store); }
     }
 

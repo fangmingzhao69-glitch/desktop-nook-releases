@@ -143,6 +143,23 @@ internal sealed class NotificationAreaIcon : IDisposable
             point.X >= bounds.Left && point.X < bounds.Right && point.Y >= bounds.Top && point.Y < bounds.Bottom;
     }
 
+    internal void SetThemeIcon(string path)
+    {
+        if (_disposed || _data.Icon == IntPtr.Zero) return;
+        if (ExtractIconExW(path, 0, IntPtr.Zero, out var icon, 1) == 0 || icon == IntPtr.Zero)
+            throw new System.IO.IOException("无法加载主题托盘图标。");
+
+        var previous = _data.Icon;
+        _data.Icon = icon;
+        try
+        {
+            if (_registered && Shell_NotifyIconW(Modify, ref _data)) return;
+            _attempts = 0;
+            RegisterIcon();
+        }
+        finally { DestroyIcon(previous); }
+    }
+
     private void ShowMenu()
     {
         if (_disposed || !_canAct() || _menuOpen) return;
@@ -205,6 +222,7 @@ internal sealed class NotificationAreaIcon : IDisposable
 
 #if NOOK_UI_VERIFICATION
     internal bool Registered => _registered;
+    internal IntPtr CurrentIcon => _data.Icon;
     internal bool HasShellBounds
     {
         get

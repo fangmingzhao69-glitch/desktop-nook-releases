@@ -7,15 +7,27 @@ namespace DesktopNook.App;
 
 internal static class BrandMigration
 {
-    internal static void RefreshAfterUpgrade(string dataRoot)
+    internal static void RefreshAfterUpgrade(string dataRoot, string? pinnedIconLocation = null) =>
+        Refresh(dataRoot, pinnedFolder: PinnedFolder(), pinnedIconLocation: pinnedIconLocation);
+
+    private static string? PinnedFolder()
     {
         var roaming = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData);
-        string? pinnedFolder = string.IsNullOrEmpty(roaming) ? null :
+        return string.IsNullOrEmpty(roaming) ? null :
             Path.Combine(roaming, "Microsoft", "Internet Explorer", "Quick Launch", "User Pinned", "TaskBar");
-        Refresh(dataRoot, pinnedFolder: pinnedFolder);
     }
 
-    internal static void Refresh(string dataRoot,string? startFolder=null,string? pinnedFolder=null,string registryKey=@"Software\Microsoft\Windows\CurrentVersion\Uninstall\DesktopNook",string? iconFolder=null,bool refreshShortcuts=true)
+    internal static void RefreshPinnedAppearance(string iconLocation, string? folder = null)
+    {
+        folder ??= PinnedFolder();
+        if (folder is null || !Directory.Exists(folder)) return;
+        var program = Environment.ProcessPath!;
+        object shell = CreateShell();
+        try { RefreshPins(shell, folder, program, iconLocation); }
+        finally { Marshal.FinalReleaseComObject(shell); }
+    }
+
+    internal static void Refresh(string dataRoot,string? startFolder=null,string? pinnedFolder=null,string registryKey=@"Software\Microsoft\Windows\CurrentVersion\Uninstall\DesktopNook",string? iconFolder=null,bool refreshShortcuts=true,string? pinnedIconLocation=null)
     {
         var program=Environment.ProcessPath??throw new IOException("无法定位程序。");
         var version=System.Reflection.Assembly.GetExecutingAssembly().GetName().Version!.ToString(3);
@@ -25,71 +37,24 @@ internal static class BrandMigration
         {
             stream.CopyTo(memory);bytes=memory.ToArray();
         }
-        string EnsureIcon(string folder)
-        {
-            // Icon identity changes with artwork, not every application release.
-            var artwork=Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(bytes))[..16];
-            Directory.CreateDirectory(folder);var file=Path.Combine(folder,"Zheye-"+artwork+".ico");
-            if(!File.Exists(file)||!File.ReadAllBytes(file).SequenceEqual(bytes))File.WriteAllBytes(file,bytes);
-            // Shell cache brokers need an unencrypted public icon. Do not decrypt or
-            // relax protection on any folder/file; choose a different cache instead.
-            if((File.GetAttributes(file)&FileAttributes.Encrypted)!=0)throw new IOException("图标缓存位置被加密。");
-            return file;
-        }
-        string icon;
-        try{icon=EnsureIcon(iconFolder??Path.Combine(Path.GetDirectoryName(program)!,"Branding"));}
-        catch(Exception ex)when(iconFolder is null&&(ex is IOException or UnauthorizedAccessException))
-        {
-            var shared=Environment.GetFolderPath(Environment.SpecialFolder.CommonDocuments);
-            if(string.IsNullOrEmpty(shared))throw new IOException("无法定位公开图标缓存位置。",ex);
-            var sid=System.Security.Principal.WindowsIdentity.GetCurrent().User!.Value;
-            icon=EnsureIcon(Path.Combine(shared,"QingxiaIconCache",sid));
-        }
+        string icon=ThemeShellIcon.SavePublicIcon(bytes,iconFolder);
         var iconLocation=icon+",0";int changed=0;
         startFolder??=Environment.GetFolderPath(Environment.SpecialFolder.Programs);
         // Never enumerate or rewrite the user's pins implicitly. Explicit folders
         // are used only by an intentional migration/isolated verification.
-        var type=Type.GetTypeFromProgID("WScript.Shell")??throw new IOException("无法读取程序入口。");
-        dynamic shell=Activator.CreateInstance(type)!;
+        object shell=CreateShell();
         try
         {
-            bool Owned(string link)
-            {
-                if(!File.Exists(link))return false;
-                dynamic entry=shell.CreateShortcut(link);
-                try{return string.Equals((string)entry.TargetPath,program,StringComparison.OrdinalIgnoreCase);}
-                finally{Marshal.FinalReleaseComObject(entry);}
-            }
             var current=Path.Combine(startFolder,"折页.lnk");
-            bool legacy = ShortcutInstaller.LegacyNames.Any(name => Owned(Path.Combine(startFolder, name)));
-            if(refreshShortcuts&&(legacy||Owned(current))&&(!File.Exists(current)||Owned(current)))
+            bool legacy = ShortcutInstaller.LegacyNames.Any(name => OwnsShortcut(shell, Path.Combine(startFolder, name), program));
+            bool owned = OwnsShortcut(shell,current,program);
+            if(refreshShortcuts&&(legacy||owned)&&(!File.Exists(current)||owned))
             {
                 if(!File.Exists(current) && legacy){ShortcutInstaller.Install(startFolder);changed++;}
-                RefreshLink(current);
+                if (RefreshLink(shell,current,program,iconLocation,refreshName:true)) changed++;
             }
-            if(refreshShortcuts&&pinnedFolder is not null&&Directory.Exists(pinnedFolder))foreach(var link in Directory.EnumerateFiles(pinnedFolder,"*.lnk"))if(Owned(link))RefreshLink(link);
-            void RefreshLink(string link)
-            {
-                dynamic entry=shell.CreateShortcut(link);
-                try
-                {
-                    var arguments = (string)entry.Arguments;
-                    bool saved = !string.Equals((string)entry.IconLocation, iconLocation, StringComparison.OrdinalIgnoreCase) ||
-                        (string)entry.Description != ShortcutInstaller.DisplayName;
-                    // Preserve target, arguments, working directory, file name and pin order.
-                    if (saved)
-                    {
-                        entry.IconLocation = iconLocation;
-                        entry.Description = ShortcutInstaller.DisplayName;
-                        entry.Save();
-                    }
-                    bool updatedIdentity = ShortcutInstaller.SetIdentity(link, iconLocation, program, arguments);
-                    if (!saved && !updatedIdentity) return;
-                    ShellIntegration.RefreshShortcut(link);
-                    changed++;
-                }
-                finally{Marshal.FinalReleaseComObject(entry);}
-            }
+            if (refreshShortcuts && pinnedFolder is not null && Directory.Exists(pinnedFolder))
+                changed += RefreshPins(shell,pinnedFolder,program,pinnedIconLocation ?? iconLocation,refreshName:true);
         }
         finally{Marshal.FinalReleaseComObject(shell);}
         using(var key=Registry.CurrentUser.OpenSubKey(registryKey,true))
@@ -101,5 +66,47 @@ internal static class BrandMigration
             }
         }
         if(changed>0)ShellIntegration.RefreshDesktop();
+    }
+
+    private static object CreateShell() => Activator.CreateInstance(
+        Type.GetTypeFromProgID("WScript.Shell") ?? throw new IOException("无法读取程序入口。"))!;
+
+    private static bool OwnsShortcut(dynamic shell, string path, string program)
+    {
+        if (!File.Exists(path)) return false;
+        dynamic entry = shell.CreateShortcut(path);
+        try { return string.Equals((string)entry.TargetPath,program,StringComparison.OrdinalIgnoreCase); }
+        finally { Marshal.FinalReleaseComObject(entry); }
+    }
+
+    private static int RefreshPins(object shell, string folder, string program, string iconLocation, bool refreshName = false)
+    {
+        int changed = 0;
+        foreach (var link in Directory.EnumerateFiles(folder,"*.lnk"))
+            if (RefreshLink(shell,link,program,iconLocation,refreshName)) changed++;
+        return changed;
+    }
+
+    private static bool RefreshLink(dynamic shell, string link, string program, string iconLocation, bool refreshName)
+    {
+        dynamic entry = shell.CreateShortcut(link);
+        try
+        {
+            if (!string.Equals((string)entry.TargetPath,program,StringComparison.OrdinalIgnoreCase)) return false;
+            var arguments = (string)entry.Arguments;
+            bool saved = !string.Equals((string)entry.IconLocation,iconLocation,StringComparison.OrdinalIgnoreCase) ||
+                (refreshName && (string)entry.Description != ShortcutInstaller.DisplayName);
+            if (saved)
+            {
+                entry.IconLocation = iconLocation;
+                if (refreshName) entry.Description = ShortcutInstaller.DisplayName;
+                entry.Save();
+            }
+            bool updatedIdentity = ShortcutInstaller.SetIdentity(link,iconLocation,program,arguments);
+            if (!saved && !updatedIdentity) return false;
+            ShellIntegration.RefreshShortcut(link);
+            return true;
+        }
+        finally { Marshal.FinalReleaseComObject(entry); }
     }
 }

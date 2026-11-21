@@ -226,9 +226,11 @@ internal sealed class SettingsWindow : Window
             if (current) AutomationProperties.SetItemStatus(button, "当前配色");
             button.Click += (_, _) => Save(() =>
             {
+                bool changed = _options.ColorTheme != theme.Id;
                 _options.ColorTheme = theme.Id;
                 _owner.FinishPanelMotion();
                 ThemePalette.Apply(_options.ThemeMode, theme.Id);
+                if (changed) _owner.ApplyShellTheme(refreshPins: true);
                 _owner.PanelMotion.InvalidateSnapshot();
                 SelectPage("外观");
                 _content.Children.OfType<WrapPanel>().First().Children.OfType<Button>()

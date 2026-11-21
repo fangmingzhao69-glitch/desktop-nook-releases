@@ -18,6 +18,20 @@ internal static class TrayVerification
             var tray = window.TrayForVerification;
             await Check(() => tray.Registered && tray.HasShellBounds, "Windows 注册托盘入口并返回其位置");
             await Check(() => window.WindowState == WindowState.Minimized, "最小化启动时托盘仍可用");
+            var icons = new HashSet<string>();
+            var initialTheme = ThemePalette.Family;
+            foreach (var family in FoldTheme.All.Where(theme => theme != initialTheme).Append(initialTheme))
+            {
+                var previous = tray.CurrentIcon;
+                ThemePalette.Apply(ThemePalette.Mode, family.Id);
+                window.ApplyShellTheme(refreshPins: true);
+                await Check(() => tray.CurrentIcon != previous && tray.Registered && tray.HasShellBounds &&
+                    ReferenceEquals(window.Icon, FoldTheme.Mark(family)) &&
+                    window.ShellIconLocation is { } location && File.Exists(location[..^2]),
+                    family.Name + "同步更新最小化窗口图标和 Windows 托盘图标");
+                icons.Add(window.ShellIconLocation!);
+            }
+            await Check(() => icons.Count == FoldTheme.All.Count, "四套配色分别使用各自的 Windows ICO");
             window.ReleaseIdleResources();
             await Check(() => window.ContentParked && tray.HasShellBounds, "释放窗口绘制资源时仍保留托盘");
             if (!tray.PostActivation()) throw new InvalidOperationException("无法发送沙箱托盘激活消息。");

@@ -221,7 +221,8 @@ public partial class MainWindow : Window
     {
         if (App.IsSandbox) return;
         ShortcutInstaller.Install();
-        BrandMigration.RefreshAfterUpgrade(Store.DataDirectory);
+        ApplyShellTheme();
+        BrandMigration.RefreshAfterUpgrade(Store.DataDirectory, ShellIconLocation);
         RefreshTaskbarPlacement();
     }, "程序入口已刷新，可从开始菜单固定到任务栏");
 

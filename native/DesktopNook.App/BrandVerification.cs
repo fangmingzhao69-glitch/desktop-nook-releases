@@ -91,6 +91,22 @@ internal static class BrandVerification
                 for(int n=0;n<5;n++)BrandMigration.Refresh(App.Store.DataDirectory,folder,pinned,reg,publicIcons,refreshShortcuts:false);
                 if(pinBefore!=LocalUpdater.Hash(ownedPath)||pinTime!=File.GetLastWriteTimeUtc(ownedPath)||startBefore!=LocalUpdater.Hash(renamed))throw new Exception("日常启动改写了任务栏或开始菜单入口。");
                 checks.Add("Five startup refreshes preserve pinned shortcut bytes/timestamp and start-menu identity even with an older icon reference");
+                var themedPath = ThemeShellIcon.FileFor(FoldTheme.Find("lime"), publicIcons);
+                BrandMigration.RefreshPinnedAppearance(themedPath + ",0", pinned);
+                dynamic themedPin = shell.CreateShortcut(ownedPath);
+                try
+                {
+                    if ((string)themedPin.IconLocation != themedPath + ",0" || (string)themedPin.Arguments != args ||
+                        (string)themedPin.WorkingDirectory != root || (string)themedPin.TargetPath != Environment.ProcessPath ||
+                        IconPixels(themedPath).SequenceEqual(IconPixels(expectedIcon)))
+                        throw new Exception("主题切换未更新固定入口的实际图案或修改了启动参数。");
+                }
+                finally { Marshal.FinalReleaseComObject(themedPin); }
+                var themedHash = LocalUpdater.Hash(ownedPath);
+                BrandMigration.RefreshPinnedAppearance(themedPath + ",0", pinned);
+                if (themedHash != LocalUpdater.Hash(ownedPath) || startBefore != LocalUpdater.Hash(renamed))
+                    throw new Exception("主题刷新重写了正确的固定入口或修改了开始菜单。");
+                checks.Add("Theme changes update the owned fixed shortcut and its shell artwork without changing launch arguments or other shortcuts");
                 if((File.GetAttributes(expectedIcon)&FileAttributes.Encrypted)!=0)throw new Exception("公开图标仍被 EFS 加密。");using(var key=Microsoft.Win32.Registry.CurrentUser.OpenSubKey(reg))if(key?.GetValue("DisplayName") as string!="折页")throw new Exception("安装显示名未迁移。");
                 if(LocalUpdater.Hash(otherPath)!=otherHash||!File.Exists(legacy)||LocalUpdater.Hash(Path.Combine(App.Store.DataDirectory,"state.json"))!=stateHash)throw new Exception("迁移影响了其他入口或收纳配置。");
             }
