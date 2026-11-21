@@ -30,7 +30,16 @@ internal sealed class TaskbarAppearancePackage(string storePath)
         {
             if (!allowDownload) throw new IOException("首次启用需要下载任务栏外观组件。");
             using var client = OnlineUpdater.CreateClient();
-            await DownloadAsync(client, token).ConfigureAwait(false);
+            if (GiteeUpdateSource.Configured is { } mirror)
+            {
+                using var mirrorClient = OnlineUpdater.CreateClient(allowRedirects: false);
+                try { await DownloadFromAsync(mirrorClient, mirror, token).ConfigureAwait(false); }
+                catch (Exception ex) when (!token.IsCancellationRequested && OnlineUpdater.IsNetworkFailure(ex))
+                {
+                    await DownloadAsync(client, token).ConfigureAwait(false);
+                }
+            }
+            else await DownloadAsync(client, token).ConfigureAwait(false);
         }
         return await Task.Run(() => VerifyAndExtract(archive, ComponentDirectory), token).ConfigureAwait(false);
     }
@@ -43,19 +52,23 @@ internal sealed class TaskbarAppearancePackage(string storePath)
         CheckRegularPath(directory);
     }
 
-    internal async Task DownloadAsync(HttpClient client, CancellationToken token = default)
+    internal Task DownloadAsync(HttpClient client, CancellationToken token = default) =>
+        DownloadFromAsync(client, null, token);
+
+    private async Task DownloadFromAsync(HttpClient client, GiteeUpdateSource? mirror, CancellationToken token)
     {
         PrepareCache();
         string finalPath = ArchivePath;
         const int expectedSize = Size;
-        var sourceUri = Source;
         var temp = finalPath + "." + Guid.NewGuid().ToString("N") + ".partial";
         using var timeout = CancellationTokenSource.CreateLinkedTokenSource(token);
         timeout.CancelAfter(TimeSpan.FromSeconds(45));
         token = timeout.Token;
         try
         {
-            using var response = await client.GetAsync(sourceUri, HttpCompletionOption.ResponseHeadersRead, token).ConfigureAwait(false);
+            using var response = mirror is null
+                ? await client.GetAsync(Source, HttpCompletionOption.ResponseHeadersRead, token).ConfigureAwait(false)
+                : await OpenMirrorComponentAsync(client, mirror, token).ConfigureAwait(false);
             response.EnsureSuccessStatusCode();
             if (response.Content.Headers.ContentLength is long length && length != expectedSize)
                 throw new IOException("组件下载的文件大小与发布记录不一致。");
@@ -79,6 +92,12 @@ internal sealed class TaskbarAppearancePackage(string storePath)
         {
             if (File.Exists(temp)) File.Delete(temp);
         }
+    }
+
+    private static Task<HttpResponseMessage> OpenMirrorComponentAsync(HttpClient client, GiteeUpdateSource mirror, CancellationToken token)
+    {
+        var tag = GiteeUpdateSource.VersionTag(typeof(TaskbarAppearancePackage).Assembly.GetName().Version!);
+        return mirror.OpenAttachmentAsync(client, mirror.Attachment(tag, PackageFile), tag, PackageFile, HttpMethod.Get, token);
     }
 
     internal static string VerifyAndExtract(string archivePath, string destination)

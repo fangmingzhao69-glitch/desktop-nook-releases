@@ -14,6 +14,7 @@
   </ItemGroup>
   <ItemGroup>
     <EmbeddedResource Include="..\..\LICENSE" LogicalName="DesktopNook.GplLicense" />
+    <AssemblyMetadata Include="GiteeMirrorRepository" Value="$(GiteeMirrorRepository)" Condition="'$(GiteeMirrorRepository)' != ''" />
   </ItemGroup>
   <ItemGroup><Page Remove="Assets\AppIconDrawing.xaml;Assets\AppIconSmallDrawing.xaml" /><Resource Include="Assets\AppIconDrawing.xaml" /><None Include="Assets\AppIconSmallDrawing.xaml" /><ProjectReference Include="..\DesktopNook.Core\DesktopNook.Core.csproj" /><Resource Include="Assets\AppIcon.png" /><Resource Include="Assets\AppIcon.ico" /><ProjectReference Include="..\DesktopNook.Games.Core\DesktopNook.Games.Core.csproj" /><EmbeddedResource Include="..\ThirdPartyNotices\DesktopIconBilliards-MIT.txt" LogicalName="DesktopNook.BilliardsLicense" /><EmbeddedResource Include="..\ThirdPartyNotices\BilliardsAudio-CC0.txt" LogicalName="DesktopNook.BilliardsAudioLicense" /><ProjectReference Include="..\DesktopNook.Games.Network\DesktopNook.Games.Network.csproj" /></ItemGroup>
 </Project>
