@@ -1,0 +1,64 @@
+{
+  "Version": "0.20.3",
+  "DisplayName": "折页",
+  "Date": "2026-11-21",
+  "ReleaseUrl": "https://github.com/fangmingzhao69-glitch/desktop-nook-releases/releases/tag/v0.20.3",
+  "Latest": true,
+  "SourceCommit": "0a741862858cba3aa29ecb17146e6320aeeeb7b9",
+  "Assets": [
+    {
+      "Name": "DesktopNook-Setup.exe",
+      "Size": 560539,
+      "SHA256": "c6453cc62f424055c14db4b1eb879f8cb473765cbf03be1513e7a366c3516d62"
+    },
+    {
+      "Name": "DesktopNook-v0.20.3-source.zip",
+      "Size": 3297606,
+      "SHA256": "db7b6c633a2258813c14c7d34fa33df561fe8c0c718a21f876ea9ed02c3b7b43"
+    },
+    {
+      "Name": "DesktopNook-win-x64.exe",
+      "Size": 1341002,
+      "SHA256": "13a67978b8c4f152f914085a77c4e31f82713abbd47681cf7968083def9b7d3c"
+    },
+    {
+      "Name": "SHA256SUMS.txt",
+      "Size": 278,
+      "SHA256": "1fe2c388e8d2a93a94b19868001560a6edc7e2e84c42b30d5cbbb8db1d7202e8"
+    }
+  ],
+  "Checks": {
+    "Tray": 12,
+    "BrandAndPinnedShortcut": 11,
+    "OnlineUpdate": 14
+  },
+  "IsolatedUpgrade": {
+    "success": true,
+    "helperExit": 0,
+    "oldVersion": "0.20.2.0",
+    "newVersion": "0.20.3.0",
+    "notesRetained": true,
+    "notesBackupRetained": true,
+    "deletedCategoryRetained": true,
+    "uncheckedPreferenceRetained": true,
+    "collectViewRetained": true,
+    "motionModeRetained": true,
+    "categoryOrdersRetained": true,
+    "orderedCategories": 3,
+    "configurationHashUnchanged": true,
+    "payloadUnchanged": true,
+    "newProcessConfirmed": true
+  },
+  "IsolatedInstaller": {
+    "Installed": true,
+    "Upgraded": true,
+    "UserStateHashPreserved": true,
+    "UserPreferencesHashPreserved": true,
+    "DisplayName": "折页",
+    "Uninstalled": true,
+    "RemainingItems": 0,
+    "RecoveredFiles": 0,
+    "LiveUserDataTouched": false
+  },
+  "VerificationScope": "Windows 托盘实测和独立目录中的固定快捷方式测试"
+}
