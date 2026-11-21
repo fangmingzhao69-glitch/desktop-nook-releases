@@ -4,6 +4,7 @@ using System.Windows.Automation;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
 using System.Windows.Data;
+using System.Windows.Input;
 using System.Windows.Media;
 
 namespace DesktopNook.App;
@@ -11,9 +12,9 @@ namespace DesktopNook.App;
 internal sealed class SettingsWindow : Window
 {
     private static readonly Size PreferredSize = new(820, 540);
-    private const double SidebarWidth = 204;
-    private const double CompactWidth = 590;
-    private const double CompactHeight = 350;
+    private const double SidebarWidth = 226;
+    private const double CompactWidth = 610;
+    private const double CompactHeight = 370;
     private const double WorkAreaInset = 12;
     internal const string TaskbarPage = "任务栏外观设置";
     internal enum ActionAfterClose { None, RefreshEntry, PinHelp, StopGame, Quit, Restore, OpenData, CheckUpdate, LocalUpdate, Releases, License, GameLicense }
@@ -59,7 +60,7 @@ internal sealed class SettingsWindow : Window
         var mark = new Image { Width = 24, Height = 24, Margin = new Thickness(0, 0, 8, 0) };
         mark.SetResourceReference(Image.SourceProperty, "FoldMark");
         brand.Children.Add(mark);
-        var brandName = Text("设置菜单", 16, "TextPrimaryBrush");
+        var brandName = Text("设置菜单", 19, "SettingsNavigationTextBrush");
         brandName.FontWeight = FontWeights.SemiBold;
         brand.Children.Add(brandName);
         sidebar.Children.Add(brand);
@@ -79,9 +80,10 @@ internal sealed class SettingsWindow : Window
             HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled
         };
         AutomationProperties.SetAutomationId(navigationScroll, "Settings-Navigation");
+        AutomationProperties.SetName(navigationScroll, "设置菜单");
         var navigationSurface = new Border
         {
-            Background = ThemePalette.Brush("CanvasSubtleBrush"), BorderBrush = ThemePalette.Brush("FoldEdgeBrush"),
+            Background = ThemePalette.Brush("SettingsNavigationBrush"), BorderBrush = ThemePalette.Brush("SettingsNavigationBorderBrush"),
             Child = navigationScroll
         };
         root.Children.Add(navigationSurface);
@@ -97,6 +99,11 @@ internal sealed class SettingsWindow : Window
         Content = root;
         UiDialogs.Chrome(this);
         SelectPage("常规");
+        Loaded += (_, _) =>
+        {
+            var current = _navigation.Values.FirstOrDefault(Selector.GetIsSelected);
+            if (current is not null) Keyboard.Focus(current);
+        };
         Closing += OnClosing;
         Closed += (_, _) => _taskbarPage?.StopPreviewTimer();
         bool? compact = null;
@@ -127,7 +134,7 @@ internal sealed class SettingsWindow : Window
                 Grid.SetColumnSpan(navigationSurface, top ? 2 : 1);
                 navigationSurface.BorderThickness = top ? new Thickness(0, 0, 0, 1) : new Thickness(0, 0, 1, 0);
                 navigationSurface.CornerRadius = top ? new CornerRadius(0) : new CornerRadius(0, 0, 0, 13);
-                navigation.ItemWidth = top ? double.NaN : 175;
+                navigation.ItemWidth = top ? double.NaN : SidebarWidth - 29;
                 foreach (var label in groupLabels) label.Visibility = top ? Visibility.Collapsed : Visibility.Visible;
                 _content.Margin = top ? new Thickness(14, 12, 14, 16) : new Thickness(24, 8, 24, 20);
             }
@@ -161,7 +168,7 @@ internal sealed class SettingsWindow : Window
         }
         void AddNavigationLabel(string label)
         {
-            var text = Text(label, 12, "TextSecondaryBrush");
+            var text = Text(label, 12, "SettingsNavigationMutedBrush");
             text.FontWeight = FontWeights.SemiBold;
             text.Margin = new Thickness(4, 8, 0, 5);
             groupLabels.Add(text);

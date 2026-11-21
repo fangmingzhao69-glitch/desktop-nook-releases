@@ -3,6 +3,7 @@ using System.Windows;
 using System.Windows.Automation;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
+using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using System.Windows.Threading;
@@ -43,6 +44,12 @@ internal static class FoldThemeVerification
             Check(items.Length == 5 && items.Count(Selector.GetIsSelected) == 1 &&
                 items.Single(Selector.GetIsSelected).Background == ThemePalette.Brush("PrimaryBrush") &&
                 items.All(button => button.FontSize >= 14), "设置菜单有五个可辨认的入口和高亮当前页");
+            var currentMenu = items.Single(Selector.GetIsSelected);
+            Check(ReferenceEquals(FocusManager.GetFocusedElement(settings), currentMenu), "打开设置后焦点位于当前菜单");
+            Check(SystemParameters.HighContrast || ThemePalette.IsDark ||
+                (menu.Parent is Border rail && rail.Background is SolidColorBrush navigation &&
+                 ((Border)settings.Content).Background is SolidColorBrush pageSurface &&
+                 Contrast(navigation.Color, pageSurface.Color) >= 4.5), "浅色设置页面与左侧深色导航有明显区分");
             var oldWidth = settings.Width;
             var oldHeight = settings.Height;
             settings.Width = 450;
@@ -123,6 +130,9 @@ internal static class FoldThemeVerification
                     Check(SystemParameters.HighContrast ||
                         (selectedMenu.Background is SolidColorBrush background && selectedMenu.Foreground is SolidColorBrush foreground &&
                          Contrast(background.Color, foreground.Color) >= 4.5), family.Name + "的设置菜单文字与选中底色清晰区分");
+                    Check(SystemParameters.HighContrast || items.Where(button => !Selector.GetIsSelected(button)).All(button =>
+                        button.Background is SolidColorBrush itemBackground && button.Foreground is SolidColorBrush itemText &&
+                        Contrast(itemBackground.Color, itemText.Color) >= 4.5), family.Name + "的其他设置菜单入口清晰可读");
                     await Save(main, $"zheye-{family.Id}-{mode}.png");
                 }
             }

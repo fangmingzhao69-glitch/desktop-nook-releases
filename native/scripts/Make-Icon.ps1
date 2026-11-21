@@ -35,4 +35,25 @@ try {
     }
     foreach($frame in $frames){$writer.Write([byte[]]$frame)}
 } finally { $writer.Dispose() }
+
+$artifacts = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..\artifacts'))
+[void][IO.Directory]::CreateDirectory($artifacts)
+$welcome = [Windows.Media.DrawingVisual]::new()
+$context = $welcome.RenderOpen()
+try {
+    $background = [Windows.Media.SolidColorBrush]::new([Windows.Media.ColorConverter]::ConvertFromString('#171A2B'))
+    $context.DrawRectangle($background, $null, [Windows.Rect]::new(0, 0, 164, 314))
+    $context.PushTransform([Windows.Media.TranslateTransform]::new(31, 85))
+    $context.PushTransform([Windows.Media.ScaleTransform]::new(102.0/1024.0, 102.0/1024.0))
+    $context.DrawDrawing($drawing)
+    $context.Pop()
+    $context.Pop()
+} finally { $context.Close() }
+$welcomeBitmap = [Windows.Media.Imaging.RenderTargetBitmap]::new(164, 314, 96, 96, [Windows.Media.PixelFormats]::Pbgra32)
+$welcomeBitmap.Render($welcome)
+$rgbBitmap = [Windows.Media.Imaging.FormatConvertedBitmap]::new($welcomeBitmap, [Windows.Media.PixelFormats]::Bgr24, $null, 0)
+$welcomeEncoder = [Windows.Media.Imaging.BmpBitmapEncoder]::new()
+$welcomeEncoder.Frames.Add([Windows.Media.Imaging.BitmapFrame]::Create($rgbBitmap))
+$welcomeFile = [IO.File]::Create((Join-Path $artifacts 'InstallerBrand.bmp'))
+try { $welcomeEncoder.Save($welcomeFile) } finally { $welcomeFile.Dispose() }
 Get-Item -LiteralPath (Join-Path $assets 'AppIcon.ico') | Select-Object FullName,Length
