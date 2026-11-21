@@ -2,7 +2,7 @@
 
 常用与灵感，折页之间。折页是 Windows 桌面收纳工具。用一个任务栏入口打开收纳面板，左侧整理软件、文件和文件夹，右侧记录便签和待办。
 
-[下载 0.20.6 安装包（Gitee）](https://gitee.com/zfmdx/desktop-nook-releases/releases/download/v0.20.6/DesktopNook-Setup.exe) · [Gitee 最新正式版](https://gitee.com/zfmdx/desktop-nook-releases/releases/latest) · [GitHub 发行页](https://github.com/fangmingzhao69-glitch/desktop-nook-releases/releases/latest) · [使用说明](docs/使用说明.md)
+[折页宣传页](https://zheye-desktop.cleverhornbill8.chatgpt.site) · [下载 0.20.7 安装包（Gitee）](https://gitee.com/zfmdx/desktop-nook-releases/releases/download/v0.20.7/DesktopNook-Setup.exe) · [Gitee 最新正式版](https://gitee.com/zfmdx/desktop-nook-releases/releases/latest) · [GitHub 发行页](https://github.com/fangmingzhao69-glitch/desktop-nook-releases/releases/latest) · [使用说明](docs/使用说明.md)
 
 0.20.6 起，折页内置更新默认优先访问 GitHub，访问失败时改用 Gitee。在「设置 → 关于与更新」可手动指定更新来源。旧版用户可通过上方的 Gitee 安装包覆盖升级。
 
@@ -29,7 +29,7 @@
 | --- | --- |
 | `DesktopNook-Setup.exe` | 首次安装或直接覆盖升级。缺少运行时时，安装器会提示补装。 |
 | `DesktopNook-win-x64.exe` | 免安装版。请先安装桌面运行时，再放到固定目录运行。 |
-| `DesktopNook-v0.20.6-source.zip` | 与本版对应的源码、构建脚本、源依赖和许可证。 |
+| `DesktopNook-v0.20.7-source.zip` | 与本版对应的源码、构建脚本、源依赖和许可证。 |
 | `SHA256SUMS.txt` | 所有发行文件的校验值。 |
 
 升级可在折页的「设置 → 关于与更新 → 检查在线更新」操作。完整迁移或备份请复制整个数据目录，可从「设置 → 数据与恢复 → 打开数据目录」进入。
@@ -43,6 +43,12 @@
 源码在 `native/`。构建需要 Windows、.NET 10 SDK 和 PowerShell，安装包另外需要 Unicode NSIS 3。开发时用独立 `--sandbox` 数据目录。
 
 [开发与构建](docs/开发与构建.md) · [架构与数据](docs/架构与数据.md) · [项目交接](docs/项目交接.md)
+
+## 双平台发布
+
+每次调整项目后，都要把同一份源码提交和版本标签同步到 **GitHub 和 Gitee**，并在两个平台发布安装包、免安装版、对应源码和 SHA-256 清单。Gitee 发行版还要包含任务栏外观组件。发布后逐一核对附件，确认上一正式版可以检查和下载更新。
+
+[发布与验收步骤](docs/开发与构建.md#发布) · [Gitee 发行列表](https://gitee.com/zfmdx/desktop-nook-releases/releases) · [GitHub 发行列表](https://github.com/fangmingzhao69-glitch/desktop-nook-releases/releases)
 
 ## 许可证
 
