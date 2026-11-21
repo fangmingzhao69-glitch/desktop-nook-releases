@@ -15,7 +15,10 @@ internal static class Maintenance
             {
                 ShortcutInstaller.Install();
                 new StartupOptions().RefreshEnabledPath();
-                BrandMigration.RefreshAfterUpgrade(root);
+                var preferences = new StartupOptions(preferencesPath: Path.Combine(root, "preferences.json"), fileOnly: true);
+                var theme = FoldTheme.Find(preferences.ColorTheme);
+                var iconLocation = ThemeShellIcon.FileFor(theme) + ",0";
+                BrandMigration.RefreshAfterUpgrade(root, iconLocation);
             }
             return 0;
         }
