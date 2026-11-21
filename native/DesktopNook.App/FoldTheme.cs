@@ -54,9 +54,7 @@ internal sealed record FoldTheme(string Id, string Name, FoldTheme.Paper Light, 
         var muted=Parse(p.Muted); var primary=Parse(p.Accent); var coral=Parse(p.Coral);
         var mint=Parse(p.Mint); var line=Parse(p.Line); var onPrimary=LabelOn(primary);
         var danger=Parse(dark ? "#FF9FAE" : "#A13349");
-        var navigation=Parse(Dark.Strip);
-        var navigationInk=Parse(Dark.Ink);
-        var navigationAccent=Parse(Dark.Accent);
+        var navigation=Blend(surface,primary,dark ? .14 : .21);
         return new()
         {
             ["CanvasBrush"]=canvas, ["CanvasSubtleBrush"]=Blend(canvas,line,.2), ["SurfaceBrush"]=surface,
@@ -67,11 +65,9 @@ internal sealed record FoldTheme(string Id, string Name, FoldTheme.Paper Light, 
             ["PrimaryPressedBrush"]=Blend(primary,onPrimary,.16), ["OnPrimaryBrush"]=onPrimary,
             ["SettingsSelectionTextBrush"]=LabelOn(primary,Colors.Black),
             ["SettingsNavigationBrush"]=navigation,
-            ["SettingsNavigationButtonBrush"]=Blend(navigation,navigationAccent,.12),
-            ["SettingsNavigationHoverBrush"]=Blend(navigation,navigationAccent,.25),
-            ["SettingsNavigationBorderBrush"]=Blend(navigation,navigationInk,.32),
-            ["SettingsNavigationTextBrush"]=navigationInk,
-            ["SettingsNavigationMutedBrush"]=Blend(Parse(Dark.Muted),navigationInk,.3),
+            ["SettingsNavigationButtonBrush"]=Blend(surface,primary,.035),
+            ["SettingsNavigationHoverBrush"]=Blend(surface,primary,.17),
+            ["SettingsNavigationBorderBrush"]=Blend(line,primary,.75),
             ["AccentInkBrush"]=dark ? primary : Blend(primary,ink,.32),
             ["SelectionBrush"]=Blend(canvas,primary,dark ? .23 : .15), ["SelectionHoverBrush"]=Blend(canvas,primary,dark ? .16 : .09),
             ["PeachBrush"]=coral, ["PeachSoftBrush"]=Blend(canvas,coral,.15),

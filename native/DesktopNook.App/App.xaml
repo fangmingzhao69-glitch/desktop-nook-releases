@@ -178,8 +178,8 @@
     </Style>
     <Style x:Key="SettingsNavigationButton" TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">
       <Setter Property="Background" Value="{DynamicResource SettingsNavigationButtonBrush}"/>
-      <Setter Property="Foreground" Value="{DynamicResource SettingsNavigationTextBrush}"/>
-      <Setter Property="BorderBrush" Value="{DynamicResource SettingsNavigationBorderBrush}"/>
+      <Setter Property="Foreground" Value="{DynamicResource TextPrimaryBrush}"/>
+      <Setter Property="BorderBrush" Value="{DynamicResource FoldEdgeBrush}"/>
       <Setter Property="BorderThickness" Value="1"/>
       <Setter Property="Padding" Value="10,7"/>
       <Setter Property="MinHeight" Value="43"/>
@@ -199,10 +199,10 @@
                   <Condition Property="Selector.IsSelected" Value="False"/>
                 </MultiTrigger.Conditions>
                 <Setter TargetName="Chrome" Property="Background" Value="{DynamicResource SettingsNavigationHoverBrush}"/>
-                <Setter TargetName="Chrome" Property="BorderBrush" Value="{DynamicResource SettingsNavigationTextBrush}"/>
+                <Setter TargetName="Chrome" Property="BorderBrush" Value="{DynamicResource SettingsNavigationBorderBrush}"/>
               </MultiTrigger>
               <Trigger Property="IsKeyboardFocused" Value="True">
-                <Setter TargetName="Chrome" Property="BorderBrush" Value="{DynamicResource SettingsNavigationTextBrush}"/>
+                <Setter TargetName="Chrome" Property="BorderBrush" Value="{DynamicResource TextPrimaryBrush}"/>
                 <Setter TargetName="Chrome" Property="BorderThickness" Value="2"/>
               </Trigger>
               <Trigger Property="IsPressed" Value="True"><Setter Property="Opacity" Value=".85"/></Trigger>

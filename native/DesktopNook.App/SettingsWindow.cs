@@ -60,7 +60,7 @@ internal sealed class SettingsWindow : Window
         var mark = new Image { Width = 24, Height = 24, Margin = new Thickness(0, 0, 8, 0) };
         mark.SetResourceReference(Image.SourceProperty, "FoldMark");
         brand.Children.Add(mark);
-        var brandName = Text("设置菜单", 19, "SettingsNavigationTextBrush");
+        var brandName = Text("设置菜单", 19, "TextPrimaryBrush");
         brandName.FontWeight = FontWeights.SemiBold;
         brand.Children.Add(brandName);
         sidebar.Children.Add(brand);
@@ -132,7 +132,7 @@ internal sealed class SettingsWindow : Window
                 sidebarColumn.Width = new GridLength(top ? 0 : SidebarWidth);
                 Grid.SetRow(navigationSurface, top ? 0 : 1);
                 Grid.SetColumnSpan(navigationSurface, top ? 2 : 1);
-                navigationSurface.BorderThickness = top ? new Thickness(0, 0, 0, 1) : new Thickness(0, 0, 1, 0);
+                navigationSurface.BorderThickness = top ? new Thickness(0, 0, 0, 2) : new Thickness(0, 0, 2, 0);
                 navigationSurface.CornerRadius = top ? new CornerRadius(0) : new CornerRadius(0, 0, 0, 13);
                 navigation.ItemWidth = top ? double.NaN : SidebarWidth - 29;
                 foreach (var label in groupLabels) label.Visibility = top ? Visibility.Collapsed : Visibility.Visible;
@@ -168,7 +168,7 @@ internal sealed class SettingsWindow : Window
         }
         void AddNavigationLabel(string label)
         {
-            var text = Text(label, 12, "SettingsNavigationMutedBrush");
+            var text = Text(label, 12, "TextSecondaryBrush");
             text.FontWeight = FontWeights.SemiBold;
             text.Margin = new Thickness(4, 8, 0, 5);
             groupLabels.Add(text);

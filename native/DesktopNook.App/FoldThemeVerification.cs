@@ -46,10 +46,9 @@ internal static class FoldThemeVerification
                 items.All(button => button.FontSize >= 14), "设置菜单有五个可辨认的入口和高亮当前页");
             var currentMenu = items.Single(Selector.GetIsSelected);
             Check(ReferenceEquals(FocusManager.GetFocusedElement(settings), currentMenu), "打开设置后焦点位于当前菜单");
-            Check(SystemParameters.HighContrast || ThemePalette.IsDark ||
-                (menu.Parent is Border rail && rail.Background is SolidColorBrush navigation &&
-                 ((Border)settings.Content).Background is SolidColorBrush pageSurface &&
-                 Contrast(navigation.Color, pageSurface.Color) >= 4.5), "浅色设置页面与左侧深色导航有明显区分");
+            var side = (Border)menu.Parent;
+            Check(side.BorderThickness.Right >= 2 && ReferenceEquals(side.BorderBrush, ThemePalette.Brush("SettingsNavigationBorderBrush")),
+                "设置菜单与内容区有独立的主题色分隔线");
             var oldWidth = settings.Width;
             var oldHeight = settings.Height;
             settings.Width = 450;
@@ -127,6 +126,13 @@ internal static class FoldThemeVerification
                          boundBrush.Color == (Color)ColorConverter.ConvertFromString(expected.Accent)),
                         family.Name + "在" + (mode == "dark" ? "深色" : "浅色") + "模式实时更新颜色");
                     var selectedMenu = items.Single(Selector.GetIsSelected);
+                    if (mode == "light" && !SystemParameters.HighContrast)
+                    {
+                        var navigation = ((SolidColorBrush)side.Background).Color;
+                        var page = ((SolidColorBrush)((Border)settings.Content).Background).Color;
+                        Check(Luminance(navigation) >= .65 && Contrast(navigation, page) >= 1.15,
+                            family.Name + "的浅色设置菜单使用可辨认的主题浅底");
+                    }
                     Check(SystemParameters.HighContrast ||
                         (selectedMenu.Background is SolidColorBrush background && selectedMenu.Foreground is SolidColorBrush foreground &&
                          Contrast(background.Color, foreground.Color) >= 4.5), family.Name + "的设置菜单文字与选中底色清晰区分");
@@ -197,9 +203,10 @@ internal static class FoldThemeVerification
         }
     }
 
+    private static double Luminance(Color color) => .2126 * color.ScR + .7152 * color.ScG + .0722 * color.ScB;
+
     private static double Contrast(Color a, Color b)
     {
-        static double Luminance(Color color) => .2126 * color.ScR + .7152 * color.ScG + .0722 * color.ScB;
         var first = Luminance(a);
         var second = Luminance(b);
         return (Math.Max(first, second) + .05) / (Math.Min(first, second) + .05);
