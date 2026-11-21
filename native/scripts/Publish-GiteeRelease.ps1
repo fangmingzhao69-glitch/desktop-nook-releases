@@ -51,7 +51,7 @@ if ([string]::IsNullOrWhiteSpace($token)) {
 if ([string]::IsNullOrWhiteSpace($token)) { throw '没有提供 Gitee 发布令牌。' }
 
 function Get-Release {
-    $request = Invoke-WebRequest -Uri "$api/tags/$Tag" -SkipHttpErrorCheck -MaximumRedirection 0 -TimeoutSec 25
+    $request = Invoke-WebRequest -Uri "$api/tags/$Tag" -Headers @{Authorization="token $token"} -SkipHttpErrorCheck -MaximumRedirection 0 -TimeoutSec 25
     if ($request.StatusCode -eq 404) { return }
     if ($request.StatusCode -ne 200) { throw "无法读取 Gitee 发行版（HTTP $($request.StatusCode)）。" }
     return $request.Content | ConvertFrom-Json
