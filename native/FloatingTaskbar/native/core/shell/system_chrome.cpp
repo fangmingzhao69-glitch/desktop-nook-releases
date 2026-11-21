@@ -271,19 +271,25 @@ void SystemChrome::SetTaskbarHidden(bool hidden)
         return;
     if (hidden == g_taskbarVisibility.hidden)
         return;
-    g_taskbarVisibility.hidden = hidden;
     if (hidden) {
         // Auto-hide first: a hidden taskbar that is not auto-hide would still
         // keep its strip of the work area.
-        if (const auto autoHide = QueryAutoHide(); autoHide.has_value() && !*autoHide) {
-            SetAutoHide(true);
-            autoHideOurs_ = true;
-            ScheduleRefit();
+        const auto autoHide = QueryAutoHide();
+        if (!autoHide.has_value())
+            return;
+        g_taskbarVisibility.hidden = true;
+        autoHideOurs_ = !*autoHide;
+        // Write the restoration record before changing Explorer.
+        if (!Save() || (autoHideOurs_ && !SetAutoHide(true))) {
+            SetTaskbarHidden(false);
+            return;
         }
-        Save();
+        if (autoHideOurs_)
+            ScheduleRefit();
         HideTaskbars();
         Watch();
     } else {
+        g_taskbarVisibility.hidden = false;
         StopRefit(false);
         if (hook_)
             UnhookWinEvent(hook_);
@@ -388,9 +394,11 @@ void SystemChrome::Enforce()
         // windows stop its height short of the bottom. Auto-hide can be lost after it was set:
         // set before Explorer's taskbar was ready at sign-in, Explorer restarted, another program.
         if (const auto autoHide = QueryAutoHide(); autoHide.has_value() && !*autoHide) {
-            SetAutoHide(true);
             autoHideOurs_ = true;
-            Save();
+            if (!Save() || !SetAutoHide(true)) {
+                SetTaskbarHidden(false);
+                return;
+            }
             Log(L"chrome: the taskbar was no longer auto-hide; set again");
             ScheduleRefit();
         }
@@ -508,11 +516,11 @@ void SystemChrome::RefitWorker()
     }
 }
 
-void SystemChrome::Save() const
+bool SystemChrome::Save() const
 {
     if (!g_taskbarVisibility.hidden && !autoHideOurs_ && !quietOurs_ && !autoPlayBannerOurs_) {
         DeleteFileW(StatePath().c_str());
-        return;
+        return true;
     }
     json::JsonObject o;
     o.SetNamedValue(L"taskbarHidden", json::JsonValue::CreateBooleanValue(g_taskbarVisibility.hidden.load()));
@@ -522,7 +530,7 @@ void SystemChrome::Save() const
         o.SetNamedValue(L"quietRestore", json::JsonValue::CreateStringValue(quietBefore_));
     if (autoPlayBannerOurs_)
         o.SetNamedValue(L"autoPlayBanner", json::JsonValue::CreateBooleanValue(true));
-    WriteTextFile(StatePath(), std::wstring(o.Stringify()));
+    return WriteTextFile(StatePath(), std::wstring(o.Stringify()));
 }
 
 } // namespace atrium

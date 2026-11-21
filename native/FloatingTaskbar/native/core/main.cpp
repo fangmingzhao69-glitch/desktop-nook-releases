@@ -561,7 +561,7 @@ void PostMessengerCard(Messenger m)
 }
 
 // Applies settings to the bar and the task model.
-void EnsureGuard();
+bool EnsureGuard();
 
 void ApplySettings(const Settings& s)
 {
@@ -669,38 +669,38 @@ void ApplySettings(const Settings& s)
         Log(L"core: remote-control mode %s", s.remoteVisible ? L"on: Atrium shows in every capture, the glass shows the wallpaper" : L"off");
     }
     if (g_app.chrome) {
-        // Without the bar, Windows' own taskbar and banners are never hidden.
-        g_app.chrome->SetTaskbarHidden(s.bar && s.hideTaskbar);
+        const bool replace = s.bar && s.hideTaskbar && zheye::Env(L"ZHEYE_DOCK_SANDBOX") != L"1";
+        const bool guarded = (replace || (s.bar && s.hideBanners) || s.trayHost) && EnsureGuard();
+        g_app.chrome->SetTaskbarHidden(replace && guarded);
         g_app.chrome->SetBannersHidden(s.bar && s.hideBanners);
-        if ((s.bar && (s.hideTaskbar || s.hideBanners)) || s.trayHost)
-            EnsureGuard();
     }
 }
 
 // While Windows' taskbar or its banners are hidden, a second Atrium.exe (`--guard`, RunGuard)
 // watches this one: however it ends (a crash past the exception filter, abort, being killed),
 // what it changed in Windows is put back at once; while it does not respond, the taskbar shows.
-void EnsureGuard()
+bool EnsureGuard()
 {
     if (g_app.guard && WaitForSingleObject(g_app.guard, 0) == WAIT_TIMEOUT)
-        return;
+        return true;
     if (g_app.guard) {
         CloseHandle(g_app.guard);
         g_app.guard = nullptr;
     }
     wchar_t exe[MAX_PATH * 2];
     if (!GetModuleFileNameW(nullptr, exe, DWORD(std::size(exe))))
-        return;
+        return false;
     std::wstring command = L"\"" + std::wstring(exe) + L"\" --guard " + std::to_wstring(GetCurrentProcessId());
     STARTUPINFOW si{sizeof(si)};
     PROCESS_INFORMATION pi{};
     if (!CreateProcessW(exe, command.data(), nullptr, nullptr, FALSE, CREATE_NO_WINDOW, nullptr, nullptr, &si, &pi)) {
         Log(L"guard: could not start (%lu)", GetLastError());
-        return;
+        return false;
     }
     CloseHandle(pi.hThread);
     g_app.guard = pi.hProcess;
     Log(L"guard: started (%lu)", pi.dwProcessId);
+    return true;
 }
 
 HWND FindProcessWindow(const wchar_t* className, DWORD pid)
@@ -1466,7 +1466,8 @@ LRESULT CALLBACK HostProc(HWND h, UINT m, WPARAM w, LPARAM l)
                 AddTrayIcon();
             if (g_app.guard && WaitForSingleObject(g_app.guard, 0) == WAIT_OBJECT_0) {
                 Log(L"guard: it went away; started again");
-                EnsureGuard();
+                if (!EnsureGuard() && g_app.chrome)
+                    g_app.chrome->SetTaskbarHidden(false);
             }
             UpdateStatus();
             if (g_app.chrome)
@@ -1702,6 +1703,7 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, PWSTR cmdLine, int)
         SystemChrome::EmergencyRestore();
         return EXCEPTION_CONTINUE_SEARCH;
     });
+    WaitForGuard();
     g_app.chrome = std::make_unique<SystemChrome>();
 
     WNDCLASSEXW wc{sizeof(wc)};

@@ -1,4 +1,5 @@
 using System.Text.Json;
+using System.Text.Json.Serialization;
 
 namespace DesktopNook.Core;
 
@@ -21,7 +22,9 @@ public sealed record FloatingTaskbarSettings
     public string AutoHide { get; init; } = "fullscreen";
     public string DisplayMode { get; init; } = "primary";
     public string Display { get; init; } = "";
-    public bool HideSystemTaskbar { get; init; }
+    // Older settings may contain HideSystemTaskbar=false. The selected mode now owns this decision.
+    [JsonIgnore]
+    public bool ReplacesSystemTaskbar => Mode == "floating";
     public bool ShowClock { get; init; } = true;
     public bool ShowTray { get; init; } = true;
     public bool ShowStatus { get; init; } = true;

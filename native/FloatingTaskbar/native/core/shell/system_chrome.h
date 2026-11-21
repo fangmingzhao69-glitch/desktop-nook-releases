@@ -101,7 +101,7 @@ private:
     void StopRefit(bool stop);
     void RefitWorker();
     void Watch();
-    void Save() const;
+    bool Save() const;
     static void CALLBACK OnShow(HWINEVENTHOOK, DWORD, HWND, LONG, LONG, DWORD, DWORD);
 
     std::atomic_bool autoHideOurs_ = false; // Atrium switched the taskbar to auto-hide

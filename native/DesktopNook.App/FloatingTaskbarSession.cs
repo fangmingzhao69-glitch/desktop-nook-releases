@@ -26,7 +26,7 @@ internal sealed class FloatingTaskbarSession : IDisposable
     {
         if (Busy) throw new IOException("正在切换任务栏，请稍后重试。");
         settings.Validate(); Busy = true;
-        var previous = Current;
+        var previous = Running ? Current : Current with { Mode = "system" };
         try
         {
             await SwitchAsync(settings, commit: save);
@@ -35,8 +35,18 @@ internal sealed class FloatingTaskbarSession : IDisposable
         }
         catch
         {
-            try { await SwitchAsync(previous, commit: false); }
-            catch { _client.Stop(); await _owner.ResumeSystemTaskbarAppearanceAsync(); }
+            try
+            {
+                await SwitchAsync(previous, commit: false);
+                Current = previous;
+            }
+            catch
+            {
+                _client.Stop();
+                await _owner.ResumeSystemTaskbarAppearanceAsync();
+                Current = previous with { Mode = "system" };
+                HasPreview = false;
+            }
             throw;
         }
         finally { Busy = false; }

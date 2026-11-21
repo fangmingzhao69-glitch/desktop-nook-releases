@@ -38,6 +38,9 @@ internal sealed class FloatingTaskbarClient : IDisposable
         var configPath = Path.Combine(EngineDirectory, "settings.json");
         JsonObject config = File.Exists(configPath) ? JsonNode.Parse(await File.ReadAllTextAsync(configPath))?.AsObject() ?? new() : new();
         foreach (var pair in EngineSettings(settings)) config[pair.Key] = pair.Value?.DeepClone();
+        // Wait for the parent to verify the pipe and request replacement before changing Explorer.
+        config["hideTaskbar"] = false;
+        config["bar"] = _sandbox;
         // Unrelated modules and logon/update registration stay owned by the main app.
         config["widgets"] = false; config["stageManager"] = false; config["startOnLogin"] = false;
         config["hideBanners"] = false; config["language"] = "zh"; config["version"] = 2;
@@ -106,14 +109,43 @@ internal sealed class FloatingTaskbarClient : IDisposable
             ["showClock"] = settings.ShowClock, ["showTray"] = settings.ShowTray, ["showStatus"] = settings.ShowStatus,
             ["showNotifications"] = settings.ShowNotifications, ["showDesktop"] = true,
             ["hoverRise"] = UiMotion.Enabled && settings.HoverRise, ["showRunning"] = !_sandbox,
-            ["hideTaskbar"] = !_sandbox && settings.HideSystemTaskbar, ["remoteVisible"] = settings.RemoteCompatible,
+            ["hideTaskbar"] = !_sandbox && settings.ReplacesSystemTaskbar, ["remoteVisible"] = settings.RemoteCompatible,
             ["dockDisplayMode"] = settings.DisplayMode, ["dockDisplay"] = settings.Display,
             ["taskbarApps"] = "all", ["barEdge"] = "bottom"
         };
     }
 
-    internal Task<JsonObject> ApplyAsync(FloatingTaskbarSettings settings, bool commit) =>
-        RequestAsync(new() { ["op"] = commit ? "commit" : "preview", ["settings"] = EngineSettings(settings) });
+    internal async Task ApplyAsync(FloatingTaskbarSettings settings, bool commit)
+    {
+        await RequestAsync(new() { ["op"] = commit ? "commit" : "preview", ["settings"] = EngineSettings(settings) });
+        if (_sandbox || !settings.ReplacesSystemTaskbar) return;
+
+        var wait = Stopwatch.StartNew();
+        while (Running && wait.Elapsed < TimeSpan.FromSeconds(6))
+        {
+            if (ExplorerTaskbarsHidden()) return;
+            await Task.Delay(100);
+        }
+        throw new IOException("Windows 任务栏未成功切换，已取消悬浮模式。");
+    }
+
+    private static bool ExplorerTaskbarsHidden()
+    {
+        if (GetWindowThreadProcessId(GetShellWindow(), out uint explorer) == 0) return false;
+        bool foundPrimary = false;
+        foreach (string windowClass in new[] { "Shell_TrayWnd", "Shell_SecondaryTrayWnd" })
+        {
+            nint window = 0;
+            while ((window = FindWindowEx(0, window, windowClass, null)) != 0)
+            {
+                GetWindowThreadProcessId(window, out uint owner);
+                if (owner != explorer) continue;
+                if (IsWindowVisible(window)) return false;
+                foundPrimary |= windowClass == "Shell_TrayWnd";
+            }
+        }
+        return foundPrimary;
+    }
 
     internal async Task<JsonObject> RequestAsync(JsonObject request)
     {
@@ -162,6 +194,9 @@ internal sealed class FloatingTaskbarClient : IDisposable
     [DllImport("kernel32.dll", SetLastError = true)] [return: MarshalAs(UnmanagedType.Bool)]
     private static extern bool GetNamedPipeServerProcessId(SafePipeHandle pipe, out uint processId);
     [DllImport("user32.dll", CharSet = CharSet.Unicode)] private static extern nint FindWindow(string className, string? name);
+    [DllImport("user32.dll", CharSet = CharSet.Unicode)] private static extern nint FindWindowEx(nint parent, nint after, string className, string? name);
+    [DllImport("user32.dll")] private static extern nint GetShellWindow();
+    [DllImport("user32.dll")] [return: MarshalAs(UnmanagedType.Bool)] private static extern bool IsWindowVisible(nint window);
     [DllImport("user32.dll")] private static extern uint GetWindowThreadProcessId(nint window, out uint pid);
     [DllImport("user32.dll")] [return: MarshalAs(UnmanagedType.Bool)] private static extern bool PostMessage(nint window, uint message, nint wParam, nint lParam);
 }

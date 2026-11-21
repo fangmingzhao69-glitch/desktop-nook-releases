@@ -61,6 +61,14 @@ internal static class FloatingTaskbarVerification
             mode.SelectedIndex = 1;
             await settings.Dispatcher.InvokeAsync(() => { }, DispatcherPriority.ContextIdle);
             Check(Find<ComboBox>(settings).Any(control => AutomationProperties.GetAutomationId(control) == "Dock-Material"), "设置页包含可切换模式与材质");
+            Check(!Find<CheckBox>(settings).Any(control => AutomationProperties.GetAutomationId(control) == "Dock-HideSystem"),
+                "替换系统任务栏由模式决定，设置页无叠加开关");
+            using (var production = new FloatingTaskbarClient(App.Store.DataDirectory, 0, sandbox: false))
+            {
+                Check(production.EngineSettings(new() { Mode = "floating" })["hideTaskbar"]!.GetValue<bool>()
+                    && !production.EngineSettings(new())["hideTaskbar"]!.GetValue<bool>(),
+                    "正式悬浮模式请求替换系统任务栏，系统模式保留原栏");
+            }
             Save(settings, Path.Combine(root, "zheye-taskbar-settings.png"));
             mode.SelectedIndex = 0;
             await settings.Dispatcher.InvokeAsync(() => { }, DispatcherPriority.ContextIdle);

@@ -43,7 +43,7 @@ internal sealed class TaskbarSettingsPage : UserControl
         var body = new StackPanel();
         body.Children.Add(new TextBlock { Text = SettingsWindow.TaskbarPage, FontSize = 17, FontWeight = FontWeights.SemiBold });
         _mode.Items.Add(new ComboBoxItem { Content = "Windows 系统任务栏", Tag = "system" });
-        _mode.Items.Add(new ComboBoxItem { Content = "折页悬浮任务栏", Tag = "floating" });
+        _mode.Items.Add(new ComboBoxItem { Content = "悬浮任务栏（替换 Windows 任务栏）", Tag = "floating" });
         _mode.SelectedIndex = _draft.Mode == "floating" ? 1 : 0;
         AutomationProperties.SetAutomationId(_mode, "Settings-TaskbarMode");
         body.Children.Add(Row("使用方式", _mode));
@@ -69,7 +69,7 @@ internal sealed class TaskbarSettingsPage : UserControl
         _try.Click += async (_, _) => await RunAsync(PreviewAsync);
         _save.Click += async (_, _) => await RunAsync(async () =>
         {
-            bool requiresTrial = _draft.Mode != _session.Saved.Mode || _draft.HideSystemTaskbar != _session.Saved.HideSystemTaskbar;
+            bool requiresTrial = _draft.Mode != _session.Saved.Mode;
             if (requiresTrial && (!_trial || _trialSettings != _draft)) { await PreviewAsync(); return; }
             await _session.ApplyAsync(_draft, save: true);
             EndTrial(); RenderFields(); _message.Text = "任务栏设置已保存。";
@@ -119,7 +119,7 @@ internal sealed class TaskbarSettingsPage : UserControl
             _message.Text = _session.Current.Mode == "floating" ? "点击「试用 12 秒」切回系统任务栏，再调整其外观。" : "系统任务栏的外观与悬浮任务栏分别保存。";
             return;
         }
-        _message.Text = "上方为布局示意，点击试用可查看桌面上的真实玻璃效果。";
+        _message.Text = App.IsSandbox ? "隔离预览保留系统任务栏。" : "试用期间，屏幕底部只显示悬浮任务栏。退出折页后恢复 Windows 任务栏。";
         Pick("材质", "Dock-Material", _draft.Material, [("liquid", "液态玻璃"), ("frosted", "柔雾玻璃"), ("solid", "纯色")], value =>
         { _draft = _draft with { Material = value }; RenderFields(); });
         Section("形状与布局");
@@ -161,8 +161,6 @@ internal sealed class TaskbarSettingsPage : UserControl
         Toggle("显示时间与日期", "Dock-Clock", _draft.ShowClock, value => _draft = _draft with { ShowClock = value });
         Toggle("显示通知入口", "Dock-Notifications", _draft.ShowNotifications, value => _draft = _draft with { ShowNotifications = value });
         Toggle("远程控制兼容（映出壁纸）", "Dock-Remote", _draft.RemoteCompatible, value => _draft = _draft with { RemoteCompatible = value });
-        Toggle("运行时隐藏 Windows 系统任务栏", "Dock-HideSystem", _draft.HideSystemTaskbar, value => _draft = _draft with { HideSystemTaskbar = value });
-        _fields.Children.Add(new TextBlock { Text = App.IsSandbox ? "隔离预览始终保留系统任务栏。" : "隐藏系统任务栏仅在悬浮模式生效；退出或异常结束时恢复。", TextWrapping = TextWrapping.Wrap, FontSize = 12, Foreground = ThemePalette.Brush("TextSecondaryBrush"), Margin = new(0, 4, 0, 12) });
         var reset = new Button { Content = "恢复悬浮任务栏默认参数", HorizontalAlignment = HorizontalAlignment.Left, Margin = new(0, 6, 0, 8) };
         reset.Click += (_, _) => { _draft = new() { Mode = "floating" }; RenderFields(); };
         _fields.Children.Add(reset);

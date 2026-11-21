@@ -8,7 +8,11 @@ void Assert(bool value, string message) { if (!value) throw new Exception(messag
 Test("Floating taskbar defaults, validation, atomic persistence and backup", root=>{
     var store=new FloatingTaskbarStore(root);
     Assert(store.Load().Mode=="system", "legacy default");
-    var selected=new FloatingTaskbarSettings{Mode="floating",Material="frosted",DisplayMode="all",HideSystemTaskbar=true};
+    Assert(!store.Load().ReplacesSystemTaskbar, "system mode keeps Explorer");
+    Directory.CreateDirectory(store.DirectoryPath);
+    File.WriteAllText(store.SettingsPath, """{"Format":1,"Mode":"floating","HideSystemTaskbar":false,"Material":"frosted","DisplayMode":"all"}""");
+    var selected=store.Load();
+    Assert(selected.ReplacesSystemTaskbar && selected.Material=="frosted" && selected.DisplayMode=="all", "legacy floating mode replaces Explorer and preserves preferences");
     store.Save(selected);store.Save(selected with{Material="liquid"});
     Assert(store.Load().Material=="liquid", "latest config");
     File.WriteAllText(store.SettingsPath,"{broken");
