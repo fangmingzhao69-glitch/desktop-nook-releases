@@ -1,0 +1,70 @@
+{
+  "Version": "0.20.7",
+  "Date": "2026-11-21",
+  "SourceCommit": "f9eb6b9edfaf54783b6d52718121965698a3f66c",
+  "GiteeRelease": "https://gitee.com/zfmdx/desktop-nook-releases/releases/tag/v0.20.7",
+  "GitHubRelease": "https://github.com/fangmingzhao69-glitch/desktop-nook-releases/releases/tag/v0.20.7",
+  "Website": {
+    "Url": "https://zheye-desktop.cleverhornbill8.chatgpt.site",
+    "SourceCommit": "adea98b09c6ddcb0b1d5a366bc7fef362bcc1d30",
+    "AnonymousPageStatus": 200,
+    "AnonymousVideoStatus": 200
+  },
+  "Assets": [
+    {
+      "Name": "DesktopNook-Setup.exe",
+      "Size": 570524,
+      "SHA256": "27907bed09d9ddc608cbabb029a70f9117ca34d68bc372d21c4083ea0c4b5d05"
+    },
+    {
+      "Name": "DesktopNook-v0.20.7-source.zip",
+      "Size": 3315030,
+      "SHA256": "02d3b733244a02e6f53e032484228e2fa65e2c21ee286e1583926612f318c821"
+    },
+    {
+      "Name": "DesktopNook-win-x64.exe",
+      "Size": 1377866,
+      "SHA256": "9fac4c4ca622beaa6df9d128ce1e17501183847c7f74c34396b43d94666cc3f9"
+    },
+    {
+      "Name": "SHA256SUMS.txt",
+      "Size": 278,
+      "SHA256": "8c736eb66e3d7fd03991947707fd3c266fb337e91d16b4b712ad6c8600e460b4"
+    }
+  ],
+  "GiteeComponent": {
+    "Name": "Qingxia-TaskbarCore-win-x64.zip",
+    "SHA256": "8315c4b8e00acf04815a672be9a671bdc242d38eaee9b4f89a9a95f3a9fad092"
+  },
+  "ClientLiveChecks": 24,
+  "PreviousClientLiveChecks": 24,
+  "IsolatedUpgrade": {
+    "success": true,
+    "helperExit": 0,
+    "oldVersion": "0.20.6.0",
+    "newVersion": "0.20.7.0",
+    "notesRetained": true,
+    "notesBackupRetained": true,
+    "deletedCategoryRetained": true,
+    "uncheckedPreferenceRetained": true,
+    "collectViewRetained": true,
+    "motionModeRetained": true,
+    "updateSourceRetained": true,
+    "categoryOrdersRetained": true,
+    "orderedCategories": 3,
+    "configurationHashUnchanged": true,
+    "payloadUnchanged": true,
+    "newProcessConfirmed": true
+  },
+  "IsolatedInstaller": {
+    "Installed": true,
+    "Upgraded": true,
+    "UserStateHashPreserved": true,
+    "UserPreferencesHashPreserved": true,
+    "DisplayName": "折页",
+    "Uninstalled": true,
+    "RemainingItems": 0,
+    "RecoveredFiles": 0,
+    "LiveUserDataTouched": false
+  }
+}
