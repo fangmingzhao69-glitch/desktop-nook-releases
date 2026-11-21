@@ -6,7 +6,9 @@ using System.Text.Json.Serialization;
 namespace DesktopNook.App;
 internal sealed class StartupOptions(string runKey = @"Software\Microsoft\Windows\CurrentVersion\Run",string settingsKey = @"Software\DesktopNook\Settings",string? preferencesPath=null,bool fileOnly=false)
 {
-    private sealed class Preferences {public bool? CloseEndsProcess {get;set;} public WindowSizePreference? WindowSize {get;set;} [JsonIgnore(Condition=JsonIgnoreCondition.WhenWritingNull)]public string? CollectView {get;set;} [JsonIgnore(Condition=JsonIgnoreCondition.WhenWritingNull)]public string? MotionMode {get;set;} [JsonIgnore(Condition=JsonIgnoreCondition.WhenWritingNull)]public string? PanelStyle {get;set;} [JsonIgnore(Condition=JsonIgnoreCondition.WhenWritingNull)]public string? Theme {get;set;} [JsonIgnore(Condition=JsonIgnoreCondition.WhenWritingNull)]public string? ColorTheme {get;set;}}
+    private sealed class Preferences {public bool? CloseEndsProcess {get;set;} public WindowSizePreference? WindowSize {get;set;} [JsonIgnore(Condition=JsonIgnoreCondition.WhenWritingNull)]public string? CollectView {get;set;} [JsonIgnore(Condition=JsonIgnoreCondition.WhenWritingNull)]public string? MotionMode {get;set;} [JsonIgnore(Condition=JsonIgnoreCondition.WhenWritingNull)]public string? PanelStyle {get;set;} [JsonIgnore(Condition=JsonIgnoreCondition.WhenWritingNull)]public string? Theme {get;set;} [JsonIgnore(Condition=JsonIgnoreCondition.WhenWritingNull)]public string? ColorTheme {get;set;}
+        [JsonIgnore(Condition=JsonIgnoreCondition.WhenWritingNull)] public string? UpdateChannel {get;set;}
+    }
     private Preferences? ReadPreferences()
     {
         if(preferencesPath is null)return null;
@@ -35,7 +37,29 @@ internal sealed class StartupOptions(string runKey = @"Software\Microsoft\Window
         var current = ReadPreferences();
         return new() { CloseEndsProcess=CloseEndsProcess, WindowSize=ReadWindowSize(),
             CollectView=SavedCollectView, MotionMode=SavedMotionMode, PanelStyle=current?.PanelStyle,
-            Theme=current?.Theme, ColorTheme=current?.ColorTheme };
+            Theme=current?.Theme, ColorTheme=current?.ColorTheme, UpdateChannel=current?.UpdateChannel };
+    }
+
+    internal UpdateSource UpdateChannel
+    {
+        get => ReadPreferences()?.UpdateChannel switch
+        {
+            "github" => UpdateSource.GitHubOnly,
+            "gitee" => UpdateSource.GiteeOnly,
+            _ => UpdateSource.Auto
+        };
+        set
+        {
+            var preferences = Snapshot();
+            preferences.UpdateChannel = value switch
+            {
+                UpdateSource.Auto => null,
+                UpdateSource.GitHubOnly => "github",
+                UpdateSource.GiteeOnly => "gitee",
+                _ => throw new ArgumentException("无效更新来源。", nameof(value))
+            };
+            SavePreferences(preferences);
+        }
     }
 
     internal string ColorTheme

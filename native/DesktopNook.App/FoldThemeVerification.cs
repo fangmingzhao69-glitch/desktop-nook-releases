@@ -15,6 +15,7 @@ internal static class FoldThemeVerification
         if (!App.IsSandbox) throw new InvalidOperationException("主题检查仅允许沙箱。");
         var selected = App.Options.ThemeMode;
         var selectedColor = App.Options.ColorTheme;
+        var selectedUpdateSource = App.Options.UpdateChannel;
         var originalNotes = main.NotesDraft;
         var settings = new SettingsWindow(main);
         try
@@ -31,6 +32,14 @@ internal static class FoldThemeVerification
                 Check(Find<TextBlock>(settings).Any(text => text.Text == page && text.FontSize >= 17),
                     "设置页可打开：" + page);
             }
+            var sourceControl=Find<ComboBox>(settings).Single(item =>
+                AutomationProperties.GetAutomationId(item)=="Settings-UpdateChannel");
+            sourceControl.SelectedIndex=2;
+            Check(App.Options.UpdateChannel==UpdateSource.GiteeOnly, "关于与更新可保存仅 Gitee");
+            sourceControl.SelectedIndex=1;
+            Check(App.Options.UpdateChannel==UpdateSource.GitHubOnly, "关于与更新可保存仅 GitHub");
+            sourceControl.SelectedIndex=0;
+            Check(App.Options.UpdateChannel==UpdateSource.Auto, "关于与更新可恢复 GitHub 优先的自动模式");
             settings.SelectPage("外观");
             settings.UpdateLayout();
 
@@ -103,6 +112,7 @@ internal static class FoldThemeVerification
             main.RenderNotes();
             App.Options.ThemeMode = selected;
             App.Options.ColorTheme = selectedColor;
+            App.Options.UpdateChannel = selectedUpdateSource;
             ThemePalette.Apply(selected, selectedColor);
             main.PanelMotion.InvalidateSnapshot();
         }

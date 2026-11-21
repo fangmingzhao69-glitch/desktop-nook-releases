@@ -17,6 +17,7 @@ public partial class MainWindow : Window
     private int _placementVersion;
     private bool _onlineBusy;
     private OnlineRelease? _latestRelease;
+    private int _updateSourceRevision;
     private DateTime _lastUpdateCheck=DateTime.MinValue;
     private readonly System.Windows.Threading.DispatcherTimer _updateTimer=new(){Interval=TimeSpan.FromHours(1)};
     internal static string CurrentVersionLabel
@@ -64,6 +65,13 @@ public partial class MainWindow : Window
         UpdateAvailableButton.Visibility=release is null?Visibility.Collapsed:Visibility.Visible;
     }
     private async void OnUpdateAvailable(object sender,RoutedEventArgs e)=>await CheckOnlineUpdateAsync(true);
+
+    internal void UpdateChannelChanged()
+    {
+        _updateSourceRevision++;
+        _lastUpdateCheck=DateTime.MinValue;
+        SetAvailableRelease(null);
+    }
     internal void RefreshTaskbarPlacement()
     {
         TaskbarPlacement.Invalidate();
@@ -264,7 +272,10 @@ public partial class MainWindow : Window
             case SettingsWindow.ActionAfterClose.CheckUpdate: _ = CheckOnlineUpdateAsync(true); break;
             case SettingsWindow.ActionAfterClose.LocalUpdate: _ = SelectUpdateAsync(); break;
             case SettingsWindow.ActionAfterClose.Releases:
-                Process.Start(new ProcessStartInfo($"https://github.com/{OnlineUpdater.Repository}/releases/latest") { UseShellExecute = true });
+                var releasesUri = App.Options.UpdateChannel == UpdateSource.GiteeOnly
+                    ? GiteeUpdateSource.Configured?.ReleasePage ?? OnlineUpdater.LatestPage
+                    : OnlineUpdater.LatestPage;
+                Process.Start(new ProcessStartInfo(releasesUri.AbsoluteUri) { UseShellExecute = true });
                 break;
             case SettingsWindow.ActionAfterClose.License: ShowOpenSource(); break;
         }
@@ -310,32 +321,36 @@ public partial class MainWindow : Window
     private async Task CheckOnlineUpdateAsync(bool manual)
     {
         if(_onlineBusy){if(manual)SetStatus("正在检查或下载更新，请稍候…");return;}
+        int sourceRevision=_updateSourceRevision;
         _onlineBusy=true;_lastUpdateCheck=DateTime.UtcNow;if(manual)_interactions++;
         try
         {
             if(manual)SetStatus($"正在检查更新（当前 {CurrentVersionLabel}）…");
+            var channel=App.Options.UpdateChannel;
             using var client=OnlineUpdater.CreateClient();
-            SetAvailableRelease(await OnlineUpdater.CheckAsync(client,System.Reflection.Assembly.GetExecutingAssembly().GetName().Version!));
-            if(_latestRelease is null)
+            var release=await OnlineUpdater.CheckAsync(client,System.Reflection.Assembly.GetExecutingAssembly().GetName().Version!,channel);
+            if(sourceRevision!=_updateSourceRevision)return;
+            SetAvailableRelease(release);
+            if(release is null)
             {
                 if(manual){SetStatus($"当前 {CurrentVersionLabel} 已是最新版本");UiDialogs.ShowUpdate(this,$"当前版本：{CurrentVersionLabel}\n已是最新版本。","检查更新");}return;
             }
-            SetStatus($"发现新版本 v{_latestRelease.Version.ToString(3)}，点击更新查看详情");
+            SetStatus($"发现新版本 v{release.Version.ToString(3)}，点击更新查看详情");
             if(!manual)return;
-            string gameNotice=GameUpdateNotice;string notes=_latestRelease.Notes.Length>600?_latestRelease.Notes[..600]+"…":_latestRelease.Notes;
-            if(UiDialogs.ShowUpdate(this,$"当前版本：{CurrentVersionLabel}\n更新到：v{_latestRelease.Version.ToString(3)}\n来源：GitHub 官方发行版\n\n{notes}{gameNotice}\n\n选择确定后从 GitHub 下载更新并自动重启，分类、收纳内容和设置保留。","发现新版本",MessageBoxButton.OKCancel)!=MessageBoxResult.OK)return;
-            if(!StopBilliards())return;var download=new UpdateDownloadWindow(this,_latestRelease,Store.DataDirectory);
+            string gameNotice=GameUpdateNotice;string notes=release.Notes.Length>600?release.Notes[..600]+"…":release.Notes;
+            if(UiDialogs.ShowUpdate(this,$"当前版本：{CurrentVersionLabel}\n更新到：v{release.Version.ToString(3)}\n发现来源：{release.SourceName} 官方发行版\n\n{notes}{gameNotice}\n\n选择确定后下载更新并自动重启，分类、收纳内容和设置保留。","发现新版本",MessageBoxButton.OKCancel)!=MessageBoxResult.OK)return;
+            if(!StopBilliards())return;var download=new UpdateDownloadWindow(this,release,Store.DataDirectory,channel);
             if(download.ShowDialog()!=true||download.DownloadedFile is null)return;
             if(!StopBilliards())return;SetStatus("正在准备更新…");
             var staged=await StageUpdateWithNotesAsync(download.DownloadedFile,Environment.ProcessPath!);
             using(var plan=System.Text.Json.JsonDocument.Parse(File.ReadAllText(staged.Plan)))
-                if(!plan.RootElement.GetProperty("CandidateHash").GetString()!.Equals(_latestRelease.Sha256,StringComparison.OrdinalIgnoreCase))throw new IOException("更新文件校验失败，请重新下载。");
+                if(!plan.RootElement.GetProperty("CandidateHash").GetString()!.Equals(release.Sha256,StringComparison.OrdinalIgnoreCase))throw new IOException("更新文件校验失败，请重新下载。");
             var helper=new ProcessStartInfo(staged.Helper){UseShellExecute=false,CreateNoWindow=true};helper.ArgumentList.Add("--apply-update");helper.ArgumentList.Add(staged.Plan);
             if(Process.Start(helper) is null)throw new IOException("无法启动更新助手。");Quit();
         }
         catch(Exception ex)
         {
-            if(manual){SetStatus("更新检查未完成");UiDialogs.ShowUpdate(this,$"当前版本：{CurrentVersionLabel}\n{OnlineUpdater.FailureMessage(ex)}\n也可以使用“从本地文件更新”。","在线更新");}
+            if(manual&&sourceRevision==_updateSourceRevision){SetStatus("更新检查未完成");UiDialogs.ShowUpdate(this,$"当前版本：{CurrentVersionLabel}\n{OnlineUpdater.FailureMessage(ex)}\n也可以使用“从本地文件更新”。","在线更新");}
         }
         finally{_onlineBusy=false;if(manual)_interactions--;}
     }

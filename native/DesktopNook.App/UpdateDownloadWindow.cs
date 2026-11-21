@@ -8,7 +8,7 @@ internal sealed class UpdateDownloadWindow : Window
 {
     internal string? DownloadedFile {get;private set;}
     private readonly CancellationTokenSource _cancel=new();
-    internal UpdateDownloadWindow(Window owner,OnlineRelease release,string dataRoot)
+    internal UpdateDownloadWindow(Window owner,OnlineRelease release,string dataRoot,UpdateSource channel=UpdateSource.Auto)
     {
         Owner=owner;Title="更新折页";Width=Math.Clamp(owner.ActualWidth-40,280,440);SizeToContent=SizeToContent.Height;ShowInTaskbar=false;ResizeMode=ResizeMode.NoResize;WindowStartupLocation=WindowStartupLocation.CenterOwner;
         var body=new StackPanel{Margin=new Thickness(16,12,16,16)};
@@ -23,7 +23,7 @@ internal sealed class UpdateDownloadWindow : Window
             try
             {
                 using var client=OnlineUpdater.CreateClient();
-                DownloadedFile=await OnlineUpdater.DownloadAsync(client,release,dataRoot,new Progress<double>(value=>{bar.Value=value;status.Text=value>=100?"正在校验更新文件…":$"已下载 {value:F0}%";}),_cancel.Token);
+                DownloadedFile=await OnlineUpdater.DownloadAsync(client,release,dataRoot,new Progress<double>(value=>{bar.Value=value;status.Text=value>=100?"正在校验更新文件…":$"已下载 {value:F0}%";}),_cancel.Token,channel);
                 if(!_cancel.IsCancellationRequested)DialogResult=true;
             }
             catch(OperationCanceledException){ }

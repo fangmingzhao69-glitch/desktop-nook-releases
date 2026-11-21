@@ -176,6 +176,15 @@ internal sealed class SettingsWindow : Window
             case "关于与更新":
                 Info($"折页  {MainWindow.CurrentVersionLabel}");
                 Info("常用与灵感，折页之间。");
+                Pick("在线更新来源", "Settings-UpdateChannel", _options.UpdateChannel,
+                    [(UpdateSource.Auto, "自动（GitHub 优先）"), (UpdateSource.GitHubOnly, "仅 GitHub"), (UpdateSource.GiteeOnly, "仅 Gitee")],
+                    value =>
+                    {
+                        if (value == _options.UpdateChannel) return;
+                        _options.UpdateChannel = value;
+                        _owner.UpdateChannelChanged();
+                    });
+                Info("自动模式在 GitHub 访问失败时切换到 Gitee。");
                 ButtonRow("检查在线更新", () => ContinueWith(ActionAfterClose.CheckUpdate), primary: true);
                 ButtonRow("从本地文件更新", () => ContinueWith(ActionAfterClose.LocalUpdate));
                 ButtonRow("打开官方发布页", () => ContinueWith(ActionAfterClose.Releases));

@@ -101,7 +101,7 @@ internal static class OnlineUpdateVerification
             if(live)
             {
                 using var remote=OnlineUpdater.CreateClient();var published=await OnlineUpdater.CheckGitHubAsync(remote,new Version(0,7,1))??throw new Exception("GitHub 未发现发行版。");
-                var actual=await OnlineUpdater.DownloadAsync(remote,published,output,null,CancellationToken.None);
+                var actual=await OnlineUpdater.DownloadAsync(remote,published,output,null,CancellationToken.None,UpdateSource.GitHubOnly);
                 if(LocalUpdater.Hash(actual)!=digest)throw new Exception("线上资产与本地产物不同。");checks.Add("真实 GitHub 公共接口与发行包下载校验通过");
                 if (GiteeUpdateSource.Configured is { } mirror)
                 {
@@ -110,7 +110,8 @@ internal static class OnlineUpdateVerification
                     var mirrored=await mirror.CheckAsync(mirrorClient,new Version(0,7,1),CancellationToken.None);
                     if (mirrored is null || mirrored.Mirror != mirror || mirrored.Version != version)
                         throw new Exception("真实 Gitee 发行与候选版本不一致。");
-                    var mirroredFile=await OnlineUpdater.DownloadWithMirrorAsync(offlineGitHub,mirrorClient,mirrored,output,null,CancellationToken.None);
+                    var mirroredFile=await OnlineUpdater.DownloadWithMirrorAsync(offlineGitHub,mirrorClient,mirror,mirrored,output,null,
+                        CancellationToken.None,UpdateSource.GiteeOnly);
                     if (LocalUpdater.Hash(mirroredFile)!=digest) throw new Exception("真实 Gitee 更新附件与候选 EXE 不一致。");
                     checks.Add("真实 Gitee 发行接口、官方 CDN 和 SHA-256 验证通过，更新过程无需 GitHub");
                     var component=new TaskbarAppearancePackage(Path.Combine(output,"gitee-taskbar"));
@@ -149,15 +150,16 @@ internal static class OnlineUpdateVerification
         });
         using var unexpectedGitHub = new HttpClient(new Handler(_ => throw new Exception("优先通道仍可用时访问了 GitHub")));
         using var good = new HttpClient(new Handler(request => Reply(request)));
-        var release=await OnlineUpdater.CheckWithMirrorAsync(unexpectedGitHub,good,mirror,older,CancellationToken.None);
+        var release=await OnlineUpdater.CheckWithMirrorAsync(unexpectedGitHub,good,mirror,older,CancellationToken.None,UpdateSource.GiteeOnly);
         if (release is null || release.Mirror!=mirror || release.Size!=size || release.Sha256!=digest)
             throw new Exception("Gitee 无附件大小与哈希字段的发行版未正确读取");
-        var candidatePath=await OnlineUpdater.DownloadWithMirrorAsync(unexpectedGitHub,good,release,output,null,CancellationToken.None);
+        var candidatePath=await OnlineUpdater.DownloadWithMirrorAsync(unexpectedGitHub,good,mirror,release,output,null,
+            CancellationToken.None,UpdateSource.GiteeOnly);
         if (LocalUpdater.Hash(candidatePath)!=digest) throw new Exception("Gitee CDN 下载内容不一致");
-        checks.Add("Gitee 优先查询发行 API，经同版本校验清单、HEAD 和官方 CDN 下载并核对 SHA-256");
+        checks.Add("仅 Gitee 通过发行 API、校验清单和官方 CDN 下载，无需访问 GitHub");
         try
         {
-            await OnlineUpdater.DownloadWithMirrorAsync(unexpectedGitHub,good,release with {Sha256=new string('0',64)},output,null,CancellationToken.None);
+            await OnlineUpdater.DownloadWithMirrorAsync(unexpectedGitHub,good,mirror,release with {Sha256=new string('0',64)},output,null,CancellationToken.None);
             throw new Exception("错误的 Gitee 哈希未被拒绝");
         }
         catch (IOException) { }
@@ -166,12 +168,32 @@ internal static class OnlineUpdateVerification
         checks.Add("Gitee 附件 SHA-256 不匹配时拒绝更新并清理半成品");
 
         using var noMirror = new HttpClient(new Handler(_ => new(HttpStatusCode.TooManyRequests)));
-        var recovered=await OnlineUpdater.CheckWithMirrorAsync(github,noMirror,mirror,older,CancellationToken.None);
-        if (recovered is null || recovered.Mirror is not null || recovered.Version!=version)
-            throw new Exception("Gitee 限流没有切换到 GitHub");
-        var backupPath=await OnlineUpdater.DownloadWithMirrorAsync(github,noMirror,release,output,null,CancellationToken.None);
-        if (LocalUpdater.Hash(backupPath)!=digest) throw new Exception("GitHub 回退文件与 Gitee 发行记录不同");
-        checks.Add("Gitee 限流后检查和下载回退 GitHub，沿用已确认版本与 SHA-256");
+        using var unexpectedGitee=new HttpClient(new Handler(_=>throw new Exception("GitHub 可用时访问了 Gitee")));
+        var primary=await OnlineUpdater.CheckWithMirrorAsync(github,unexpectedGitee,mirror,older,CancellationToken.None);
+        if (primary is null || primary.Mirror is not null || primary.Version!=version ||
+            await OnlineUpdater.CheckWithMirrorAsync(github,unexpectedGitee,mirror,version,CancellationToken.None) is not null)
+            throw new Exception("自动模式没有以成功的 GitHub 回应为准");
+        checks.Add("自动优先使用 GitHub，GitHub 正常返回已是最新版时也不访问 Gitee");
+
+        using var blockedGitHub = new HttpClient(new Handler(_=>new(HttpStatusCode.ServiceUnavailable)));
+        var recovered=await OnlineUpdater.CheckWithMirrorAsync(blockedGitHub,good,mirror,older,CancellationToken.None);
+        if (recovered is null || recovered.Mirror!=mirror || recovered.Version!=version)
+            throw new Exception("GitHub 失败没有切换到 Gitee");
+        var backupPath=await OnlineUpdater.DownloadWithMirrorAsync(blockedGitHub,good,mirror,primary,output,null,CancellationToken.None);
+        if (LocalUpdater.Hash(backupPath)!=digest) throw new Exception("Gitee 回退文件与 GitHub 发行记录不同");
+        var githubBackup=await OnlineUpdater.DownloadWithMirrorAsync(github,noMirror,mirror,release,output,null,CancellationToken.None);
+        if (LocalUpdater.Hash(githubBackup)!=digest) throw new Exception("GitHub 回退文件与 Gitee 发行记录不同");
+        checks.Add("自动检查在 GitHub 失败后改用 Gitee，下载回退沿用已确认版本和 SHA-256");
+
+        await AssertHttpFailure(() => OnlineUpdater.CheckWithMirrorAsync(blockedGitHub,unexpectedGitee,mirror,older,
+            CancellationToken.None,UpdateSource.GitHubOnly));
+        await AssertHttpFailure(() => OnlineUpdater.DownloadWithMirrorAsync(blockedGitHub,unexpectedGitee,mirror,primary,output,null,
+            CancellationToken.None,UpdateSource.GitHubOnly));
+        await AssertHttpFailure(() => OnlineUpdater.CheckWithMirrorAsync(unexpectedGitHub,noMirror,mirror,older,
+            CancellationToken.None,UpdateSource.GiteeOnly));
+        await AssertHttpFailure(() => OnlineUpdater.DownloadWithMirrorAsync(unexpectedGitHub,noMirror,mirror,release,output,null,
+            CancellationToken.None,UpdateSource.GiteeOnly));
+        checks.Add("手动指定的唯一来源失败时，检查和下载均不切换到另一个平台");
 
         using var badAttachment = new HttpClient(new Handler(request =>
             Reply(request,downloadUrl:new Uri("https://gitee.com/unrelated/fixture/releases/download/" + tag + "/" + OnlineUpdater.AssetName))));
@@ -180,13 +202,16 @@ internal static class OnlineUpdateVerification
             new Uri("https://gitee.com/unrelated/fixture/attach_files/3775890/download/" + OnlineUpdater.AssetName))));
         foreach (var invalid in new[] {badAttachment,badRedirect,outsideIntermediate})
         {
-            var fromGitHub=await OnlineUpdater.CheckWithMirrorAsync(github,invalid,mirror,older,CancellationToken.None);
-            if (fromGitHub is null || fromGitHub.Mirror is not null) throw new Exception("Gitee 的外部仓库或 CDN 未拒绝");
+            try
+            {
+                await OnlineUpdater.CheckWithMirrorAsync(unexpectedGitHub,invalid,mirror,older,CancellationToken.None,UpdateSource.GiteeOnly);
+                throw new Exception("Gitee 的外部仓库或 CDN 未拒绝");
+            }
+            catch (IOException) { }
         }
-        checks.Add("拒绝 Gitee 外部仓库和未授权重定向，仍可查询折页 GitHub 发行版");
+        checks.Add("Gitee 拒绝外部仓库和未授权重定向");
 
-        using var unreachable = new HttpClient(new Handler(_ => throw new HttpRequestException("offline")));
-        if (await OnlineUpdater.CheckWithMirrorAsync(unreachable,good,mirror,version,CancellationToken.None) is not null)
+        if (await OnlineUpdater.CheckWithMirrorAsync(blockedGitHub,good,mirror,version,CancellationToken.None) is not null)
             throw new Exception("镜像同版本不应重复提示");
         using var cancelled = new CancellationTokenSource();
         cancelled.Cancel();
@@ -196,7 +221,31 @@ internal static class OnlineUpdateVerification
             throw new Exception("取消后 Gitee 仍返回更新");
         }
         catch (OperationCanceledException) { }
-        checks.Add("Gitee 可独立判断已是最新版，取消不会启动 GitHub 回退");
+        checks.Add("Gitee 可在回退时判断已是最新版，用户取消不会启动另一来源");
+
+        var preferencePath=Path.Combine(output,"update-source-preferences.json");
+        var preferences=new StartupOptions(preferencesPath:preferencePath,fileOnly:true);
+        File.WriteAllText(preferencePath,"{}");
+        if (preferences.UpdateChannel!=UpdateSource.Auto) throw new Exception("旧版偏好未默认选择自动");
+        foreach (var choice in new[] {UpdateSource.GiteeOnly,UpdateSource.GitHubOnly,UpdateSource.Auto})
+        {
+            preferences.UpdateChannel=choice;
+            preferences.MotionMode="off";
+            preferences.PersistForUpdate();
+            if (new StartupOptions(preferencesPath:preferencePath,fileOnly:true).UpdateChannel!=choice)
+                throw new Exception("更新来源在保存其他偏好后丢失");
+        }
+        checks.Add("旧偏好默认自动，手动来源在保存、重新读取和准备升级时保留");
+
+        static async Task AssertHttpFailure(Func<Task> test)
+        {
+            try
+            {
+                await test();
+                throw new Exception("指定更新来源的 HTTP 失败未返回");
+            }
+            catch (HttpRequestException) { }
+        }
 
         HttpResponseMessage Reply(HttpRequestMessage request,Uri? downloadUrl=null,Uri? redirect=null)
         {

@@ -6,7 +6,12 @@ using System.Text.Json;
 
 namespace DesktopNook.App;
 
-internal sealed record OnlineRelease(Version Version,Uri Download,long Size,string Sha256,string Notes,GiteeUpdateSource? Mirror=null);
+internal enum UpdateSource { Auto, GitHubOnly, GiteeOnly }
+
+internal sealed record OnlineRelease(Version Version,Uri Download,long Size,string Sha256,string Notes,GiteeUpdateSource? Mirror=null)
+{
+    internal string SourceName => Mirror is null ? "GitHub" : "Gitee";
+}
 
 internal static class OnlineUpdater
 {
@@ -21,35 +26,35 @@ internal static class OnlineUpdater
         client.DefaultRequestHeaders.UserAgent.ParseAdd("DesktopNook-Updater/0.8");
         return client;
     }
-    internal static async Task<OnlineRelease?> CheckAsync(HttpClient client,Version current,CancellationToken token=default)
+    internal static async Task<OnlineRelease?> CheckAsync(HttpClient client,Version current,UpdateSource source=UpdateSource.Auto,
+        CancellationToken token=default)
     {
-        if (GiteeUpdateSource.Configured is not { } mirror)
+        if (source==UpdateSource.GitHubOnly || (GiteeUpdateSource.Configured is null && source==UpdateSource.Auto))
             return await CheckGitHubAsync(client,current,token);
+        var mirror=GiteeUpdateSource.Configured ?? throw new IOException("当前版本未配置 Gitee 更新源。");
         using var mirrorClient = CreateClient(allowRedirects:false);
-        return await CheckWithMirrorAsync(client,mirrorClient,mirror,current,token);
+        return await CheckWithMirrorAsync(client,mirrorClient,mirror,current,token,source);
     }
 
     internal static async Task<OnlineRelease?> CheckWithMirrorAsync(HttpClient github,HttpClient mirrorClient,
-        GiteeUpdateSource mirror,Version current,CancellationToken token)
+        GiteeUpdateSource mirror,Version current,CancellationToken token,UpdateSource source=UpdateSource.Auto)
     {
-        bool mirrorHadNoUpdate;
+        if (source==UpdateSource.GiteeOnly)
+            return await mirror.CheckAsync(mirrorClient,current,token);
+        if (source==UpdateSource.GitHubOnly)
+            return await CheckGitHubAsync(github,current,token);
+
+        using var primaryTimeout=CancellationTokenSource.CreateLinkedTokenSource(token);
+        primaryTimeout.CancelAfter(TimeSpan.FromSeconds(18));
         try
         {
-            var found = await mirror.CheckAsync(mirrorClient,current,token);
-            if (found is not null) return found;
-            mirrorHadNoUpdate = true;
+            // A successful GitHub response is authoritative even if it reports no update.
+            return await CheckGitHubAsync(github,current,primaryTimeout.Token);
         }
         catch (Exception ex) when (!token.IsCancellationRequested &&
             (IsNetworkFailure(ex) || ex is IOException or JsonException or InvalidOperationException or KeyNotFoundException))
         {
-            mirrorHadNoUpdate = false;
-        }
-
-        token.ThrowIfCancellationRequested();
-        try { return await CheckGitHubAsync(github,current,token); }
-        catch (Exception ex) when (mirrorHadNoUpdate && !token.IsCancellationRequested && IsNetworkFailure(ex))
-        {
-            return null;
+            return await mirror.CheckAsync(mirrorClient,current,token);
         }
     }
 
@@ -133,25 +138,37 @@ internal static class OnlineUpdater
     private static bool TrustedUrl(Uri uri)=>uri.Scheme==Uri.UriSchemeHttps&&uri.Host.Equals("github.com",StringComparison.OrdinalIgnoreCase)
         &&uri.IsDefaultPort&&string.IsNullOrEmpty(uri.UserInfo)&&uri.AbsolutePath.StartsWith($"/{Repository}/releases/download/",StringComparison.Ordinal);
     internal static Version Normalize(Version v)=>new(v.Major,v.Minor,Math.Max(0,v.Build),Math.Max(0,v.Revision));
-    internal static async Task<string> DownloadAsync(HttpClient client,OnlineRelease release,string dataRoot,IProgress<double>? progress,CancellationToken token)
+    internal static async Task<string> DownloadAsync(HttpClient client,OnlineRelease release,string dataRoot,
+        IProgress<double>? progress,CancellationToken token,UpdateSource source=UpdateSource.Auto)
     {
-        if (release.Mirror is null)
+        if (source==UpdateSource.GitHubOnly || (source==UpdateSource.Auto && release.Mirror is null && GiteeUpdateSource.Configured is null))
+        {
+            if (release.Mirror is not null) throw new IOException("请从 GitHub 重新检查更新。");
             return await DownloadVerifiedAsync(client,release,dataRoot,progress,token);
+        }
+        var mirror=release.Mirror ?? GiteeUpdateSource.Configured ?? throw new IOException("当前版本未配置 Gitee 更新源。");
         using var mirrorClient = CreateClient(allowRedirects:false);
-        return await DownloadWithMirrorAsync(client,mirrorClient,release,dataRoot,progress,token);
+        return await DownloadWithMirrorAsync(client,mirrorClient,mirror,release,dataRoot,progress,token,source);
     }
 
-    internal static async Task<string> DownloadWithMirrorAsync(HttpClient github,HttpClient mirrorClient,OnlineRelease release,
-        string dataRoot,IProgress<double>? progress,CancellationToken token)
+    internal static async Task<string> DownloadWithMirrorAsync(HttpClient github,HttpClient mirrorClient,GiteeUpdateSource mirror,
+        OnlineRelease release,string dataRoot,IProgress<double>? progress,CancellationToken token,UpdateSource source=UpdateSource.Auto)
     {
+        var fromGitee=release.Mirror is not null;
+        if ((source==UpdateSource.GiteeOnly && !fromGitee) || (source==UpdateSource.GitHubOnly && fromGitee))
+            throw new IOException("更新来源已更改，请重新检查更新。");
         using var timeout = CancellationTokenSource.CreateLinkedTokenSource(token);
         timeout.CancelAfter(TimeSpan.FromSeconds(45));
-        try { return await DownloadVerifiedAsync(mirrorClient,release,dataRoot,progress,timeout.Token); }
-        catch (Exception ex) when (!token.IsCancellationRequested && IsNetworkFailure(ex))
+        try { return await DownloadVerifiedAsync(fromGitee ? mirrorClient : github,release,dataRoot,progress,timeout.Token); }
+        catch (Exception ex) when (source==UpdateSource.Auto && !token.IsCancellationRequested && IsNetworkFailure(ex))
         {
             var tag=GiteeUpdateSource.VersionTag(release.Version);
-            Uri fallback=new($"https://github.com/{Repository}/releases/download/{tag}/{AssetName}");
-            return await DownloadVerifiedAsync(github,release with { Download=fallback,Mirror=null },dataRoot,progress,token);
+            var fallback=fromGitee
+                ? release with { Download=new Uri($"https://github.com/{Repository}/releases/download/{tag}/{AssetName}"),Mirror=null }
+                : release with { Download=mirror.Attachment(tag,AssetName),Mirror=mirror };
+            using var backupTimeout=CancellationTokenSource.CreateLinkedTokenSource(token);
+            backupTimeout.CancelAfter(TimeSpan.FromSeconds(45));
+            return await DownloadVerifiedAsync(fromGitee ? github : mirrorClient,fallback,dataRoot,progress,backupTimeout.Token);
         }
     }
 

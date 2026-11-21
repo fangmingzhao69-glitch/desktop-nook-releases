@@ -30,6 +30,7 @@ internal sealed partial class GiteeUpdateSource
     }
 
     internal Uri Latest => new($"https://gitee.com/api/v5/repos/{_repository}/releases/latest");
+    internal Uri ReleasePage => new($"https://gitee.com/{_repository}/releases/latest");
 
     internal Uri Attachment(string tag, string filename) =>
         new($"https://gitee.com/{_repository}/releases/download/{tag}/{filename}");
