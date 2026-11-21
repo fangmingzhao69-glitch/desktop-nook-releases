@@ -2,7 +2,7 @@
 
 常用与灵感，折页之间。折页是 Windows 桌面收纳工具。用一个任务栏入口打开收纳面板，左侧整理软件、文件和文件夹，右侧记录便签和待办。
 
-[折页宣传页](https://zheye-desktop.cleverhornbill8.chatgpt.site) · [下载 0.20.11 安装包（Gitee）](https://gitee.com/zfmdx/desktop-nook-releases/releases/download/v0.20.11/DesktopNook-Setup.exe) · [Gitee 最新正式版](https://gitee.com/zfmdx/desktop-nook-releases/releases/latest) · [GitHub 发行页](https://github.com/fangmingzhao69-glitch/desktop-nook-releases/releases/latest) · [使用说明](docs/使用说明.md)
+[折页宣传页](https://zheye-desktop.cleverhornbill8.chatgpt.site) · [下载 0.21.0 安装包（Gitee）](https://gitee.com/zfmdx/desktop-nook-releases/releases/download/v0.21.0/DesktopNook-Setup.exe) · [Gitee 最新正式版](https://gitee.com/zfmdx/desktop-nook-releases/releases/latest) · [GitHub 发行页](https://github.com/fangmingzhao69-glitch/desktop-nook-releases/releases/latest) · [使用说明](docs/使用说明.md)
 
 0.20.6 起，折页内置更新默认优先访问 GitHub，访问失败时改用 Gitee。在「设置 → 关于与更新」可手动指定更新来源。旧版用户可通过上方的 Gitee 安装包覆盖升级。
 
@@ -10,7 +10,7 @@
 
 ## 当前功能
 
-源码中的 0.21.0 开发版新增可切换的悬浮玻璃任务栏，以及经典纸页、柔雾纸页、通透玻璃三种界面风格。正式下载仍以上方发行链接为准。[新增功能与验证范围](docs/悬浮任务栏与界面风格.md)
+0.21.0 新增可切换的悬浮玻璃任务栏，以及经典纸页、柔雾纸页、通透玻璃三种界面风格。[新增功能与验证范围](docs/悬浮任务栏与界面风格.md)
 
 ![折页悬浮玻璃任务栏的沙箱实拍](docs/images/zheye-floating-taskbar.png)
 
@@ -19,6 +19,7 @@
 | 桌面收纳 | 批量添加桌面快捷方式、文件和文件夹，也可直接拖入面板。按分类显示，支持拖拽排序、移动分类、右键操作和移回桌面。系统回收站入口可收纳，回收站内容由 Windows 管理。 |
 | 便签与待办 | 按分类管理文字和待办，支持搜索、自动保存、重命名和排序。多行文字按原文批量粘贴为多条待办。文字记录和待办均可在标题旁切换所选文字的删除线，完成项自动下移。支持归档、删除和 Markdown 导出。 |
 | 面板与任务栏 | 固定到任务栏后单击打开或收起。运行时托盘提供打开、设置和退出入口。支持开机自启、窗口尺寸、左右分栏比例、开合样式、动画开关和关闭行为。顶栏通过设置图标统一打开常规、外观、任务栏外观设置、数据和更新。主题支持浅色、深色及跟随系统。 |
+| 悬浮任务栏与风格 | 系统与悬浮模式可切换，提供液态玻璃、柔雾玻璃、纯色及 12 秒试用回退。界面风格、四套配色和明暗模式分别选择。 |
 | 任务栏外观 | 支持系统默认、透明、纯色、模糊和亚克力。桌面与六种动态场景可分别配置颜色和细线。可见窗口和最大化场景支持窗口规则。可预览和恢复默认。 |
 | 图标台球 | 支持单人练习、本机双人和好友邀请房间。可选中八、斯诺克、九球追分和十五球追分球组，支持球形或原始图标、辅助线、按力度变化的碰撞音效、实录落袋声及成绩记录。 |
 | 本地存储和更新 | 收纳内容、便签与设置均保存在本机。支持软件内检查更新、确认后下载安装，以及从本地文件更新。 |
@@ -33,7 +34,7 @@
 | --- | --- |
 | `DesktopNook-Setup.exe` | 首次安装或直接覆盖升级。缺少运行时时，安装器会提示补装。 |
 | `DesktopNook-win-x64.exe` | 免安装版。请先安装桌面运行时，再放到固定目录运行。 |
-| `DesktopNook-v0.20.11-source.zip` | 与本版对应的源码、构建脚本、源依赖和许可证。 |
+| `DesktopNook-v0.21.0-source.zip` | 与本版对应的源码、构建脚本、源依赖和许可证。 |
 | `SHA256SUMS.txt` | 所有发行文件的校验值。 |
 
 升级可在折页的「设置 → 关于与更新 → 检查在线更新」操作。完整迁移或备份请复制整个数据目录，可从「设置 → 数据与恢复 → 打开数据目录」进入。
