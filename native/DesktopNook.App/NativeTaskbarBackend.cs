@@ -50,6 +50,9 @@ internal sealed class NativeTaskbarBackend(string storePath, bool sandbox, bool 
         {
             if (settings.UsesMaterialComponent || dryRun)
             {
+                if (!dryRun && _worker is not { Running: true })
+                    await Task.Run(NativeTaskbarModule.CheckExplorerCompatibility);
+
                 Directory.CreateDirectory(Path.GetDirectoryName(_configuration)!);
                 TaskbarAppearanceStore.WriteComponentSettings(_configuration, settings);
                 if (_worker is not { Running: true })
@@ -197,11 +200,14 @@ internal sealed class NativeTaskbarBackend(string storePath, bool sandbox, bool 
 internal sealed class NativeTaskbarModule
 {
     private const string Filename = "QingxiaTaskbarCore.dll";
+    private const string ExplorerModule = "ExplorerTAP.dll";
+    internal const string ExplorerRestartNeeded =
+        "Windows 资源管理器仍载有另一版本的任务栏材质组件。请在任务管理器中重启「Windows 资源管理器」后再试。原生悬浮胶囊可使用「系统默认」材质。";
     private static readonly Dictionary<string, string> Hashes = new(StringComparer.OrdinalIgnoreCase)
     {
         [Filename] = "91F2D6CBECE6F120415F004D974300708859FA2E9D88D865E4CD630B8A26336B",
         ["ProgramLog.dll"] = "0EC63B02AA66BA4D3CC66CD724223E03A7160BAD7118ADBEC1403FEDF99BFF80",
-        ["ExplorerTAP.dll"] = "6D8D2E025EC30911DA7DE9EA04F171F03B658196FAAE737E15D0DCC0C6739844",
+        [ExplorerModule] = "6D8D2E025EC30911DA7DE9EA04F171F03B658196FAAE737E15D0DCC0C6739844",
         ["ExplorerHooks.dll"] = "896727368CE616E6F4962083CD11295F54DCBA35EC72B3FC6FB2DFCF120A1BBC"
     };
 
@@ -214,6 +220,40 @@ internal sealed class NativeTaskbarModule
     internal RunTaskbar Run { get; }
 
     private NativeTaskbarModule(RunTaskbar run) => Run = run;
+
+    internal static void CheckExplorerCompatibility()
+    {
+        if (GetWindowThreadProcessId(GetShellWindow(), out uint pid) == 0 || pid == 0) return;
+
+        string? path;
+        try
+        {
+            using var explorer = Process.GetProcessById((int)pid);
+            path = explorer.Modules.Cast<ProcessModule>()
+                .FirstOrDefault(module => string.Equals(module.ModuleName, ExplorerModule, StringComparison.OrdinalIgnoreCase))
+                ?.FileName;
+        }
+        catch (ArgumentException) { return; } // Explorer restarted before it could be inspected.
+        catch (InvalidOperationException) { return; }
+        catch (Win32Exception error)
+        {
+            throw new IOException("无法核对 Windows 资源管理器中载入的任务栏材质组件。请稍后重试。", error);
+        }
+        if (path is null) return;
+
+        string hash;
+        try
+        {
+            using var file = File.OpenRead(path);
+            hash = Convert.ToHexString(SHA256.HashData(file));
+        }
+        catch (Exception error) when (error is IOException or UnauthorizedAccessException)
+        {
+            throw new IOException("无法核对 Windows 资源管理器中载入的任务栏材质组件。请重启「Windows 资源管理器」后再试。", error);
+        }
+        if (!string.Equals(hash, Hashes[ExplorerModule], StringComparison.Ordinal))
+            throw new IOException(ExplorerRestartNeeded);
+    }
 
     internal static NativeTaskbarModule Load(string directory)
     {
@@ -254,4 +294,6 @@ internal sealed class NativeTaskbarModule
 
     [DllImport("kernel32.dll", CharSet = CharSet.Unicode, ExactSpelling = true, SetLastError = true)]
     private static extern IntPtr LoadLibraryExW(string path, IntPtr reserved, uint flags);
+    [DllImport("user32.dll")] private static extern nint GetShellWindow();
+    [DllImport("user32.dll")] private static extern uint GetWindowThreadProcessId(nint window, out uint pid);
 }
