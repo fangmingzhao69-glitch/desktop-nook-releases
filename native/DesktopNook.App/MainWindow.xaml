@@ -15,7 +15,7 @@
      BorderBrush="{DynamicResource FoldEdgeBrush}" BorderThickness="1" CornerRadius="14" SnapsToDevicePixels="True">
      <Grid>
       <Grid.RowDefinitions><RowDefinition Height="54"/><RowDefinition Height="*"/></Grid.RowDefinitions>
-      <Border Background="{DynamicResource FoldTitleBrush}" BorderBrush="{DynamicResource LineBrush}"
+      <Border x:Name="TitleSurface" Background="{DynamicResource FoldTitleBrush}" BorderBrush="{DynamicResource LineBrush}"
        BorderThickness="0,0,0,1" CornerRadius="13,13,0,0">
        <DockPanel Margin="20,0,12,0" LastChildFill="False">
         <StackPanel DockPanel.Dock="Left" Orientation="Horizontal" VerticalAlignment="Center">
@@ -43,8 +43,8 @@
       <Grid x:Name="SplitLayout" Grid.Row="1">
        <Grid.ColumnDefinitions><ColumnDefinition x:Name="LauncherColumn" Width="61*"/><ColumnDefinition Width="5"/><ColumnDefinition x:Name="NotesColumn" Width="39*"/></Grid.ColumnDefinitions>
        <Grid.RowDefinitions><RowDefinition Height="60"/><RowDefinition Height="42"/><RowDefinition Height="*"/><RowDefinition Height="36"/></Grid.RowDefinitions>
-       <Rectangle Grid.RowSpan="4" Fill="{DynamicResource FoldGridPattern}" IsHitTestVisible="False"/>
-       <Rectangle Grid.Column="2" Grid.RowSpan="4" Margin="0,92,0,36" Fill="{DynamicResource FoldRulePattern}" IsHitTestVisible="False"/>
+       <Rectangle x:Name="PaperGrid" Grid.RowSpan="4" Fill="{DynamicResource FoldGridPattern}" IsHitTestVisible="False"/>
+       <Rectangle x:Name="PaperRules" Grid.Column="2" Grid.RowSpan="4" Margin="0,92,0,36" Fill="{DynamicResource FoldRulePattern}" IsHitTestVisible="False"/>
        <DockPanel Margin="24,0" VerticalAlignment="Center">
         <Button x:Name="CollectButton" DockPanel.Dock="Right" Style="{StaticResource PrimaryButton}" AutomationProperties.AutomationId="Collect" FontSize="12" VerticalAlignment="Center" Click="OnCollect">
          <StackPanel Orientation="Horizontal"><Path Data="M8,2 V14 M2,8 H14" Width="16" Height="16" Stroke="{DynamicResource OnPrimaryBrush}" StrokeThickness="1.75" StrokeStartLineCap="Round" StrokeEndLineCap="Round"/><TextBlock Text="添加图标" Margin="4,0,0,0"/></StackPanel>

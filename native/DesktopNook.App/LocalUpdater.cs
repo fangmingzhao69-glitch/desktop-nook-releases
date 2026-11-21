@@ -51,6 +51,14 @@ internal static class LocalUpdater
         foreach(var name in new[]{"state.json","state.json.bak","item-order.json","item-order.json.bak","migration.json","category-policy.json","category-policy.json.bak","preferences.json","preferences.json.bak","storage.json"}){var file=Path.Combine(dataRoot,name);if(File.Exists(file))File.Copy(file,Path.Combine(metadata,name),false);}
         var vault=Path.Combine(dataRoot,"vault");if(Directory.Exists(vault))foreach(var folder in Directory.EnumerateDirectories(vault)){if(Guid.TryParseExact(Path.GetFileName(folder),"N",out _)&&File.Exists(Path.Combine(folder,"entry.json"))){var dest=Path.Combine(metadata,"vault",Path.GetFileName(folder));Directory.CreateDirectory(dest);File.Copy(Path.Combine(folder,"entry.json"),Path.Combine(dest,"entry.json"),false);}}
         var notes=Path.Combine(dataRoot,"Notes");if(Directory.Exists(notes))DesktopNook.Core.VerifiedContent.Copy(notes,Path.Combine(metadata,"Notes"));
+        foreach (var name in new[] { "settings.json", "settings.json.bak", "Engine/settings.json", "Engine/start.json", "Engine/system.json" })
+        {
+            var sourceFile = Path.Combine(dataRoot, "FloatingTaskbar", name);
+            if (!File.Exists(sourceFile)) continue;
+            var backupFile = Path.Combine(metadata, "FloatingTaskbar", name);
+            Directory.CreateDirectory(Path.GetDirectoryName(backupFile)!);
+            File.Copy(sourceFile, backupFile);
+        }
         var appearance=new DesktopNook.Core.TaskbarAppearanceStore(dataRoot);
         if(File.Exists(appearance.SettingsPath))
         {

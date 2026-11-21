@@ -1,0 +1,38 @@
+// Feishu (Lark) messages as Atrium cards. Feishu does not publish Windows
+// notifications either: it shows its own popup, a small untitled Chromium
+// window (Chrome_WidgetWin_1) at the screen's corner, for about ten seconds.
+// Its text is readable through UI Automation, read only: the first text is
+// the chat or sender, the next the message. Window and UIA events wake an MTA
+// reader; a five-second reconciliation covers missed events. A newly shown
+// popup gets one short settling pass if its text is still loading (D33).
+// Nothing in Feishu is changed; its popup stays as it is.
+#pragma once
+
+#include "notice.h"
+
+#include <windows.h>
+
+#include <atomic>
+#include <thread>
+
+namespace atrium {
+
+class FeishuSource {
+public:
+    // Posts `msg` to `notify` with a heap-allocated Notice* in lParam (the
+    // receiver deletes it).
+    FeishuSource(HWND notify, UINT msg);
+    ~FeishuSource();
+    FeishuSource(const FeishuSource&) = delete;
+    FeishuSource& operator=(const FeishuSource&) = delete;
+
+private:
+    void Run();
+    HWND notify_;
+    UINT msg_;
+    std::atomic<bool> stop_{false};
+    HANDLE wake_ = nullptr;
+    std::thread thread_;
+};
+
+} // namespace atrium

@@ -8,6 +8,7 @@ internal sealed class StartupOptions(string runKey = @"Software\Microsoft\Window
 {
     private sealed class Preferences {public bool? CloseEndsProcess {get;set;} public WindowSizePreference? WindowSize {get;set;} [JsonIgnore(Condition=JsonIgnoreCondition.WhenWritingNull)]public string? CollectView {get;set;} [JsonIgnore(Condition=JsonIgnoreCondition.WhenWritingNull)]public string? MotionMode {get;set;} [JsonIgnore(Condition=JsonIgnoreCondition.WhenWritingNull)]public string? PanelStyle {get;set;} [JsonIgnore(Condition=JsonIgnoreCondition.WhenWritingNull)]public string? Theme {get;set;} [JsonIgnore(Condition=JsonIgnoreCondition.WhenWritingNull)]public string? ColorTheme {get;set;}
         [JsonIgnore(Condition=JsonIgnoreCondition.WhenWritingNull)] public string? UpdateChannel {get;set;}
+        [JsonIgnore(Condition=JsonIgnoreCondition.WhenWritingNull)] public string? VisualStyle {get;set;}
     }
     private Preferences? ReadPreferences()
     {
@@ -37,7 +38,18 @@ internal sealed class StartupOptions(string runKey = @"Software\Microsoft\Window
         var current = ReadPreferences();
         return new() { CloseEndsProcess=CloseEndsProcess, WindowSize=ReadWindowSize(),
             CollectView=SavedCollectView, MotionMode=SavedMotionMode, PanelStyle=current?.PanelStyle,
-            Theme=current?.Theme, ColorTheme=current?.ColorTheme, UpdateChannel=current?.UpdateChannel };
+            Theme=current?.Theme, ColorTheme=current?.ColorTheme, UpdateChannel=current?.UpdateChannel, VisualStyle=current?.VisualStyle };
+    }
+
+    internal string VisualStyle
+    {
+        get => ReadPreferences()?.VisualStyle is "mist" or "glass" ? ReadPreferences()!.VisualStyle! : "paper";
+        set
+        {
+            if (value is not ("paper" or "mist" or "glass")) throw new ArgumentException("无效界面风格。", nameof(value));
+            var preferences = Snapshot(); preferences.VisualStyle = value == "paper" ? null : value;
+            SavePreferences(preferences);
+        }
     }
 
     internal UpdateSource UpdateChannel

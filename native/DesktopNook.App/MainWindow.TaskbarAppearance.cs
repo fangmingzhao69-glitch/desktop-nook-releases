@@ -13,11 +13,16 @@ public partial class MainWindow
         if (App.IsSandbox) return;
         SessionEndingCancelEventHandler ending = (_, args) =>
         {
-            if (!args.Cancel) _taskbarAppearance?.Stop();
+            if (!args.Cancel) { _floatingTaskbar?.Dispose(); _taskbarAppearance?.Stop(); }
         };
         Application.Current.SessionEnding += ending;
         Closed += (_, _) => Application.Current.SessionEnding -= ending;
-        _ = RestoreSavedTaskbarAppearanceAsync();
+        try
+        {
+            if (FloatingTaskbar.Saved.Mode == "floating") _ = StartFloatingTaskbarAsync();
+            else _ = RestoreSavedTaskbarAppearanceAsync();
+        }
+        catch (Exception ex) { SetStatus("任务栏设置：" + ex.Message); }
     }
 
     internal bool StartingTaskbarAppearance => _startingTaskbarAppearance;

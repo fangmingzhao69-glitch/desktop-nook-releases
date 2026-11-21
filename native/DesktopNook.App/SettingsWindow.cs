@@ -16,7 +16,7 @@ internal sealed class SettingsWindow : Window
     private const double CompactHeight = 370;
     private const double WorkAreaInset = 12;
     internal const string TaskbarPage = "任务栏外观设置";
-    internal enum ActionAfterClose { None, RefreshEntry, PinHelp, StopGame, Quit, Restore, OpenData, CheckUpdate, LocalUpdate, Releases, License, GameLicense }
+    internal enum ActionAfterClose { None, RefreshEntry, PinHelp, StopGame, Quit, Restore, OpenData, CheckUpdate, LocalUpdate, Releases, License, GameLicense, TaskbarLicense }
     private readonly MainWindow _owner;
     private readonly StackPanel _content = new();
     private readonly ScrollViewer _scroller;
@@ -27,7 +27,7 @@ internal sealed class SettingsWindow : Window
         VerticalContentAlignment = VerticalAlignment.Stretch
     };
     private readonly TaskbarAppearanceSession? _taskbarSession;
-    private TaskbarAppearancePage? _taskbarPage;
+    private TaskbarSettingsPage? _taskbarPage;
     private bool _taskbarSelected;
     private bool _leavingTaskbar;
     private bool _closeReady;
@@ -206,7 +206,7 @@ internal sealed class SettingsWindow : Window
         _scroller.Visibility = showTaskbar ? Visibility.Collapsed : Visibility.Visible;
         if (showTaskbar)
         {
-            _taskbarContent.Content ??= _taskbarPage = new TaskbarAppearancePage(this, _taskbarSession ?? _owner.TaskbarAppearance());
+            _taskbarContent.Content ??= _taskbarPage = new TaskbarSettingsPage(this, _owner, _taskbarSession ?? _owner.TaskbarAppearance());
             return;
         }
 
@@ -232,6 +232,13 @@ internal sealed class SettingsWindow : Window
             case "外观":
                 ColorThemeCards();
                 ThemeCards();
+                Pick("界面风格", "Settings-VisualStyle", _options.VisualStyle,
+                    PanelVisualStyle.Choices.Select(choice => (choice.Id, choice.Name)).ToArray(), value =>
+                    {
+                        _options.VisualStyle = value;
+                        _owner.FinishPanelMotion();
+                        PanelVisualStyle.Select(value);
+                    });
                 var motionHeading = Text("面板与动效", 14);
                 motionHeading.FontWeight = FontWeights.SemiBold;
                 motionHeading.Margin = new Thickness(0, 18, 0, 10);
@@ -282,6 +289,7 @@ internal sealed class SettingsWindow : Window
                 ButtonRow("打开官方发布页", () => ContinueWith(ActionAfterClose.Releases));
                 ButtonRow("开源许可与源码", () => ContinueWith(ActionAfterClose.License));
                 ButtonRow("图标台球许可", () => ContinueWith(ActionAfterClose.GameLicense));
+                ButtonRow("悬浮任务栏许可", () => ContinueWith(ActionAfterClose.TaskbarLicense));
                 break;
         }
     }

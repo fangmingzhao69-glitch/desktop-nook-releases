@@ -1,0 +1,2772 @@
+#include "bar.h"
+
+#include "localization.h"
+#include "render/continuous_corners.h"
+
+#include "clock.h"
+#include "log.h"
+#include "shell/shell_taskbar.h"
+#include "render/capture.h"
+#include "render/desktop_backdrop.h"
+#include "render/glass_renderer.h"
+#include "render/ui_font.h"
+#include "ui/surface.h"
+
+#include <dwmapi.h>
+#include <psapi.h>
+#include <shellapi.h>
+#include <shellscalingapi.h>
+#include <windowsx.h>
+#include <winrt/Windows.Foundation.h>
+
+#include <algorithm>
+#include <cmath>
+#include <cstring>
+#include <cwctype>
+#include <vector>
+
+namespace atrium {
+
+namespace {
+
+constexpr UINT WM_BAR_CAPTURE = WM_APP + 0x70; // wParam 1: Atrium may show in screenshots (render thread -> UI thread)
+constexpr UINT WM_BAR_LAYOUT = WM_APP + 0x71; // defer DPI relayout until SetWindowPos returns
+
+// DCompositionWaitForCompositorClock (Windows 11): waits for the next composed frame or a handle;
+// WAIT_OBJECT_0 + count is the clock. Looked up at run time (absent before build 22000).
+using WaitClockFn = DWORD(WINAPI*)(UINT, const HANDLE*, DWORD);
+const WaitClockFn kWaitForCompositorClock = reinterpret_cast<WaitClockFn>(GetProcAddress(LoadLibraryW(L"dcomp.dll"), "DCompositionWaitForCompositorClock"));
+
+// Another app bar or the taskbar moved (ABN_POSCHANGED and the like).
+UINT AppBarNotice()
+{
+    static const UINT kNotice = RegisterWindowMessageW(L"Atrium.AppBar");
+    return kNotice;
+}
+
+constexpr wchar_t kVisualClass[] = L"AtriumBarVisual";
+constexpr wchar_t kInputClass[] = L"AtriumBarInput";
+constexpr wchar_t kClockKey[] = L"#clock", kStartKey[] = L"#start", kNotifyKey[] = L"#notify", kTrayKey[] = L"#tray", kImeKey[] = L"#ime",
+                  kStatusKey[] = L"#status", kMoreKey[] = L"#more", kDesktopKey[] = L"#desktop";
+// Bar entries and the clock start with '#'; app keys are AUMIDs or paths.
+bool IsEntry(const std::wstring& key) { return !key.empty() && key[0] == L'#'; }
+constexpr double kInsetDip = 14; // room for the drop shadow around the shape
+constexpr DWORD kStaleMs = 2000;  // present at least this often (echo filter cap)
+constexpr UINT_PTR kTooltipTimer = 1, kFileHoverTimer = 2, kGuardTimer = 3;
+constexpr UINT kTooltipDelayMs = 450, kPreviewSwapMs = 60, kFileHoverDelayMs = 600, kGuardMs = 1000;
+constexpr float kTooltipFont = 12.5f, kTooltipPadX = 12, kTooltipPadY = 6, kTooltipMinH = 28;
+constexpr float kTooltipTailH = 5, kTooltipTailHalfW = 12, kTooltipTailInset = 8;
+constexpr UINT kGuardFastMs = 150; // while below a system taskbar the user is using
+constexpr UINT_PTR kSlideTimer = 4;   // the slide out is over: hide the windows
+constexpr UINT_PTR kPointerTimer = 5; // while covered: watch the pointer
+constexpr UINT_PTR kDisplayTimer = 6; // the shared Dock's cross-display gesture
+constexpr UINT_PTR kCoverTimer = 7;   // windows moved on this monitor: look at what covers it, once for a burst
+constexpr UINT_PTR kNearTimer = 8;    // the pointer coming down onto the bar (hoverRise)
+constexpr UINT kNearMs = 16;
+constexpr UINT kCoverMs = 50;
+constexpr UINT kPointerMs = 50;
+constexpr DWORD kLeaveMs = 500;       // a revealed bar goes down this long after the pointer left it
+
+std::map<HWINEVENTHOOK, Bar*> g_guards; // each display has its own stacking guard
+struct CaptureWindows {
+    HWND visual, input;
+    bool visible;
+};
+std::map<Bar*, CaptureWindows> g_capturePolicies; // UI-thread only
+
+void ApplyCapturePolicies()
+{
+    // One capture fallback must exclude every Atrium window to prevent feedback.
+    const bool visible = std::ranges::all_of(g_capturePolicies, [](const auto& entry) { return entry.second.visible; });
+    for (const auto& [bar, windows] : g_capturePolicies) {
+        SetCaptureExclusion(windows.visual, visible);
+        SetCaptureExclusion(windows.input, visible);
+    }
+    Surface::SetCaptureVisible(visible);
+}
+
+// Windows the bar never climbs over: menus, tooltips, the shell's own
+// surfaces, input method windows.
+bool IgnoredCover(HWND w)
+{
+    static const wchar_t* const kClasses[] = {L"#32768",
+                                              L"tooltips_class32",
+                                              L"Shell_SecondaryTrayWnd",
+                                              L"NotifyIconOverflowWindow",
+                                              L"TopLevelWindowForOverflowXamlIsland",
+                                              L"Xaml_WindowedPopupClass",
+                                              L"XamlExplorerHostIslandWindow",
+                                              L"Windows.UI.Core.CoreWindow",
+                                              L"SysShadow",
+                                              L"IME",
+                                              L"MSCTFIME UI",
+                                              L"ForegroundStaging",
+                                              L"MultitaskingViewFrame",
+                                              L"Shell_InputSwitchTopLevelWindow",
+                                              L"Progman",
+                                              L"WorkerW"};
+    wchar_t cls[96] = {};
+    GetClassNameW(w, cls, 96);
+    for (const wchar_t* c : kClasses)
+        if (wcscmp(cls, c) == 0)
+            return true;
+    LONG ex = GetWindowLongW(w, GWL_EXSTYLE);
+    if ((ex & WS_EX_TRANSPARENT) && (ex & WS_EX_LAYERED))
+        return true; // click-through overlays
+    BOOL cloaked = FALSE;
+    DwmGetWindowAttribute(w, DWMWA_CLOAKED, &cloaked, sizeof(cloaked));
+    return cloaked != FALSE;
+}
+
+int Px(double dip, float scale) { return int(std::lround(dip * scale)); }
+
+// Ink over the glass (mean sRGB luminance of what it shows, 0..1): black and
+// white text read equally well near 0.46, so dark ink from 0.50 up and light
+// ink again below 0.42. Light grey windows (0.5..0.65) used to keep white text.
+constexpr float kDarkInkAbove = 0.50f, kLightInkBelow = 0.42f;
+
+GlassParams ParamsFor(const Settings& s, float scale)
+{
+    GlassParams p{};
+    p.radius = float(s.cornerRadius * scale);
+    p.edge = float(s.edge * scale);
+    p.refract = float(s.refraction * scale);
+    p.dispersion = float(s.dispersion);
+    // Blur strength is mostly the mip level; mixing a sharp and a blurred sample
+    // only at the low end avoids double images at medium settings.
+    p.blurMix = float(std::min(1.0, s.blur * 4.0));
+    p.blurLod = float(1.0 + 4.5 * s.blur);
+    p.tintMix = float(1.0 - s.transparency);
+    p.tintR = float((s.tint >> 16) & 0xFF) / 255.f;
+    p.tintG = float((s.tint >> 8) & 0xFF) / 255.f;
+    p.tintB = float(s.tint & 0xFF) / 255.f;
+    p.tintA = 1;
+    p.highlight = float(s.highlight);
+    p.shadow = float(s.shadow);
+    p.lightX = -0.6f;
+    p.lightY = -0.8f;
+    p.inset = float(kInsetDip * scale);
+    return p;
+}
+
+// The popups' glass: exactly the bar's material (D26), one set of parameters
+// per piece of glass in the window.
+void PanelParams(const Settings& s, float scale, const GlassPanel& p, std::vector<GlassParams>& out)
+{
+    out.clear();
+    GlassParams g = ParamsFor(s, scale);
+    g.inset = p.inset;
+    if (p.shapes.empty()) {
+        g.shapeL = g.shapeT = p.inset;
+        g.shapeR = float(p.window.right - p.window.left) - p.inset;
+        g.shapeB = float(p.window.bottom - p.window.top) - p.inset;
+        g.radius = p.radius;
+        out.push_back(g);
+        return;
+    }
+    for (const GlassShape& sh : p.shapes) {
+        g.shapeL = sh.left;
+        g.shapeT = sh.top;
+        g.shapeR = sh.right;
+        g.shapeB = sh.bottom;
+        g.radius = std::min(sh.radius, std::min(sh.right - sh.left, sh.bottom - sh.top) / 2);
+        g.fade = sh.fade;
+        g.partCount = float(std::min<size_t>(sh.parts.size(), kMaxGlassParts));
+        g.melt = sh.melt;
+        g.partMix = sh.partMix;
+        g.tailX = sh.tailX;
+        g.tailHalfWidth = sh.tailHalfWidth;
+        g.tailHeight = sh.tailHeight;
+        g.tailInset = sh.tailInset;
+        for (size_t i = 0; i < sh.parts.size() && i < kMaxGlassParts; ++i) {
+            const GlassShape::Part& pt = sh.parts[i];
+            g.parts[i][0] = pt.left;
+            g.parts[i][1] = pt.top;
+            g.parts[i][2] = pt.right;
+            g.parts[i][3] = pt.bottom;
+            for (int k = 0; k < 4; ++k)
+                g.partRadii[i][k] = pt.radii[k];
+        }
+        out.push_back(g);
+    }
+}
+
+// Luminance of what the glass shows (backdrop mixed with the tint), the
+// bar's rule for its ink.
+float GlassLuma(const Settings& s, float backdrop)
+{
+    float tm = float(1.0 - s.transparency);
+    float tintLuma = (0.2126f * float((s.tint >> 16) & 0xFF) + 0.7152f * float((s.tint >> 8) & 0xFF) + 0.0722f * float(s.tint & 0xFF)) / 255.f;
+    return backdrop * (1 - tm) + tintLuma * tm;
+}
+
+// The bar's time and date, in the system's own formats. `seconds` asks for the
+// long time format (which carries seconds); a locale whose long time has none
+// gets them added after the minutes, so the switch always shows a difference.
+void ClockStrings(std::wstring& time, std::wstring& date, bool seconds)
+{
+    wchar_t t[64] = {}, d[64] = {};
+    GetTimeFormatEx(LOCALE_NAME_USER_DEFAULT, seconds ? 0 : TIME_NOSECONDS, nullptr, nullptr, t, 64);
+    if (seconds) {
+        wchar_t plain[64] = {};
+        GetTimeFormatEx(LOCALE_NAME_USER_DEFAULT, TIME_NOSECONDS, nullptr, nullptr, plain, 64);
+        if (std::wstring(t) == plain) {
+            wchar_t pattern[64] = {};
+            if (GetLocaleInfoEx(LOCALE_NAME_USER_DEFAULT, LOCALE_STIMEFORMAT, pattern, ARRAYSIZE(pattern)) > 0) {
+                std::wstring withSeconds = pattern;
+                const size_t minute = withSeconds.rfind(L'm');
+                if (minute != std::wstring::npos) {
+                    withSeconds.insert(minute + 1, L":ss");
+                    GetTimeFormatEx(LOCALE_NAME_USER_DEFAULT, 0, nullptr, withSeconds.c_str(), t, ARRAYSIZE(t));
+                }
+            }
+        }
+    }
+    GetDateFormatEx(LOCALE_NAME_USER_DEFAULT, DATE_SHORTDATE, nullptr, nullptr, d, 64, nullptr);
+    time = t;
+    date = d;
+}
+
+// Widest rendering of a clock string: every digit replaced by the widest digit.
+std::wstring WidestDigits(std::wstring s)
+{
+    for (auto& c : s)
+        if (iswdigit(c))
+            c = L'8';
+    return s;
+}
+
+void RegisterClasses(HINSTANCE instance)
+{
+    static bool done = false;
+    if (done)
+        return;
+    WNDCLASSEXW wc{sizeof(wc)};
+    wc.hInstance = instance;
+    wc.hCursor = LoadCursorW(nullptr, IDC_ARROW);
+    wc.lpfnWndProc = DefWindowProcW; // replaced per window once `this` is attached
+    wc.lpszClassName = kVisualClass;
+    RegisterClassExW(&wc);
+    wc.lpszClassName = kInputClass;
+    RegisterClassExW(&wc);
+    done = true;
+}
+
+} // namespace
+
+void RefreshCaptureExclusion() { ApplyCapturePolicies(); }
+
+// OLE drop target on the input window: files dragged over an app bring it to
+// the front after a moment; dropping opens them with that app.
+struct BarDropTarget : winrt::implements<BarDropTarget, IDropTarget> {
+    Bar* bar;
+    bool files = false;
+    explicit BarDropTarget(Bar* b) : bar(b) {}
+
+    DWORD Effect(POINTL pt)
+    {
+        std::wstring key = bar->FileDragOver(POINT{pt.x, pt.y});
+        return files && !key.empty() && bar->canOpenFiles && bar->canOpenFiles(key) ? DROPEFFECT_COPY : DROPEFFECT_NONE;
+    }
+    HRESULT __stdcall DragEnter(IDataObject* data, DWORD, POINTL pt, DWORD* effect) override
+    {
+        FORMATETC fe{CF_HDROP, nullptr, DVASPECT_CONTENT, -1, TYMED_HGLOBAL};
+        files = data && data->QueryGetData(&fe) == S_OK;
+        *effect = Effect(pt);
+        return S_OK;
+    }
+    HRESULT __stdcall DragOver(DWORD, POINTL pt, DWORD* effect) override
+    {
+        *effect = Effect(pt);
+        return S_OK;
+    }
+    HRESULT __stdcall DragLeave() override
+    {
+        bar->FileDragLeave();
+        return S_OK;
+    }
+    HRESULT __stdcall Drop(IDataObject* data, DWORD, POINTL pt, DWORD* effect) override
+    {
+        *effect = Effect(pt);
+        std::wstring key = bar->fileHoverKey_;
+        bar->FileDragLeave();
+        if (*effect == DROPEFFECT_NONE || !data)
+            return S_OK;
+        FORMATETC fe{CF_HDROP, nullptr, DVASPECT_CONTENT, -1, TYMED_HGLOBAL};
+        STGMEDIUM sm{};
+        if (FAILED(data->GetData(&fe, &sm)))
+            return S_OK;
+        std::vector<std::wstring> paths;
+        if (auto* drop = static_cast<HDROP>(GlobalLock(sm.hGlobal))) {
+            UINT count = DragQueryFileW(drop, 0xFFFFFFFF, nullptr, 0);
+            for (UINT i = 0; i < count && i < 64; ++i) {
+                std::wstring p(DragQueryFileW(drop, i, nullptr, 0) + 1, L'\0');
+                p.resize(DragQueryFileW(drop, i, p.data(), UINT(p.size())));
+                paths.push_back(std::move(p));
+            }
+            GlobalUnlock(sm.hGlobal);
+        }
+        ReleaseStgMedium(&sm);
+        if (!paths.empty() && bar->onDropFiles)
+            bar->onDropFiles(key, paths);
+        return S_OK;
+    }
+};
+
+Bar::Bar(HINSTANCE instance, bool debugCapturable, std::wstring display)
+    : debugCapturable_(debugCapturable),
+      displayOverride_(std::move(display)),
+      wake_(CreateEventW(nullptr, FALSE, FALSE, nullptr)),
+      quit_(CreateEventW(nullptr, TRUE, FALSE, nullptr)),
+      frame_(CreateEventW(nullptr, FALSE, FALSE, nullptr)),
+      captureAck_(CreateEventW(nullptr, FALSE, FALSE, nullptr)),
+      captureVisible_(debugCapturable)
+{
+    RegisterClasses(instance);
+    DWriteCreateFactory(DWRITE_FACTORY_TYPE_SHARED, __uuidof(IDWriteFactory3), reinterpret_cast<IUnknown**>(dwrite_.put()));
+
+    // Visual: never hit-tested (layered + transparent), no redirection bitmap.
+    visual_ = CreateWindowExW( // NOLINT(cppcoreguidelines-prefer-member-initializer): after RegisterClasses
+        WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE | WS_EX_TOPMOST | WS_EX_NOREDIRECTIONBITMAP | WS_EX_TRANSPARENT | WS_EX_LAYERED, kVisualClass, L"Atrium Bar",
+        WS_POPUP, 0, 0, 1, 1, nullptr, nullptr, instance, nullptr);
+    SetLayeredWindowAttributes(visual_, 0, 255, LWA_ALPHA);
+    // Input: draws nothing, so it is invisible; its window region is the shape.
+    input_ = CreateWindowExW( // NOLINT(cppcoreguidelines-prefer-member-initializer): after RegisterClasses
+        WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE | WS_EX_TOPMOST | WS_EX_NOREDIRECTIONBITMAP, kInputClass, L"Atrium Bar Input", WS_POPUP, 0, 0, 1, 1, nullptr,
+        nullptr, instance, nullptr);
+    SetWindowLongPtrW(input_, GWLP_USERDATA, reinterpret_cast<LONG_PTR>(this));
+    SetWindowLongPtrW(input_, GWLP_WNDPROC, reinterpret_cast<LONG_PTR>(&Bar::InputProc));
+    SetWindowLongPtrW(visual_, GWLP_USERDATA, reinterpret_cast<LONG_PTR>(this));
+    SetWindowLongPtrW(visual_, GWLP_WNDPROC, reinterpret_cast<LONG_PTR>(&Bar::VisualProc));
+    // Out of every capture until the render thread has a backdrop that
+    // leaves them out by itself (Desktop Duplication).
+    if (debugCapturable_)
+        Log(L"bar: --debug-capturable, Atrium shows in screenshots (with Windows.Graphics.Capture, the backdrop freezes after the first frame)");
+    SetCaptureExclusion(visual_, captureVisible_);
+    SetCaptureExclusion(input_, captureVisible_);
+    g_capturePolicies[this] = {visual_, input_, debugCapturable_};
+    ApplyCapturePolicies();
+
+    // A compact Dock-style label, using the same material and adaptive ink as
+    // every other surface. It never takes focus or receives pointer input.
+    tooltip_ = std::make_unique<Surface>(instance, L"Atrium Hover Label", false);
+    tooltip_->message = [](UINT m, WPARAM, LPARAM, LRESULT& result) {
+        if (m != WM_NCHITTEST)
+            return false;
+        result = HTTRANSPARENT;
+        return true;
+    };
+    tooltip_->paint = [this](Canvas& c) {
+        auto bounds = D2D1::RectF(0, 0, tooltipSize_.width, tooltipSize_.height);
+        if (c.panel)
+            c.Callout(bounds, std::min(16.f, tooltipSize_.height / 2), tooltipTailX_, kTooltipTailHalfW, edge_ == BarEdge::Bottom ? kTooltipTailH : 0,
+                      kTooltipTailInset, c.theme.panel);
+        c.Text(tooltipText_, D2D1::RectF(kTooltipPadX, kTooltipPadY, bounds.right - kTooltipPadX, bounds.bottom - kTooltipPadY), kTooltipFont, c.theme.text,
+               DWRITE_FONT_WEIGHT_MEDIUM, 1);
+    };
+
+    // Drag and drop needs OLE on this (STA) thread; balanced in the destructor.
+    oleReady_ = SUCCEEDED(OleInitialize(nullptr));
+    if (oleReady_) {
+        dropTarget_ = winrt::make<BarDropTarget>(this);
+        if (FAILED(RegisterDragDrop(input_, dropTarget_.get()))) {
+            Log(L"bar: RegisterDragDrop failed; dropping files on apps is unavailable");
+            dropTarget_ = nullptr;
+        }
+    }
+
+    // Stacking guard: raised again when covered, hidden behind full-screen apps.
+    const DWORD evs[] = {EVENT_SYSTEM_FOREGROUND, EVENT_SYSTEM_MOVESIZEEND, EVENT_OBJECT_LOCATIONCHANGE};
+    for (int i = 0; i < 3; ++i) {
+        hooks_[i] = SetWinEventHook(evs[i], evs[i], nullptr, &Bar::WinEvent, 0, 0, WINEVENT_OUTOFCONTEXT | WINEVENT_SKIPOWNPROCESS);
+        if (hooks_[i])
+            g_guards[hooks_[i]] = this;
+    }
+    SetTimer(input_, kGuardTimer, kGuardMs, nullptr);
+
+    render_ = std::thread([this] { RenderThread(); });
+}
+
+Bar::~Bar()
+{
+    UpdateAppBar(nullptr, RECT{}, 0);
+    for (HWINEVENTHOOK h : hooks_)
+        if (h) {
+            UnhookWinEvent(h);
+            g_guards.erase(h);
+        }
+    SetEvent(quit_);
+    if (render_.joinable())
+        render_.join();
+    if (dropTarget_)
+        RevokeDragDrop(input_);
+    dropTarget_ = nullptr;
+    tooltip_.reset();
+    g_capturePolicies.erase(this);
+    ApplyCapturePolicies();
+    DestroyWindow(input_);
+    DestroyWindow(visual_);
+    CloseHandle(wake_);
+    CloseHandle(quit_);
+    CloseHandle(frame_);
+    CloseHandle(captureAck_);
+    if (oleReady_)
+        OleUninitialize();
+}
+
+bool Bar::StopRendering(DWORD timeoutMs)
+{
+    SetEvent(quit_);
+    if (!render_.joinable())
+        return true;
+    // The render thread may wait for this thread (ShowOwnWindowsToCapture, DirectComposition):
+    // keep its messages flowing while waiting, never a bare join.
+    HANDLE thread = render_.native_handle();
+    const ULONGLONG until = GetTickCount64() + timeoutMs;
+    while (MsgWaitForMultipleObjects(1, &thread, FALSE, 50, QS_ALLINPUT) != WAIT_OBJECT_0) {
+        MSG msg;
+        while (PeekMessageW(&msg, nullptr, 0, 0, PM_REMOVE)) {
+            TranslateMessage(&msg);
+            DispatchMessageW(&msg);
+        }
+        if (GetTickCount64() > until) {
+            Log(L"core: the render thread did not stop in %lu ms", timeoutMs);
+            return false;
+        }
+    }
+    render_.join();
+    return true;
+}
+
+LRESULT CALLBACK Bar::VisualProc(HWND h, UINT m, WPARAM w, LPARAM l)
+{
+    auto* self = reinterpret_cast<Bar*>(GetWindowLongPtrW(h, GWLP_USERDATA));
+    if (m == WM_DPICHANGED && self) {
+        PostMessageW(self->input_, WM_BAR_LAYOUT, 0, 0);
+        return 0;
+    }
+    if (m == WM_BAR_CAPTURE && self) {
+        // From the render thread: whether Atrium's windows may show in screenshots.
+        bool visible = w != 0;
+        g_capturePolicies[self].visible = visible;
+        ApplyCapturePolicies();
+        SetEvent(self->captureAck_);
+        return 0;
+    }
+    if (m == WM_CLOSE && self) {
+        if (self->onCloseRequest)
+            self->onCloseRequest(); // the app decides; never destroy just this window
+        return 0;
+    }
+    return DefWindowProcW(h, m, w, l);
+}
+
+LRESULT CALLBACK Bar::InputProc(HWND h, UINT m, WPARAM w, LPARAM l)
+{
+    auto* self = reinterpret_cast<Bar*>(GetWindowLongPtrW(h, GWLP_USERDATA));
+    return self ? self->OnInput(h, m, w, l) : DefWindowProcW(h, m, w, l);
+}
+
+POINT Bar::LayoutPoint(POINT client) const
+{
+    RECT cr{};
+    GetClientRect(input_, &cr);
+    return EdgeFrame{edge_, cr}.FromArea(client);
+}
+
+RECT Bar::EdgeZone() const
+{
+    const EdgeFrame f{edge_, window_};
+    return f.ToArea(RECT{LONG(scene_.bar.left), 0, LONG(scene_.bar.right), std::max<LONG>(0, f.FromArea(monitor_).bottom)});
+}
+
+std::wstring Bar::HitTest(POINT pt) const
+{
+    for (const auto& hit : hits_)
+        if (PtInRect(&hit.rect, pt))
+            return hit.key;
+    return {};
+}
+
+// The bar's strip of the screen while it is always shown (`reserve` px on `edge_` of
+// `monitor`); 0 gives it back. Windows keeps the work area: maximized windows end before the bar.
+void Bar::UpdateAppBar(HMONITOR monitor, RECT bounds, int reserve)
+{
+    APPBARDATA abd{sizeof(abd)};
+    abd.hWnd = input_;
+    if (reserve <= 0 || !monitor) {
+        if (appBar_) {
+            AppBarMessage(ABM_REMOVE, abd);
+            appBar_ = false;
+            appBarReserved_ = 0;
+            appBarMonitor_ = nullptr;
+            Log(L"bar: screen strip given back");
+        }
+        return;
+    }
+    if (!appBar_) {
+        abd.uCallbackMessage = AppBarNotice();
+        if (!AppBarMessage(ABM_NEW, abd))
+            return;
+        appBar_ = true;
+        appBarRect_ = RECT{};
+    }
+    const EdgeFrame frame{edge_, bounds};
+    const RECT want = frame.ToArea(RECT{0, LONG(frame.Across()) - reserve, LONG(frame.Along()), LONG(frame.Across())});
+    if (appBarMonitor_ == monitor && appBarEdge_ == edge_ && appBarReserved_ == reserve && EqualRect(&appBarRect_, &want))
+        return;
+    constexpr UINT kAppBarEdge[] = {ABE_BOTTOM, ABE_TOP, ABE_LEFT, ABE_RIGHT}; // in BarEdge's order
+    abd.uEdge = kAppBarEdge[int(edge_)];
+    abd.rc = want;
+    AppBarMessage(ABM_QUERYPOS, abd); // inside another app bar (the system taskbar, if shown) on the same edge
+    RECT rc = frame.FromArea(abd.rc);
+    rc.top = rc.bottom - reserve;
+    abd.rc = frame.ToArea(rc);
+    AppBarMessage(ABM_SETPOS, abd);
+    appBarRect_ = want;
+    appBarReserved_ = reserve;
+    appBarMonitor_ = monitor;
+    appBarEdge_ = edge_;
+    Log(L"bar: keeps %d px of the screen's %s edge (always shown)", reserve, settings_.barEdge.c_str());
+}
+
+LRESULT Bar::OnInput(HWND h, UINT m, WPARAM w, LPARAM l)
+{
+    POINT pt = LayoutPoint({GET_X_LPARAM(l), GET_Y_LPARAM(l)});
+    if (m == AppBarNotice() && AppBarNotice()) {
+        if (w == ABN_POSCHANGED) { // another app bar or the taskbar moved: claim the strip again
+            appBarRect_ = RECT{};
+            Relayout();
+        }
+        return 0;
+    }
+    switch (m) {
+    case WM_BAR_LAYOUT:
+        layoutPending_ = false;
+        Relayout();
+        return 0;
+    case WM_MOUSEACTIVATE: {
+        onInteract();
+        // Never take focus from the user's app, except for the logo and the
+        // bell: the start menu and the notification list need the keyboard,
+        // and only the foreground process may hand the foreground to its own window.
+        POINT cur;
+        GetCursorPos(&cur);
+        ScreenToClient(h, &cur);
+        cur = LayoutPoint(cur);
+        if ((HitTest(cur) == kStartKey || HitTest(cur) == kNotifyKey) && HIWORD(l) == WM_LBUTTONDOWN) {
+            previousForeground_ = GetForegroundWindow();
+            if (previousForeground_ == input_ || previousForeground_ == visual_)
+                previousForeground_ = nullptr;
+            return MA_ACTIVATE;
+        }
+        return MA_NOACTIVATE;
+    }
+    case WM_CLOSE:
+        if (onCloseRequest)
+            onCloseRequest();
+        return 0;
+    case WM_MOUSEMOVE: {
+        onInteract();
+        if (dragging_) {
+            UpdateDrag(pt);
+            return 0;
+        }
+        // A press on an app that moves past the system drag threshold starts a drag.
+        if (pressedLeft_ && !pressed_.empty() && !IsEntry(pressed_) && (w & MK_LBUTTON) &&
+            (std::abs(pt.x - pressPt_.x) > GetSystemMetrics(SM_CXDRAG) || std::abs(pt.y - pressPt_.y) > GetSystemMetrics(SM_CYDRAG))) {
+            BeginDrag(pt);
+            return 0;
+        }
+        // Remember brief visits; only the current cursor samples determine approach or retreat above it.
+        if (float(pt.y) >= scene_.bar.top)
+            near_.Update(scene_.bar, {float(pt.x), float(pt.y)}, scale_, settings_.nearEnter, settings_.nearLeave);
+        if (!tracking_) {
+            TRACKMOUSEEVENT tme{sizeof(tme), TME_LEAVE, h, 0};
+            tracking_ = TrackMouseEvent(&tme) != FALSE;
+            SetRegion(true); // magnified icons reach above the shape
+        }
+        std::wstring hover = HitTest(pt);
+        bool magnify = scene_.magnify > 1.001f;
+        // Of the pointer's height only its side of the glass's top edge matters to the wave.
+        const bool crossed = (scene_.pointerY < scene_.bar.top) != (float(pt.y) < scene_.bar.top);
+        if (hover != scene_.hoverKey || (magnify && (scene_.pointerX != float(pt.x) || crossed))) {
+            if (hover != scene_.hoverKey) {
+                scene_.hoverKey = hover;
+                // With a preview up, the next app's windows follow the pointer without the tooltip's delay.
+                bool quick = previewShown_ || (previewOpen && previewOpen());
+                HideTooltip();
+                if (!hover.empty())
+                    SetTimer(h, kTooltipTimer, quick ? kPreviewSwapMs : kTooltipDelayMs, nullptr);
+            }
+            scene_.pointerX = float(pt.x);
+            WatchNear(false); // current cursor Y and near flags belong to this same snapshot
+            Publish();
+        } else if (magnify && float(pt.y) < scene_.bar.top) {
+            WatchNear(); // above the glass a move straight up may end the early response: published if it did
+        }
+        return 0;
+    }
+    case WM_TIMER:
+        if (w == kDisplayTimer) {
+            WatchDisplays();
+            return 0;
+        } else if (w == kCoverTimer) {
+            KillTimer(h, kCoverTimer);
+            coverPending_ = false;
+            UpdateCover();
+            return 0;
+        } else if (w == kTooltipTimer) {
+            KillTimer(h, kTooltipTimer);
+            if (pressed_.empty() && !dragging_)
+                ShowTooltip();
+            return 0;
+        } else if (w == kFileHoverTimer) {
+            KillTimer(h, kFileHoverTimer);
+            if (!fileHoverKey_.empty() && !IsEntry(fileHoverKey_) && onFileDragHover)
+                onFileDragHover(fileHoverKey_);
+            return 0;
+        } else if (w == kGuardTimer) {
+            GuardStacking(nullptr);
+            return 0;
+        } else if (w == kSlideTimer) {
+            KillTimer(h, kSlideTimer);
+            if (tucked_ && !slidOut_) {
+                slidOut_ = true;
+                Relayout(); // hides the windows; the render thread rests
+                WatchNear(); // nothing to answer now: let it fall back
+            }
+            return 0;
+        }
+        if (w == kPointerTimer) {
+            WatchPointer();
+            return 0;
+        }
+        if (w == kNearTimer) {
+            WatchNear();
+            return 0;
+        }
+        break;
+    case WM_MOUSELEAVE:
+        tracking_ = false;
+        HideTooltip();
+        if (!dragging_) {
+            SetRegion(false);
+            scene_.hoverKey.clear();
+            scene_.pressedKey.clear();
+            scene_.pointerX = scene_.pointerY = -1;
+            pressed_.clear();
+            pressedLeft_ = false;
+            Publish();
+        }
+        return 0;
+    case WM_LBUTTONDOWN:
+    case WM_MBUTTONDOWN:
+        HideTooltip();
+        if (onPreviewClose)
+            onPreviewClose(); // a press on the bar: the preview gives way
+        pressed_ = HitTest(pt);
+        pressedLeft_ = m == WM_LBUTTONDOWN;
+        pressPt_ = pt;
+        scene_.pressedKey = pressed_;
+        if (m == WM_LBUTTONDOWN) { // the glass gives way under the press
+            scene_.rippleX = float(pt.x);
+            scene_.rippleY = float(pt.y);
+            scene_.rippleMs = ClockMs();
+        }
+        SetCapture(h);
+        Publish();
+        return 0;
+    case WM_LBUTTONUP:
+    case WM_MBUTTONUP: {
+        if (dragging_) {
+            // Dropped well above or below the bar: cancel, like the system taskbar.
+            int mid = int((scene_.bar.top + scene_.bar.bottom) / 2);
+            EndDrag(std::abs(pt.y - mid) <= int(scene_.bar.bottom - scene_.bar.top));
+            ReleaseCapture();
+            POINT cur;
+            GetCursorPos(&cur);
+            if (WindowFromPoint(cur) != input_) { // released off the bar: no hover is left
+                tracking_ = false;
+                SetRegion(false);
+                scene_.hoverKey.clear();
+                scene_.pointerX = scene_.pointerY = -1;
+                Publish();
+            }
+            return 0;
+        }
+        std::wstring key = HitTest(pt);
+        bool same = !pressed_.empty() && key == pressed_;
+        pressed_.clear();
+        pressedLeft_ = false;
+        scene_.pressedKey.clear();
+        ReleaseCapture();
+        Publish();
+        if (!same)
+            return 0;
+        // Shift+click starts a new instance, as on the Windows taskbar.
+        bool launch = m == WM_MBUTTONUP || (w & MK_SHIFT);
+        if (IsEntry(key)) {
+            if (m != WM_LBUTTONUP)
+                return 0;
+            const RECT anchor = EntryRect(key);
+            if (key == kMoreKey && onOverflow)
+                onOverflow(hidden_, anchor);
+            for (auto [k, f] : {std::pair{kStartKey, &onStartClick}, {kNotifyKey, &onNotifyClick}, {kTrayKey, &onTrayClick}, {kStatusKey, &onStatusClick}})
+                if (key == k && *f)
+                    (*f)(anchor);
+            for (auto [k, f] : {std::pair{kClockKey, &onClockClick}, {kDesktopKey, &onDesktopClick}, {kImeKey, &onImeClick}})
+                if (key == k && *f)
+                    (*f)();
+        } else if (launch ? bool(onLaunch) : bool(onActivate)) {
+            // Starting an app (or another instance) hops its icon, as in the macOS Dock.
+            auto t = std::ranges::find_if(items_, [&](const TaskItem& i) { return i.key == key; });
+            if (t != items_.end() && (launch || t->windows.empty()))
+                Bounce(key);
+            (launch ? onLaunch : onActivate)(key);
+        }
+        return 0;
+    }
+    case WM_CAPTURECHANGED:
+        if (reinterpret_cast<HWND>(l) != h && dragging_) {
+            EndDrag(false); // capture taken away (e.g. a system menu opened)
+            SetRegion(false);
+        } else if (reinterpret_cast<HWND>(l) != h && (!pressed_.empty() || pressedLeft_)) {
+            pressed_.clear();
+            pressedLeft_ = false;
+            scene_.pressedKey.clear();
+            Publish();
+        }
+        return 0;
+    case WM_MOUSEWHEEL: { // over the status icon: the volume
+        onInteract();
+        POINT p{GET_X_LPARAM(l), GET_Y_LPARAM(l)};
+        ScreenToClient(h, &p);
+        int notches = GET_WHEEL_DELTA_WPARAM(w) / WHEEL_DELTA;
+        if (notches && HitTest(LayoutPoint(p)) == kStatusKey && onStatusWheel)
+            onStatusWheel(notches);
+        return 0;
+    }
+    case WM_RBUTTONUP: {
+        onInteract();
+        if (dragging_)
+            return 0;
+        std::wstring key = HitTest(pt);
+        // Menus open on the inner side of the bar (beyond icons the pointer magnified), without the tooltip.
+        HideTooltip();
+        KillTimer(h, kTooltipTimer);
+        POINT screen = EdgeFrame{edge_, window_}.ToArea(POINT{pt.x, 0});
+        if (!key.empty() && !IsEntry(key) && onItemMenu)
+            onItemMenu(key, screen);
+        else if (onContextMenu)
+            onContextMenu(screen);
+        return 0;
+    }
+    default: break;
+    }
+    return DefWindowProcW(h, m, w, l);
+}
+
+void Bar::BeginDrag(POINT pt)
+{
+    int from = -1;
+    for (int i = 0; i < int(scene_.items.size()); ++i)
+        if (scene_.items[size_t(i)].key == pressed_)
+            from = i;
+    if (from < 0)
+        return;
+    const auto& plate = scene_.items[size_t(from)].plate;
+    dragging_ = true;
+    dragKey_ = pressed_;
+    dragInsert_ = from;
+    grabDx_ = pressPt_.x - int((plate.left + plate.right) / 2);
+    dragX_ = pt.x;
+    scene_.pressedKey.clear();
+    HideTooltip();
+    Relayout();
+}
+
+void Bar::UpdateDrag(POINT pt)
+{
+    dragX_ = pt.x;
+    // Insertion point: the slot whose centre is nearest to the dragged plate's.
+    float centre = float(pt.x - grabDx_);
+    int slot = int(std::lround((centre - float(appsLeft_) - float(plate_) / 2) / float(pitch_)));
+    dragInsert_ = std::clamp(slot, 0, std::max(shown_ - 1, 0));
+    Relayout();
+}
+
+void Bar::EndDrag(bool commit)
+{
+    if (!dragging_)
+        return;
+    dragging_ = false;
+    std::wstring key = dragKey_;
+    dragKey_.clear();
+    pressed_.clear();
+    pressedLeft_ = false;
+    scene_.pressedKey.clear();
+    int from = -1;
+    for (int i = 0; i < shown_ && i < int(items_.size()); ++i)
+        if (items_[size_t(i)].key == key)
+            from = i;
+    bool moved = commit && from >= 0 && dragInsert_ >= 0 && dragInsert_ != from && dragInsert_ < int(items_.size());
+    if (moved) {
+        // Show the new order right away; the model confirms it a moment later
+        // with the same order, which then needs no relayout.
+        TaskItem t = std::move(items_[size_t(from)]);
+        items_.erase(items_.begin() + from);
+        items_.insert(items_.begin() + dragInsert_, std::move(t));
+        auto shared = std::ranges::find_if(allItems_, [&](const TaskItem& item) { return item.key == key; });
+        TaskItem movedItem = std::move(*shared);
+        allItems_.erase(shared);
+        const std::wstring before = dragInsert_ + 1 < int(items_.size()) ? items_[size_t(dragInsert_) + 1].key : L"";
+        auto insertion = std::ranges::find_if(allItems_, [&](const TaskItem& item) { return item.key == before; });
+        allItems_.insert(insertion, std::move(movedItem));
+    }
+    scene_.hoverKey = moved ? key : scene_.hoverKey;
+    Relayout(); // the dropped icon slides from the pointer into its slot
+    if (moved && onReorder)
+        onReorder(key, dragInsert_);
+}
+
+std::wstring Bar::FileDragOver(POINT screen)
+{
+    onInteract();
+    ScreenToClient(input_, &screen);
+    std::wstring key = HitTest(LayoutPoint(screen));
+    if (IsEntry(key))
+        key.clear();
+    if (key != fileHoverKey_) {
+        fileHoverKey_ = key;
+        scene_.hoverKey = key;
+        KillTimer(input_, kFileHoverTimer);
+        if (!key.empty())
+            SetTimer(input_, kFileHoverTimer, kFileHoverDelayMs, nullptr);
+        Publish();
+    }
+    return key;
+}
+
+void Bar::FileDragLeave()
+{
+    KillTimer(input_, kFileHoverTimer);
+    fileHoverKey_.clear();
+    scene_.hoverKey.clear();
+    Publish();
+}
+
+void Bar::ReadDisplays()
+{
+    displays_ = ConnectedDisplays();
+    displayDpis_.assign(displays_.size(), 96);
+    for (size_t i = 0; i < displays_.size(); ++i)
+        if (UINT dx = 96, dy = 96; SUCCEEDED(GetDpiForMonitor(displays_[i].monitor, MDT_EFFECTIVE_DPI, &dx, &dy)))
+            displayDpis_[i] = dx;
+}
+
+void Bar::Apply(const Settings& s)
+{
+    const bool changed = settings_.dockDisplayMode != s.dockDisplayMode || settings_.dockDisplay != s.dockDisplay;
+    settings_ = s;
+    if (displays_.empty())
+        ReadDisplays();
+    if (changed)
+        activeDisplay_.clear();
+    summonMonitor_ = nullptr;
+    WatchDisplaysIfNeeded();
+    Relayout();
+    UpdateCover(); // the hide mode may have changed
+    UpdateNearWatch(); // hoverRise may have been turned on or off
+}
+
+// Watching the pointer for the follow mode only with another display to follow it to.
+void Bar::WatchDisplaysIfNeeded()
+{
+    if (settings_.dockDisplayMode == L"follow" && displayOverride_.empty() && displays_.size() > 1)
+        SetTimer(input_, kDisplayTimer, kPointerMs, nullptr);
+    else
+        KillTimer(input_, kDisplayTimer);
+}
+
+void Bar::RefreshDisplays(bool)
+{
+    auto before = std::exchange(displays_, {});
+    auto beforeDpis = std::exchange(displayDpis_, {});
+    ReadDisplays();
+    WatchDisplaysIfNeeded();
+    if (beforeDpis != displayDpis_ || !std::ranges::equal(before, displays_, [](const DisplayInfo& a, const DisplayInfo& b) {
+            return a.monitor == b.monitor && a.id == b.id && EqualRect(&a.bounds, &b.bounds) && a.primary == b.primary;
+        }))
+        ++displayGeneration_; // HMONITOR can be reused after a mode or adapter change.
+    summonMonitor_ = nullptr;
+    if (dragging_)
+        EndDrag(false);
+    Relayout();
+    UpdateCover();
+}
+
+void Bar::WatchDisplays()
+{
+    // Never move a Dock while its icons, a file drop, or a popup are being used.
+    if (!visible_ || dragging_ || pressedLeft_ || !fileHoverKey_.empty() || (GetAsyncKeyState(VK_LBUTTON) & 0x8000) || (keepShown && keepShown()) ||
+        (previewOpen && previewOpen())) {
+        summonMonitor_ = nullptr;
+        return;
+    }
+    POINT point{};
+    GetCursorPos(&point);
+    HMONITOR monitor = MonitorFromPoint(point, MONITOR_DEFAULTTONULL);
+    auto target = std::ranges::find_if(displays_, [&](const DisplayInfo& d) { return d.monitor == monitor; });
+    // The pointer must stay at the actual edge; screen crossings do not summon the Dock.
+    if (target == displays_.end() || monitor == hmonitor_ || !AtDisplayEdge(edge_, point, target->bounds)) {
+        summonMonitor_ = nullptr;
+        return;
+    }
+    const ULONGLONG now = GetTickCount64();
+    if (summonMonitor_ != monitor) {
+        summonMonitor_ = monitor;
+        summonAt_ = now;
+        return;
+    }
+    if (double(now - summonAt_) < settings_.dockDisplayDelay)
+        return;
+    activeDisplay_ = target->id;
+    summonMonitor_ = nullptr;
+    KillTimer(input_, kSlideTimer);
+    covered_ = revealed_ = tucked_ = slidOut_ = false;
+    scene_.tucked = false;
+    HideTooltip();
+    scene_.hoverKey.clear();
+    scene_.pointerX = scene_.pointerY = -1;
+    SetRegion(false);
+    Relayout();
+    UpdateCover();
+    // A summoned Dock stays visible long enough for the pointer to reach it.
+    revealed_ = true;
+    leftAt_ = now;
+    UpdateAutoHide();
+    UpdateNearWatch();
+    Raise();
+}
+
+void Bar::SetItems(std::vector<TaskItem> items)
+{
+    // Title changes (a browser switching tabs) only affect the tooltips; skip
+    // the relayout and the redraw unless something visible changed.
+    auto visible = [](const std::vector<TaskItem>& v) {
+        std::wstring sig;
+        for (const auto& t : v)
+            sig += t.key + L"|" + std::to_wstring(!t.windows.empty()) + std::to_wstring(t.active) + std::to_wstring(t.attention) + L"|" +
+                   std::to_wstring(t.iconVersion) + L"\n";
+        return sig;
+    };
+    bool same = visible(items) == visible(allItems_);
+    allItems_ = std::move(items);
+    if (filterTasks_)
+        same = false; // monitor membership can change without the group's window count changing
+    if (same) {
+        items_ = allItems_;
+        UpdateTooltips();
+    } else {
+        Relayout();
+    }
+}
+
+void Bar::SetVisible(bool visible)
+{
+    visible_ = visible;
+    Relayout();
+    UpdateNearWatch();
+}
+
+void Bar::Relayout()
+{
+    const std::wstring id = !displayOverride_.empty()              ? displayOverride_ :
+                            settings_.dockDisplayMode == L"fixed"  ? settings_.dockDisplay :
+                            settings_.dockDisplayMode == L"follow" ? activeDisplay_ :
+                                                                     std::wstring();
+    HMONITOR mon = ResolveDisplay(displays_, id);
+    MONITORINFO mi{sizeof(mi)};
+    GetMonitorInfoW(mon, &mi);
+    const bool primary = (mi.dwFlags & MONITORINFOF_PRIMARY) != 0;
+    filterTasks_ = FilterTasksOnDisplay(settings_.taskbarApps, primary);
+    items_ = TaskItemsForDisplay(allItems_, settings_.taskbarApps, primary, mon, GetAncestor(GetForegroundWindow(), GA_ROOTOWNER),
+                                 [](HWND window) { return MonitorFromWindow(window, MONITOR_DEFAULTTONEAREST); });
+    UINT dpiX = 96, dpiY = 96;
+    GetDpiForMonitor(mon, MDT_EFFECTIVE_DPI, &dpiX, &dpiY);
+    const float s = float(dpiX) / 96.f;
+    const Settings& st = settings_;
+    const BarEdge edge = ParseBarEdge(st.barEdge);
+    const bool edgeChanged = hmonitor_ && edge != edge_;
+    const bool monitorChanged = hmonitor_ && (hmonitor_ != mon || !EqualRect(&monitor_, &mi.rcMonitor) || scale_ != s || edgeChanged);
+    if (edgeChanged) {
+        if (dragging_) {
+            dragging_ = false;
+            dragKey_.clear();
+        }
+        HideTooltip();
+        near_.Reset();
+        nearX_ = -1;
+        nearRise_ = nearMagnify_ = false;
+        scene_.hoverKey.clear();
+        scene_.pressedKey.clear();
+        scene_.pointerX = scene_.pointerY = -1;
+        scene_.rippleMs = 0;
+        pressed_.clear();
+        pressedLeft_ = tracking_ = regionExtended_ = false;
+    }
+    edge_ = edge;
+    const EdgeFrame wa{edge_, mi.rcWork};
+    // Resolve per-display visibility without changing the user's individual switches.
+    const bool showRight = !st.taskbarRightPrimaryOnly || primary;
+    const bool showClock = showRight && st.showClock;
+    const bool showTray = showRight && st.showTray;
+    const bool showIme = showRight && st.imeStatus;
+    const bool showStatus = showRight && st.showStatus;
+    const bool showNotifications = showRight && st.showNotifications;
+    const bool showDesktop = showRight && st.showDesktop;
+
+    // Metrics (px). Every icon sits centred on a square plate (press and drag
+    // feedback); the plate has the same gap `v` to the top and bottom edge,
+    // and its corner radius is the bar's minus that gap, so plate and bar
+    // corners are concentric.
+    const int inset = Px(kInsetDip, s);
+    const int barH = Px(st.height, s);
+    const int icon = std::clamp(Px(st.iconSize, s), Px(12, s), barH - Px(16, s));
+    int plate = std::max(icon + Px(4, s), std::min(barH - Px(12, s), int(std::lround(icon * 1.55))));
+    int gap = std::max(Px(4, s), int(std::lround(icon * 0.18)));
+    const int sepGap = Px(8, s);
+    const float mag = float(std::clamp(st.magnify, 1.0, 2.0));
+
+    // Clock block sized for its widest possible text, or its two stacked lines on a side edge.
+    float timePx = float(barH) * 0.25f, datePx = float(barH) * 0.19f;
+    int clockW = 0;
+    if (showClock) {
+        float span = timePx * 1.22f + datePx * 1.25f;
+        if (!Vertical(edge_)) {
+            std::wstring time, date;
+            ClockStrings(time, date, st.showClockSeconds);
+            span = std::max(MeasureUiText(dwrite_.get(), WidestDigits(time), timePx, DWRITE_FONT_WEIGHT_SEMI_BOLD),
+                            MeasureUiText(dwrite_.get(), WidestDigits(date), datePx, DWRITE_FONT_WEIGHT_NORMAL));
+        }
+        clockW = int(std::ceil(span)) + Px(22, s);
+    }
+
+    // Left to right: [logo] [apps ... (overflow)] | [tray] [input method] [status] [clock] [bell].
+    // The logo, the overflow entry, the tray and the bell use the same plates
+    // as the apps; so does the status ring (battery or volume, Wi-Fi).
+    // The status entry as three icons (statusStyle) is wider than a plate by about an icon.
+    const int statusExtra = st.statusStyle == L"icons" ? int(std::lround(icon * 1.3f)) : 0;
+    // Show Desktop: a narrow slot at the bar's right end, a thin line in it, as the system taskbar's.
+    const int deskW = showDesktop ? std::max(Px(10, s), int(std::lround(icon * 0.45))) : 0;
+    const int rightCount = int(showTray) + int(showIme) + int(showStatus) + int(showNotifications) + int(clockW != 0) + int(showDesktop);
+    const int groupGap = rightCount ? sepGap : 0;
+    const int total = int(items_.size());
+    int n = total;
+    bool more = false;
+    auto padFor = [&](int p) { return (barH - p) / 2 + Px(4, s); }; // ends: plate gap plus a little air
+    auto contentWidth = [&](int count, int p, int g, bool overflow) {
+        int slots = count + (overflow ? 1 : 0);
+        int w = 2 * padFor(p) + p + 2 * g;               // logo and the air after it
+        w += slots ? slots * p + (slots - 1) * g : 0;    // apps
+        if (rightCount)
+            w += 2 * sepGap + p * (int(showTray) + int(showIme) + int(showStatus) + int(showNotifications)) + (showStatus ? statusExtra : 0) + clockW + deskW +
+                 (rightCount - 1) * g;
+        return std::max(w, barH * 2);
+    };
+    // The magnified bar stretches by up to (mag - 1) * range on top of its width.
+    auto stretchFor = [&](int p, int g) { return mag > 1.001f ? int(std::ceil((mag - 1) * float(p + g) * 2.3f)) : 0; };
+    const int screenW = int(wa.Along()) - 2 * inset;
+    const int maxW = std::max(barH * 2, std::min(Px(st.width, s), screenW - stretchFor(plate, gap)));
+    // Too many apps: tighten the gaps, then the plates; what still does not fit
+    // goes behind the overflow entry (never silently dropped).
+    while (n > 0 && contentWidth(n, plate, gap, false) > maxW && gap > Px(2, s))
+        --gap;
+    while (n > 0 && contentWidth(n, plate, gap, false) > maxW && plate > icon + Px(4, s))
+        --plate;
+    if (contentWidth(n, plate, gap, false) > maxW) {
+        more = true;
+        while (n > 0 && contentWidth(n, plate, gap, true) > maxW)
+            --n;
+    }
+    hidden_.clear();
+    for (int i = n; i < total; ++i)
+        hidden_.push_back(items_[size_t(i)].key);
+    // Never narrower than what is always there (logo, overflow, tray, status, clock, bell).
+    const int barW = std::max(st.autoWidth ? std::min(contentWidth(n, plate, gap, more), maxW) : maxW, std::min(contentWidth(0, plate, gap, more), screenW));
+    const int pad = padFor(plate);
+    const int statusW = plate + statusExtra;
+    const int v = (barH - plate) / 2;
+    const int pitch = plate + gap;
+    const int radius = std::min(Px(st.cornerRadius, s), std::min(barW, barH) / 2);
+
+    // Room in the windows around the shape: the shadow everywhere; at the
+    // sides half of the magnified stretch (the bar grows on both sides of the
+    // pointer); above, the raised glass and magnified or hopping icons.
+    const float range = float(pitch) * 2.3f;
+    const int stretch = stretchFor(plate, gap);
+    // The window keeps the width of the widest bar the settings allow, and
+    // the bar sits centred in it: when apps come and go only the shape
+    // changes, so its width and the icons can glide instead of the window
+    // jumping to a new size.
+    const int roomW = std::max(barW, maxW);
+    const int side = inset + (stretch + 1) / 2 + (stretch ? Px(2, s) : 0);
+    const int insetX = side + (roomW - barW) / 2;
+    const int lift = std::max(int(std::ceil(float(icon) * (mag - 1))), int(std::ceil(float(icon) * 0.55f)));
+    const int glassRise = st.hoverRise ? int(std::ceil(float(icon) * (mag - 1))) : 0;
+    const int rise = std::max(glassRise, lift - (barH - icon) / 2 + Px(6, s));
+    // Keep shadow room above the raised glass, including at maximum magnification.
+    const int insetTop = std::max(inset + glassRise, rise);
+
+    const int winW = roomW + 2 * side, winH = barH + insetTop + inset;
+    const int x = (int(wa.Along()) - winW) / 2;
+    // "Always shown": the bar keeps its strip of the screen as an app bar (as the system taskbar
+    // does), so maximized windows end before it (#40). Its own strip is not part of where it sits.
+    const int reserve = visible_ && st.bar && st.autoHide == L"never" ? Px(st.margin, s) + barH : 0;
+    const int base = int(wa.Across()) + (appBar_ && appBarMonitor_ == mon && appBarEdge_ == edge_ ? appBarReserved_ : 0);
+    const int y = base - Px(st.margin, s) - barH - insetTop;
+    const RECT win = wa.ToArea(RECT{x, y, x + winW, y + winH});
+
+    // Display order: during a drag the dragged app leaves its slot and the
+    // others close up around the insertion point.
+    std::vector<int> order(size_t(std::max(n, 0)));
+    for (int i = 0; i < n; ++i)
+        order[size_t(i)] = i;
+    int dragIndex = -1;
+    if (dragging_) {
+        for (int i = 0; i < n; ++i)
+            if (items_[size_t(i)].key == dragKey_)
+                dragIndex = i;
+        if (dragIndex < 0) {
+            dragging_ = false; // the app went away mid-drag
+            dragKey_.clear();
+        } else {
+            dragInsert_ = std::clamp(dragInsert_, 0, n - 1);
+            order.erase(order.begin() + dragIndex);
+            order.insert(order.begin() + dragInsert_, dragIndex);
+        }
+    }
+
+    // Launch feedback is one 480 ms hop.
+    const double now = ClockMs();
+    for (auto it = bounces_.begin(); it != bounces_.end();)
+        it = now - it->second > 480 ? bounces_.erase(it) : std::next(it);
+
+    // Scene in layout coordinates.
+    const D2D1_POINT_2F shift =
+        hmonitor_ && !edgeChanged ? EdgeFrame{edge_, win}.FromArea(EdgeFrame{edge_, window_}.ToArea(D2D1_POINT_2F{0, 0})) : D2D1_POINT_2F{};
+    BarScene scene;
+    scene.edge = edge_;
+    scene.scale = s;
+    scene.bar = D2D1::RectF(float(insetX), float(insetTop), float(insetX + barW), float(insetTop + barH));
+    scene.windowW = float(winW);
+    scene.windowH = float(winH);
+    scene.tucked = tucked_;
+    scene.plateRadius = float(std::clamp(radius - v, Px(3, s), plate / 2));
+    scene.hoverKey = dragging_ ? std::wstring() : scene_.hoverKey;
+    scene.pressedKey = scene_.pressedKey;
+    scene.dragKey = dragging_ ? dragKey_ : std::wstring();
+    scene.magnify = mag;
+    scene.magnifyRange = range;
+    scene.magnifyLift = st.hoverRise ? float(icon) * (mag - 1) : 0;
+    scene.earlyRise = st.hoverRise && st.riseNear;
+    scene.earlyMagnify = st.magnifyNear;
+    // Keep the pointer and the ripple; only the geometry changes. The pointer
+    // moves with the window if it was rebuilt at another place.
+    scene.pointerX = scene_.pointerX < 0 ? -1 : scene_.pointerX + shift.x;
+    scene.pointerY = scene_.pointerX < 0 ? -1 : scene_.pointerY + shift.y;
+    // The pointer just above the bar: the glass and/or the icons answer it (hoverRise,
+    // riseNear, magnifyNear).
+    scene.nearX = nearX_ < 0 ? -1 : nearX_ + shift.x;
+    scene.nearRise = nearRise_;
+    scene.nearMagnify = nearMagnify_;
+    scene.alertLight = st.attentionLight;
+    scene.alertBounce = st.attentionBounce;
+    scene.rippleX = scene_.rippleX + shift.x;
+    scene.rippleY = scene_.rippleY + shift.y;
+    scene.rippleMs = scene_.rippleMs;
+    hits_.clear();
+    // Hit cells reach up to the window's top: magnified icons rise above the
+    // shape, and the input region then covers that room too.
+    const int hitTop = 0, hitBottom = insetTop + barH;
+    const float plateTop = float(insetTop + v);
+    const float iconTop = float(insetTop) + float(barH - icon) / 2;
+    auto entry = [&](const wchar_t* key, int left, const wchar_t* glyph) {
+        SceneItem it;
+        it.key = key;
+        it.plate = D2D1::RectF(float(left), plateTop, float(left + plate), plateTop + float(plate));
+        float il = float(left) + float(plate - icon) / 2;
+        it.icon = D2D1::RectF(il, iconTop, il + float(icon), iconTop + float(icon));
+        it.glyph = glyph;
+        return it;
+    };
+    // Disabled entries consume neither space nor hit targets.
+    const int startLeft = insetX + pad;
+    int cursor = insetX + barW - pad;
+    auto rightSlot = [&](int width, bool enabled) {
+        if (!enabled)
+            return cursor;
+        cursor -= width;
+        const int left = cursor;
+        cursor -= gap;
+        return left;
+    };
+    const int deskLeft = rightSlot(deskW, showDesktop);
+    const int bellLeft = rightSlot(plate, showNotifications);
+    const int clockLeft = rightSlot(clockW, clockW != 0), clockRight = clockLeft + clockW;
+    const int statusLeft = rightSlot(statusW, showStatus), statusRight = statusLeft + statusW;
+    const int imeLeft = rightSlot(plate, showIme);
+    const int trayLeft = rightSlot(plate, showTray);
+    const int rightLeft = rightCount ? cursor + gap : insetX + barW - pad;
+    const int appsMin = startLeft + plate + 2 * gap;
+    const int slots = n + (more ? 1 : 0);
+    const int appsW = slots ? slots * plate + (slots - 1) * gap : 0;
+    // Apps are centred in the space between the logo and the separator (matters when autoWidth is off).
+    const int appsLeft = appsMin + std::max(0, (rightLeft - 2 * groupGap - appsMin - appsW) / 2);
+    scene.extras.push_back(entry(kStartKey, startLeft, L""));
+    hits_.push_back({kStartKey, RECT{insetX, hitTop, appsMin - gap / 2, hitBottom}});
+    // Icons are rendered for their magnified size, so they stay sharp when they grow.
+    const int iconPx = int(std::lround(float(icon) * mag));
+    std::map<std::wstring, CachedIcon> keep;
+    for (int k = 0; k < n; ++k) {
+        const int i = order[size_t(k)];
+        const TaskItem& t = items_[size_t(i)];
+        SceneItem it;
+        it.key = t.key;
+        float left = float(appsLeft + k * pitch);
+        if (i == dragIndex) // follows the pointer, kept within the app strip
+            left = std::clamp(float(dragX_ - grabDx_) - float(plate) / 2, float(appsLeft - gap), float(appsLeft + n * pitch - gap - plate + gap));
+        it.plate = D2D1::RectF(left, plateTop, left + float(plate), plateTop + float(plate));
+        float iconLeft = left + float(plate - icon) / 2;
+        it.icon = D2D1::RectF(iconLeft, iconTop, iconLeft + float(icon), iconTop + float(icon));
+        it.running = !t.windows.empty();
+        it.active = t.active;
+        it.attention = t.attention;
+        if (auto b = bounces_.find(t.key); b != bounces_.end()) {
+            it.bounceMs = b->second;
+        }
+        // Icons are cached per key until the model reports a new version.
+        CachedIcon c;
+        if (auto f = icons_.find(t.key); f != icons_.end() && f->second.version == t.iconVersion && f->second.px == iconPx && f->second.image)
+            c = f->second;
+        else if (iconProvider) {
+            IconImage img = iconProvider(t.key, iconPx);
+            if (!img.Empty())
+                c = {t.iconVersion, iconPx, nextIconId_++, std::make_shared<const IconImage>(std::move(img))};
+        }
+        if (c.image) {
+            it.image = c.image;
+            it.imageId = c.id;
+            keep[t.key] = c;
+        }
+        scene.items.push_back(std::move(it));
+        // Hit cells split the gaps.
+        int hl = appsLeft + k * pitch - gap / 2;
+        int hr = appsLeft + k * pitch + plate + (gap - gap / 2);
+        hits_.push_back({t.key, RECT{hl, hitTop, hr, hitBottom}});
+    }
+    if (more) {
+        int left = appsLeft + n * pitch;
+        scene.extras.push_back(entry(kMoreKey, left, L"\uE712"));
+        hits_.push_back({kMoreKey, RECT{left - gap / 2, hitTop, left + plate + gap / 2, hitBottom}});
+    }
+    icons_ = std::move(keep);
+    appsLeft_ = appsLeft;
+    pitch_ = pitch;
+    plate_ = plate;
+    shown_ = n;
+    scene.separatorX = rightCount ? float(rightLeft - sepGap) : -1;
+    if (showTray) {
+        scene.extras.push_back(entry(kTrayKey, trayLeft, L"\uE70E"));
+        hits_.push_back({kTrayKey, RECT{trayLeft - gap / 2, hitTop, trayLeft + plate + gap / 2, hitBottom}});
+    }
+    if (showIme) {
+        scene.extras.push_back(entry(kImeKey, imeLeft, L""));
+        hits_.push_back({kImeKey, RECT{imeLeft - gap / 2, hitTop, imeLeft + plate + gap / 2, hitBottom}});
+    }
+    if (showStatus) {
+        SceneItem status = entry(kStatusKey, statusLeft, L"");
+        status.plate = D2D1::RectF(float(statusLeft), plateTop, float(statusRight), plateTop + float(plate));
+        status.icon = D2D1::RectF(float(statusLeft), iconTop, float(statusRight), iconTop + float(icon));
+        scene.extras.push_back(std::move(status));
+        hits_.push_back({kStatusKey, RECT{statusLeft - gap / 2, hitTop, statusRight + gap / 2, hitBottom}});
+    }
+    scene.status = status_;
+    scene.statusIcons = st.statusStyle == L"icons";
+    if (clockW) {
+        scene.clock = D2D1::RectF(float(clockLeft), plateTop, float(clockRight), plateTop + float(plate));
+        scene.timePx = timePx;
+        scene.datePx = datePx;
+        hits_.push_back({kClockKey, RECT{clockLeft - gap / 2, hitTop, clockRight + gap / 2, hitBottom}});
+    }
+    if (showNotifications) {
+        SceneItem bell = entry(kNotifyKey, bellLeft, L"\uEA8F");
+        bell.badge = unread_;
+        scene.extras.push_back(std::move(bell));
+        hits_.push_back({kNotifyKey, RECT{bellLeft - gap / 2, hitTop, showDesktop ? deskLeft - gap / 2 : insetX + barW, hitBottom}});
+    }
+    if (showDesktop) {
+        SceneItem desk = entry(kDesktopKey, deskLeft, L"");
+        desk.plate = D2D1::RectF(float(deskLeft), plateTop, float(deskLeft + deskW), plateTop + float(plate));
+        desk.icon = D2D1::RectF(float(deskLeft), iconTop, float(deskLeft + deskW), iconTop + float(icon));
+        scene.extras.push_back(std::move(desk));
+        hits_.push_back({kDesktopKey, RECT{deskLeft - gap / 2, hitTop, insetX + barW, hitBottom}}); // to the bar's very end
+    }
+    if (!scene.hoverKey.empty() && std::ranges::none_of(hits_, [&](const Hit& h) { return h.key == scene.hoverKey; }))
+        scene.hoverKey.clear(); // the hovered app went away
+    // The input method glyph is the foreground window's, not layout: it rides through a rebuild.
+    scene.imeGlyph = scene_.imeGlyph;
+    scene.imePrevGlyph = scene_.imePrevGlyph;
+    scene.imeMs = scene_.imeMs;
+    scene_ = std::move(scene);
+
+    // The window only changes when the bar's size does (not on every drag move).
+    const bool shown = visible_ && !slidOut_;
+    if (!dragging_ || !EqualRect(&win, &applied_) || shown != appliedVisible_) {
+        SetWindowPos(visual_, HWND_TOPMOST, win.left, win.top, win.right - win.left, win.bottom - win.top,
+                     SWP_NOACTIVATE | (shown ? SWP_SHOWWINDOW : SWP_HIDEWINDOW));
+        // Input window right below the visual one, region = the rounded shape.
+        SetWindowPos(input_, visual_, win.left, win.top, win.right - win.left, win.bottom - win.top,
+                     SWP_NOACTIVATE | (shown ? SWP_SHOWWINDOW : SWP_HIDEWINDOW));
+        applied_ = win;
+        appliedVisible_ = shown;
+    }
+    window_ = win;
+    monitor_ = mi.rcMonitor;
+    hmonitor_ = mon;
+    UpdateAppBar(mon, mi.rcMonitor, reserve);
+    scale_ = s;
+    insetX_ = insetX;
+    insetTop_ = insetTop;
+    rise_ = rise;
+    radius_ = radius;
+    SetRegion(regionExtended_);
+    UpdateTooltips();
+    Publish();
+    if (monitorChanged)
+        onMonitorChanged();
+    onItemsChanged();
+}
+
+void Bar::SetRegion(bool extended)
+{
+    regionExtended_ = extended;
+    const int barW = int(scene_.bar.right - scene_.bar.left), barH = int(scene_.bar.bottom - scene_.bar.top);
+    const int ext = extended ? rise_ : 0;
+    if (appliedRgn_[0] == barW && appliedRgn_[1] == barH && appliedRgn_[2] == radius_ && appliedRgn_[3] == insetX_ && appliedRgn_[4] == insetTop_ &&
+        appliedRgn_[5] == ext && appliedRgn_[6] == int(edge_))
+        return;
+    RECT cr{};
+    GetClientRect(input_, &cr);
+    const EdgeFrame frame{edge_, cr};
+    const RECT shape = frame.ToArea(RECT{insetX_, insetTop_, insetX_ + barW, insetTop_ + barH});
+    HRGN rgn = ContinuousRegion(RECT{shape.left, shape.top, shape.right + 1, shape.bottom + 1}, radius_);
+    if (ext > 0) {
+        // While the pointer is on the bar, the room on its inner side belongs to the
+        // raised glass and icons (clicks go to the icon under the pointer).
+        const RECT inner = frame.ToArea(RECT{insetX_ + radius_ / 2, insetTop_ - ext, insetX_ + barW - radius_ / 2, insetTop_ + radius_});
+        HRGN top = CreateRectRgn(inner.left, inner.top, inner.right, inner.bottom);
+        CombineRgn(rgn, rgn, top, RGN_OR);
+        DeleteObject(top);
+    }
+    if (!SetWindowRgn(input_, rgn, FALSE))
+        DeleteObject(rgn);
+    appliedRgn_[0] = barW;
+    appliedRgn_[1] = barH;
+    appliedRgn_[2] = radius_;
+    appliedRgn_[3] = insetX_;
+    appliedRgn_[4] = insetTop_;
+    appliedRgn_[5] = ext;
+    appliedRgn_[6] = int(edge_);
+}
+
+void Bar::ActivateIndex(int index)
+{
+    if (index < 0 || index >= int(items_.size()) || !onActivate)
+        return;
+    const TaskItem& t = items_[size_t(index)];
+    Log(L"bar: app %d by the keyboard (%s)", index + 1, t.name.c_str());
+    if (t.windows.empty())
+        Bounce(t.key);
+    onActivate(std::wstring(t.key)); // the copy: activating may change the items
+}
+
+void Bar::Bounce(const std::wstring& key)
+{
+    Log(L"bar: bounce %s", key.c_str());
+    double now = ClockMs();
+    bounces_[key] = now;
+    for (auto& it : scene_.items)
+        if (it.key == key) {
+            it.bounceMs = now;
+        }
+    Publish();
+}
+
+void Bar::SetPanel(const GlassPanel& panel)
+{
+    if (panel.visible)
+        panels_[panel.hwnd] = panel;
+    else
+        panels_.erase(panel.hwnd);
+    Publish(false);
+}
+
+void CALLBACK Bar::WinEvent(HWINEVENTHOOK hook, DWORD event, HWND hwnd, LONG idObject, LONG idChild, DWORD, DWORD)
+{
+    auto found = g_guards.find(hook);
+    if (found == g_guards.end() || idObject != OBJID_WINDOW || idChild != CHILDID_SELF)
+        return;
+    Bar* bar = found->second;
+    if (event == EVENT_OBJECT_LOCATIONCHANGE) {
+        if (bar->filterTasks_ && !bar->layoutPending_) {
+            const bool known =
+                std::ranges::any_of(bar->allItems_, [&](const TaskItem& item) { return std::ranges::find(item.windows, hwnd) != item.windows.end(); });
+            const bool shown =
+                std::ranges::any_of(bar->items_, [&](const TaskItem& item) { return std::ranges::find(item.windows, hwnd) != item.windows.end(); });
+            if (known && shown != (MonitorFromWindow(hwnd, MONITOR_DEFAULTTONEAREST) == bar->hmonitor_)) {
+                bar->layoutPending_ = true;
+                PostMessageW(bar->input_, WM_BAR_LAYOUT, 0, 0);
+            }
+        }
+        // Windows move many times a second while dragged: the windows of the monitor are walked
+        // once for each burst, not for every step.
+        if ((hwnd == GetForegroundWindow() || MonitorFromWindow(hwnd, MONITOR_DEFAULTTONULL) == bar->hmonitor_) && !bar->coverPending_) {
+            bar->coverPending_ = true;
+            SetTimer(bar->input_, kCoverTimer, kCoverMs, nullptr);
+        }
+        return;
+    }
+    if (bar->settings_.taskbarApps != L"all")
+        bar->Relayout();
+    bar->GuardStacking(event == EVENT_SYSTEM_FOREGROUND ? L"foreground" : L"move");
+}
+
+// Focus may be on another screen; use this monitor's app Z-order instead.
+bool Bar::MonitorCoveredByApp() const
+{
+    MONITORINFO mi{sizeof(mi)};
+    GetMonitorInfoW(hmonitor_, &mi);
+    std::vector<RECT> tiles; // snapped windows in front, filling the screen together
+    for (HWND window = GetTopWindow(nullptr); window; window = GetWindow(window, GW_HWNDNEXT)) {
+        if (!IsWindowVisible(window) || IsIconic(window))
+            continue;
+        DWORD pid = 0;
+        GetWindowThreadProcessId(window, &pid);
+        const HMONITOR windowMonitor = MonitorFromWindow(window, MONITOR_DEFAULTTONEAREST);
+        if (pid == GetCurrentProcessId() || windowMonitor != hmonitor_)
+            continue;
+        const LONG_PTR ex = GetWindowLongPtrW(window, GWL_EXSTYLE);
+        if (!(ex & WS_EX_APPWINDOW) && ((ex & (WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE)) || GetWindow(window, GW_OWNER)))
+            continue; // transient UI must not reveal a bar over a full-screen app
+        if ((ex & WS_EX_TRANSPARENT) && (ex & WS_EX_LAYERED))
+            continue;
+        BOOL cloaked = FALSE;
+        DwmGetWindowAttribute(window, DWMWA_CLOAKED, &cloaked, sizeof(cloaked));
+        if (cloaked)
+            continue; // windows on another virtual desktop do not cover this one
+        wchar_t cls[64] = {};
+        GetClassNameW(window, cls, 64);
+        if (wcscmp(cls, L"Shell_TrayWnd") == 0 || wcscmp(cls, L"Shell_SecondaryTrayWnd") == 0 || wcscmp(cls, L"Progman") == 0 || wcscmp(cls, L"WorkerW") == 0)
+            continue;
+        RECT frame{};
+        if (!GetWindowRect(window, &frame))
+            continue;
+        if (auto covered = WindowCoverOnMonitor(windowMonitor, frame, IsZoomed(window) != FALSE, hmonitor_, monitor_)) {
+            if (*covered)
+                return true;
+            // Snapped side by side, the windows fill the screen as a maximized one does.
+            RECT bounds = frame; // without the invisible resize borders
+            DwmGetWindowAttribute(window, DWMWA_EXTENDED_FRAME_BOUNDS, &bounds, sizeof(bounds));
+            const int slack = MulDiv(8, int(GetDpiForWindow(window)), 96);
+            if (IsTile(bounds, mi.rcWork, slack)) {
+                tiles.push_back(bounds);
+                if (TilesFill(tiles, mi.rcWork, slack))
+                    return true;
+            }
+            // A smaller window in front (a mail opened from a chat, a dialog, a float) does not
+            // decide: what fills the screen behind it still does.
+        }
+    }
+    return false;
+}
+
+void Bar::UpdateCover()
+{
+    // Apply the hide mode independently on each display.
+    const std::wstring& mode = settings_.autoHide;
+    bool covered = mode == L"always" || (mode != L"never" && MonitorCoveredByApp());
+    if (covered == covered_)
+        return;
+    covered_ = covered;
+    // Maximizing with the pointer on the bar keeps it up until the pointer leaves.
+    POINT p{};
+    GetCursorPos(&p);
+    RECT zone = EdgeZone();
+    revealed_ = covered && !slidOut_ && PtInRect(&zone, p) && !FullScreenInFront(hmonitor_);
+    leftAt_ = 0;
+    if (mode == L"fullscreen")
+        Log(L"bar: monitor %p %s", hmonitor_, covered ? L"covered by its top app: auto-hide" : L"not covered by its top app");
+    else
+        Log(L"bar: auto-hide %s (%s)", covered ? L"always" : L"never", mode.c_str());
+    if (covered)
+        SetTimer(input_, kPointerTimer, kPointerMs, nullptr);
+    else
+        KillTimer(input_, kPointerTimer);
+    UpdateAutoHide();
+}
+
+void Bar::Reveal()
+{
+    if (!covered_ || revealed_ || !visible_ || FullScreenInFront(hmonitor_))
+        return;
+    revealed_ = true;
+    leftAt_ = 0;
+    UpdateAutoHide();
+}
+
+void Bar::UpdateAutoHide()
+{
+    bool tuck = covered_ && !revealed_ && visible_;
+    if (tuck == tucked_)
+        return;
+    tucked_ = tuck;
+    scene_.tucked = tuck;
+    if (tuck) {
+        HideTooltip();
+        SetRegion(false);
+        // The painter's slide out takes kSlideOutMs; then the windows go.
+        SetTimer(input_, kSlideTimer, UINT(BarPainter::kSlideOutMs) + 60, nullptr);
+        UpdateNearWatch();
+        Publish();
+        return;
+    }
+    KillTimer(input_, kSlideTimer);
+    if (slidOut_) {
+        slidOut_ = false;
+        Relayout(); // shows the windows; the painter slides the bar up
+    } else {
+        Publish();
+    }
+    UpdateNearWatch();
+    Raise();
+}
+
+void Bar::WatchPointer()
+{
+    if (!covered_) {
+        KillTimer(input_, kPointerTimer);
+        return;
+    }
+    POINT p{};
+    GetCursorPos(&p);
+    RECT zone = EdgeZone();
+    if (!revealed_) {
+        // The screen's edge, along the bar.
+        if (AtDisplayEdge(edge_, p, monitor_) && PtInRect(&zone, p) && !FullScreenInFront(hmonitor_)) {
+            revealed_ = true;
+            leftAt_ = 0;
+            UpdateAutoHide();
+        }
+        return;
+    }
+    if (PtInRect(&zone, p) || dragging_ || (keepShown && keepShown())) {
+        leftAt_ = 0;
+        return;
+    }
+    ULONGLONG now = GetTickCount64();
+    if (!leftAt_)
+        leftAt_ = now;
+    else if (now - leftAt_ >= kLeaveMs) {
+        revealed_ = false;
+        leftAt_ = 0;
+        UpdateAutoHide();
+    }
+}
+
+// The pointer just above a visible bar: the hover wave answers it before the pointer
+// arrives — the glass rises to it (hoverRise and riseNear) and/or the icons magnify
+// (magnifyNear), each on its own. Moves and timer ticks use the same current cursor
+// sample, so its Y and near flags reach the render thread together.
+void Bar::WatchNear(bool publish)
+{
+    const bool available = visible_ && !tucked_ && !slidOut_;
+    const bool watching = available && scene_.magnify > 1.001f && (scene_.earlyRise || scene_.earlyMagnify);
+    POINT p{};
+    if ((watching || scene_.pointerX >= 0) && (!GetCursorPos(&p) || !ScreenToClient(input_, &p)))
+        return;
+    p = LayoutPoint(p);
+    const bool changed = near_.Sample(scene_, {float(p.x), float(p.y)}, settings_.nearEnter, settings_.nearLeave, available);
+    nearX_ = scene_.nearX;
+    nearRise_ = scene_.nearRise;
+    nearMagnify_ = scene_.nearMagnify;
+    if (changed && publish)
+        Publish();
+}
+
+// Watched while the bar is on screen and something answers the pointer above it; a tick
+// steps aside for a tucked bar by itself.
+void Bar::UpdateNearWatch()
+{
+    const bool wanted = settings_.magnify > 1.001f && ((settings_.hoverRise && settings_.riseNear) || settings_.magnifyNear);
+    if (visible_ && !tucked_ && !slidOut_ && wanted)
+        SetTimer(input_, kNearTimer, kNearMs, nullptr);
+    else {
+        KillTimer(input_, kNearTimer);
+        near_.Reset();
+        if (nearX_ >= 0 || nearRise_ || nearMagnify_) {
+            nearX_ = -1;
+            nearRise_ = nearMagnify_ = false;
+            scene_.nearX = -1;
+            scene_.nearRise = scene_.nearMagnify = false;
+            Publish();
+        }
+    }
+}
+
+void Bar::Raise()
+{
+    SetWindowPos(visual_, HWND_TOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE | SWP_NOOWNERZORDER);
+    SetWindowPos(input_, visual_, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE | SWP_NOOWNERZORDER);
+}
+
+// Keeps the bar on top: hidden behind a full-screen app, below a revealed
+// system taskbar that overlaps it while the user is using that taskbar (the
+// pointer on it outside the bar, or the keyboard in it), and otherwise raised again when
+// another topmost window covers it. A taskbar held up only by an app's
+// flashing button does not push the bar down (the bar shows the app's
+// attention itself). A window that keeps pushing itself over the bar
+// wins after a few rounds, so two always-on-top windows never fight.
+void Bar::GuardStacking(const wchar_t* why)
+{
+    UpdateCover();
+    if (!visible_ || tucked_ || dragging_)
+        return;
+    RECT bar = BarRect(), r{}, overlap{}, trayRect{};
+    HWND tray = ShellTaskbar();
+    bool trayOver = tray && IsWindowVisible(tray) && GetWindowRect(tray, &trayRect) && IntersectRect(&overlap, &trayRect, &bar) &&
+                    overlap.right - overlap.left > 2 && overlap.bottom - overlap.top > 2;
+    bool usingTray = false;
+    POINT cur{};
+    wchar_t fgCls[64] = {};
+    if (trayOver) {
+        GetCursorPos(&cur);
+        HWND fg = GetForegroundWindow();
+        GetClassNameW(fg, fgCls, 64);
+        // The pointer counts on the system taskbar outside the bar: over the bar it is meant for the bar.
+        RECT ours = EdgeZone();
+        usingTray = (PtInRect(&trayRect, cur) && !PtInRect(&ours, cur)) || fg == tray || wcscmp(fgCls, L"TopLevelWindowForOverflowXamlIsland") == 0 ||
+                    wcscmp(fgCls, L"Shell_TrayWnd") == 0;
+    }
+    bool trayAbove = false;
+    HWND cover = nullptr;
+    for (HWND w = GetTopWindow(nullptr); w && w != visual_; w = GetWindow(w, GW_HWNDNEXT)) {
+        if (w == tray) {
+            trayAbove = true;
+            continue;
+        }
+        if (w == input_ || !IsWindowVisible(w))
+            continue;
+        DWORD pid = 0;
+        GetWindowThreadProcessId(w, &pid);
+        if (pid == GetCurrentProcessId())
+            continue;
+        if (!(GetWindowLongW(w, GWL_EXSTYLE) & WS_EX_TOPMOST)) {
+            cover = w; // the bar has lost its topmost place
+            break;
+        }
+        if (GetWindowRect(w, &r) && IntersectRect(&overlap, &r, &bar) && !IgnoredCover(w)) {
+            cover = w;
+            break;
+        }
+    }
+    if (trayOver && usingTray) {
+        // The revealed taskbar stays in front; it slides away again by itself.
+        if (!trayAbove) {
+            SetWindowPos(visual_, tray, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE | SWP_NOOWNERZORDER);
+            SetWindowPos(input_, visual_, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE | SWP_NOOWNERZORDER);
+            if (!belowTray_)
+                Log(L"bar: below the revealed system taskbar (pointer %ld,%ld, foreground %s)", cur.x, cur.y, fgCls);
+        }
+        if (!belowTray_) // the system taskbar gets the pointer now: watch for it coming back to the bar
+            SetTimer(input_, kGuardTimer, kGuardFastMs, nullptr);
+        belowTray_ = true;
+        return;
+    }
+    if (trayOver && trayAbove) {
+        // Up without the user (an app's button flashing): the bar stays in front.
+        Raise();
+        if (belowTray_)
+            SetTimer(input_, kGuardTimer, kGuardMs, nullptr);
+        if (belowTray_ || !trayHeldUp_)
+            Log(L"bar: over the system taskbar, which an app holds up");
+        belowTray_ = false;
+        trayHeldUp_ = true;
+        return;
+    }
+    if (belowTray_) {
+        Log(L"bar: the system taskbar went down again");
+        SetTimer(input_, kGuardTimer, kGuardMs, nullptr);
+    }
+    belowTray_ = false;
+    trayHeldUp_ = trayOver;
+    if (!cover)
+        return;
+    ULONGLONG now = GetTickCount64();
+    for (auto it = raises_.begin(); it != raises_.end();)
+        it = now - it->second.second > 10000 || !IsWindow(it->first) ? raises_.erase(it) : std::next(it);
+    auto& count = raises_.try_emplace(cover, 0, now).first->second;
+    if (++count.first > 4) {
+        if (count.first == 5) {
+            wchar_t cls[64] = {};
+            GetClassNameW(cover, cls, 64);
+            Log(L"bar: %s keeps covering the bar; leaving it in front", cls);
+        }
+        return;
+    }
+    Raise();
+    if (cover != lastCover_) {
+        wchar_t cls[64] = {};
+        GetClassNameW(cover, cls, 64);
+        Log(L"bar: raised over %s (%s)", cls, why ? why : L"check");
+        lastCover_ = cover;
+    }
+}
+
+void Bar::SetStatus(const SystemStatus& status)
+{
+    if (status == status_)
+        return;
+    status_ = status;
+    scene_.status = status;
+    Publish();
+    UpdateTooltips();
+}
+
+void Bar::SetIme(const std::wstring& glyph)
+{
+    if (glyph == scene_.imeGlyph)
+        return;
+    scene_.imePrevGlyph = scene_.imeGlyph;
+    scene_.imeGlyph = glyph;
+    scene_.imeMs = ClockMs();
+    Publish(); // content only: the glass does not change
+}
+
+void Bar::SetUnread(int count)
+{
+    if (count == unread_)
+        return;
+    unread_ = count;
+    Relayout();
+}
+
+RECT Bar::EntryRect(const std::wstring& key) const
+{
+    const EdgeFrame frame{edge_, window_};
+    auto rect = [&](const D2D1_RECT_F& r) { return frame.ToArea(RECT{LONG(r.left), LONG(r.top), LONG(r.right), LONG(r.bottom)}); };
+    for (const auto& it : scene_.extras)
+        if (it.key == key)
+            return rect(it.plate);
+    for (const auto& it : scene_.items)
+        if (it.key == key)
+            return rect(it.plate);
+    if (key == kClockKey)
+        return rect(scene_.clock);
+    // Toasts still have an anchor when their taskbar entry is hidden.
+    const LONG h = LONG(scene_.bar.bottom - scene_.bar.top);
+    return frame.ToArea(RECT{LONG(scene_.bar.right) - h, LONG(scene_.bar.top), LONG(scene_.bar.right), LONG(scene_.bar.bottom)});
+}
+
+RECT Bar::BarRect() const
+{
+    return EdgeFrame{edge_, window_}.ToArea(RECT{LONG(scene_.bar.left), LONG(scene_.bar.top), LONG(scene_.bar.right), LONG(scene_.bar.bottom)});
+}
+
+std::wstring Bar::TooltipText(const std::wstring& key) const
+{
+    if (key == kStartKey)
+        return Tr(L"Start");
+    if (key == kNotifyKey)
+        return unread_ ? TrFormat(L"%d unread notifications", int(unread_)) : Tr(L"Notifications");
+    if (key == kTrayKey)
+        return Tr(L"Tray");
+    if (key == kImeKey)
+        return Tr(L"Input method");
+    if (key == kDesktopKey)
+        return Tr(L"Show Desktop");
+    if (key == kStatusKey) {
+        const SystemStatus& st = status_;
+        std::wstring net;
+        if (!st.connected)
+            net = Tr(L"No network");
+        else if (st.wifi)
+            net = TrFormat(L"Wi-Fi %s · signal %d%%", st.network.c_str(), st.signal);
+        else
+            net = st.network;
+        std::wstring more;
+        if (st.battery)
+            more = st.charging ? TrFormat(L"\nBattery %d%% · plugged in", st.batteryPercent) : TrFormat(L"\nBattery %d%%", st.batteryPercent);
+        if (st.audio)
+            more += st.muted ? Tr(L"\nMuted") : TrFormat(L"\nVolume %d%%", st.volume);
+        return net + more;
+    }
+    if (key == kMoreKey)
+        return TrFormat(L"%d more apps", int(hidden_.size()));
+    if (key == kClockKey) {
+        wchar_t buf[128] = {};
+        GetDateFormatEx(LOCALE_NAME_USER_DEFAULT, DATE_LONGDATE, nullptr, nullptr, buf, 128, nullptr);
+        return buf;
+    }
+    for (const auto& t : items_)
+        if (t.key == key)
+            return t.windows.size() > 1 ? TrFormat(L"%s · %d windows", t.name.c_str(), int(t.windows.size())) : t.name;
+    return {};
+}
+
+void Bar::ShowTooltip()
+{
+    const std::wstring& key = scene_.hoverKey;
+    auto hit = std::ranges::find_if(hits_, [&](const Hit& h) { return h.key == key; });
+    const int rise = scene_.magnify > 1.001f ? rise_ : 0;
+    const POINT tip =
+        hit != hits_.end() ? EdgeFrame{edge_, window_}.ToArea(POINT{(hit->rect.left + hit->rect.right) / 2, int(scene_.bar.top) - rise}) : POINT{};
+    // An app with windows: its windows, previewed, instead of the tooltip (as the Windows taskbar).
+    if (onPreview && hit != hits_.end() && !IsEntry(key)) {
+        auto item = std::ranges::find_if(items_, [&](const TaskItem& t) { return t.key == key; });
+        if (item != items_.end() && !item->windows.empty()) {
+            tooltip_->Hide(false);
+            previewShown_ = true;
+            onPreview(key, item->windows, tip);
+            return;
+        }
+    }
+    if (previewShown_) { // its last window went: back to the tooltip
+        previewShown_ = false;
+        if (onPreviewClose)
+            onPreviewClose();
+    }
+    std::wstring text = TooltipText(key);
+    if (hit == hits_.end() || text.empty()) {
+        tooltip_->Hide(false);
+        return;
+    }
+    MONITORINFO mi{sizeof(mi)};
+    GetMonitorInfoW(hmonitor_, &mi);
+    int margin = Px(8, scale_);
+    const float maxTextW = std::min(320.f, float(mi.rcWork.right - mi.rcWork.left - 2 * margin) / scale_ - 2 * kTooltipPadX);
+    winrt::com_ptr<IDWriteTextFormat> format;
+    winrt::com_ptr<IDWriteTextLayout> layout;
+    // UiTextFormat/UiTextLayout take physical pixels: the tooltip's size is
+    // DIP, so measure at the monitor's scale and divide the metrics back.
+    if (FAILED(UiTextFormat(dwrite_.get(), kTooltipFont * scale_, DWRITE_FONT_WEIGHT_MEDIUM, format.put())))
+        return;
+    format->SetWordWrapping(DWRITE_WORD_WRAPPING_NO_WRAP);
+    if (FAILED(UiTextLayout(dwrite_.get(), text, format.get(), maxTextW * scale_, 1000 * scale_, layout.put())))
+        return;
+    DWRITE_TEXT_METRICS metrics{};
+    layout->GetMetrics(&metrics);
+    tooltipText_ = std::move(text);
+    tooltipSize_ = D2D1::SizeF(std::min(maxTextW, std::ceil(metrics.widthIncludingTrailingWhitespace / scale_)) + 2 * kTooltipPadX,
+                               std::max(kTooltipMinH, std::ceil(metrics.height / scale_) + 2 * kTooltipPadY));
+    int w = Px(tooltipSize_.width, scale_), h = Px(tooltipSize_.height, scale_);
+    int minX = int(mi.rcWork.left) + margin, maxX = std::max(minX, int(mi.rcWork.right) - margin - w);
+    int minY = int(mi.rcWork.top) + margin, maxY = std::max(minY, int(mi.rcWork.bottom) - margin - h);
+    int left = std::clamp(int(tip.x) - w / 2, minX, maxX), top = std::clamp(int(tip.y) - h / 2, minY, maxY);
+    if (edge_ == BarEdge::Bottom)
+        top = std::max(minY, int(tip.y) - h - margin);
+    else if (edge_ == BarEdge::Top)
+        top = std::min(maxY, int(tip.y) + margin);
+    else if (edge_ == BarEdge::Left)
+        left = std::min(maxX, int(tip.x) + margin);
+    else
+        left = std::max(minX, int(tip.x) - w - margin);
+    const bool tail = edge_ == BarEdge::Bottom;
+    RECT rect{left, top, left + w, top + h + (tail ? Px(kTooltipTailH, scale_) : 0)};
+    const float radius = std::min(16.f, tooltipSize_.height / 2);
+    tooltip_->SetRadius(radius);
+    if (tail) {
+        tooltipTailX_ = std::clamp(float(tip.x - left) / scale_, 0.f, tooltipSize_.width);
+        ShapeDip label{D2D1::RectF(0, 0, tooltipSize_.width, tooltipSize_.height), radius};
+        label.tailX = tooltipTailX_;
+        label.tailHalfWidth = kTooltipTailHalfW;
+        label.tailHeight = kTooltipTailH;
+        label.tailInset = kTooltipTailInset;
+        tooltip_->SetShapes({label});
+    } else {
+        tooltip_->SetShapes({});
+    }
+    POINT anchor{tip.x, rect.bottom}; // it grows out of the side facing the icon
+    switch (edge_) {
+    case BarEdge::Top: anchor.y = rect.top; break;
+    case BarEdge::Left: anchor = {rect.left, tip.y}; break;
+    case BarEdge::Right: anchor = {rect.right, tip.y}; break;
+    case BarEdge::Bottom: break;
+    }
+    if (tooltip_->Visible()) {
+        tooltip_->Move(rect);
+        tooltip_->Invalidate();
+    } else {
+        tooltip_->Show(rect, false, anchor);
+    }
+}
+
+void Bar::HideTooltip()
+{
+    KillTimer(input_, kTooltipTimer);
+    if (previewShown_) {
+        previewShown_ = false;
+        if (onPreviewLeave)
+            onPreviewLeave();
+    }
+    tooltip_->Hide();
+}
+
+void Bar::UpdateTooltips()
+{
+    if (tooltip_->Visible() || previewShown_)
+        ShowTooltip(); // e.g. the window count changed while hovering
+}
+
+void Bar::Publish(bool bar)
+{
+    {
+        std::lock_guard g(lock_);
+        snapshot_.settings = settings_;
+        snapshot_.scene = scene_;
+        snapshot_.window = window_;
+        snapshot_.monitor = monitor_;
+        snapshot_.hmonitor = hmonitor_;
+        snapshot_.displayGeneration = displayGeneration_;
+        snapshot_.scale = scale_;
+        snapshot_.visible = visible_ && !slidOut_;
+        snapshot_.panels.clear();
+        for (const auto& [hwnd, p] : panels_)
+            snapshot_.panels.push_back(p);
+        if (bar)
+            ++snapshot_.generation;
+    }
+    SetEvent(wake_);
+}
+
+void Bar::ShowOwnWindowsToCapture(bool visible)
+{
+    if (debugCapturable_)
+        visible = true;
+    if (visible == captureVisible_)
+        return;
+    // The windows belong to the UI thread; it answers once they are changed.
+    ResetEvent(captureAck_);
+    PostMessageW(visual_, WM_BAR_CAPTURE, visible ? 1 : 0, 0);
+    if (WaitForSingleObject(captureAck_, 1000) != WAIT_OBJECT_0)
+        Log(L"render: the UI thread did not confirm the capture exclusion in time");
+    captureVisible_ = visible;
+    Log(L"render: Atrium %s screenshots", visible ? L"shows in" : L"is kept out of");
+}
+
+void Bar::RenderThread()
+{
+    winrt::init_apartment(winrt::apartment_type::multi_threaded);
+    while (WaitForSingleObject(quit_, 0) == WAIT_TIMEOUT) {
+        SessionEnd end = SessionEnd::Retry;
+        try {
+            end = RenderSession();
+        } catch (const winrt::hresult_error& e) {
+            Log(L"render: 0x%08X %s; rebuilding in 1 s", static_cast<unsigned>(e.code()), e.message().c_str());
+        }
+        if (end == SessionEnd::Exit || (end == SessionEnd::Retry && WaitForSingleObject(quit_, 1000) != WAIT_TIMEOUT))
+            break;
+    }
+    winrt::uninit_apartment();
+}
+
+namespace {
+
+void SampleBarInks(const BarScene& s, const Settings& st, RECT w, const Readback& rb, bool& darkClock, bool& darkApps)
+{
+    const EdgeFrame ef{s.edge, D2D1::RectF(0, 0, float(w.right - w.left), float(w.bottom - w.top))};
+    auto decide = [&](bool& dark, D2D1_RECT_F r) {
+        if (r.right <= r.left)
+            return;
+        r = ef.ToArea(r);
+        const float p = float(GlassRenderer::kPad), lum = GlassLuma(st, rb.RegionLuma(r.left + p, r.top + p, r.right + p, r.bottom + p));
+        dark = lum > kDarkInkAbove ? true : lum < kLightInkBelow ? false : dark;
+    };
+    D2D1_RECT_F r = s.clock;
+    for (const auto& it : s.extras)
+        if (s.clock.right <= s.clock.left && it.key != kStartKey && it.key != kMoreKey)
+            r = r.right <= r.left ? it.plate : D2D1::RectF(std::min(r.left, it.plate.left), s.bar.top, std::max(r.right, it.plate.right), s.bar.bottom);
+    if (r.right <= r.left)
+        r = D2D1::RectF(std::max(s.bar.left, s.bar.right - (s.bar.bottom - s.bar.top)), s.bar.top, s.bar.right, s.bar.bottom);
+    decide(darkClock, r);
+    decide(darkApps, s.items.empty() ? D2D1::RectF(s.bar.left, s.bar.top, s.separatorX > s.bar.left ? s.separatorX : s.bar.right, s.bar.bottom) :
+                                       D2D1::RectF(s.items.front().icon.left, s.bar.top, s.items.back().icon.right, s.bar.bottom));
+}
+
+// Whether the screen on the inner side of `bar` (screen px), as GDI reads it, has any light in it: the
+// capture's picture of the same place coming all black then means the capture is what is black
+// (duplication after a sleep on some drivers, a video in an overlay plane), not the desktop.
+bool ScreenLitAbove(BarEdge edge, RECT bar)
+{
+    constexpr int kW = 32, kH = 4;
+    const EdgeFrame frame{edge, bar};
+    const LONG d = std::max(8L, std::min(64L, LONG(frame.Across())));
+    const RECT sample = frame.ToArea(RECT{0, -d, LONG(frame.Along()), 0});
+    const int w = Vertical(edge) ? kH : kW, h = Vertical(edge) ? kW : kH;
+    bool lit = false;
+    HDC screen = GetDC(nullptr);
+    HDC mem = CreateCompatibleDC(screen);
+    BITMAPINFO bi{};
+    bi.bmiHeader = {sizeof(BITMAPINFOHEADER), w, -h, 1, 32, BI_RGB};
+    void* bits = nullptr;
+    if (HBITMAP dib = CreateDIBSection(screen, &bi, DIB_RGB_COLORS, &bits, nullptr, 0)) {
+        HGDIOBJ old = SelectObject(mem, dib);
+        SetStretchBltMode(mem, HALFTONE);
+        if (StretchBlt(mem, 0, 0, w, h, screen, sample.left, sample.top, sample.right - sample.left, sample.bottom - sample.top, SRCCOPY)) {
+            GdiFlush();
+            const auto* px = static_cast<const uint8_t*>(bits);
+            for (int i = 0; i < w * h && !lit; ++i)
+                lit = px[i * 4] + px[i * 4 + 1] + px[i * 4 + 2] > 24;
+        }
+        SelectObject(mem, old);
+        DeleteObject(dib);
+    }
+    DeleteDC(mem);
+    ReleaseDC(nullptr, screen);
+    return lit;
+}
+
+} // namespace
+
+Bar::SessionEnd Bar::RenderSession()
+{
+    // Wait for the first layout.
+    HANDLE first[] = {quit_, wake_};
+    Snapshot snap;
+    for (;;) {
+        {
+            std::lock_guard g(lock_);
+            snap = snapshot_;
+        }
+        if (snap.hmonitor)
+            break;
+        if (WaitForMultipleObjects(2, first, FALSE, INFINITE) == WAIT_OBJECT_0)
+            return SessionEnd::Exit;
+    }
+
+    Gpu gpu = Gpu::ForMonitor(snap.hmonitor);
+    const HMONITOR captureMonitor = snap.hmonitor;
+    const unsigned captureGeneration = snap.displayGeneration;
+    // The backdrop: Desktop Duplication, which leaves Atrium's windows out by
+    // itself (so screenshots may show them); else Windows.Graphics.Capture
+    // with Atrium kept out of every capture.
+    std::unique_ptr<BackdropSource> capture;
+    // Remote-control mode: the wallpaper, so that the screen's capture may show Atrium.
+    const bool remote = RemoteVisible();
+    // The capture came all black twice in a row, through both capture APIs: the wallpaper for a while.
+    const bool blackOut = !remote && GetTickCount64() < wallpaperUntil_;
+    if (remote || blackOut) {
+        capture = std::make_unique<WallpaperCapture>(gpu, snap.hmonitor, frame_);
+        Log(remote ? L"render: remote-control mode, the glass shows the wallpaper" : L"render: the glass shows the wallpaper for now");
+    } else if (!duplicationFailed_) {
+        HRESULT why = S_OK;
+        bool elsewhere = false;
+        for (int tries = 0;; ++tries) {
+            capture = DuplicationCapture::Create(gpu, snap.hmonitor, frame_, why, elsewhere);
+            if (capture || !DuplicationCapture::Temporary(why))
+                break;
+            if (tries == 0)
+                Log(L"render: desktop duplication unavailable for now (0x%08X), trying again every second", static_cast<unsigned>(why));
+            if (WaitForSingleObject(quit_, 1000) != WAIT_TIMEOUT)
+                return SessionEnd::Exit;
+        }
+        if (!capture && elsewhere)
+            PreferPowerSavingGpu();
+        if (!capture) {
+            duplicationFailed_ = true;
+            duplicationRetryAt_ = GetTickCount64() + 30000;
+            Log(L"render: desktop duplication unavailable (0x%08X); Windows.Graphics.Capture, Atrium kept out of screenshots", static_cast<unsigned>(why));
+        }
+    }
+    if (!capture) {
+        ShowOwnWindowsToCapture(false); // before the first frame, or the glass would sample itself
+        capture = std::make_unique<MonitorCapture>(gpu, snap.hmonitor, frame_);
+    } else {
+        ShowOwnWindowsToCapture(true);
+    }
+    // --debug-capturable with Windows.Graphics.Capture: a frozen backdrop (later frames contain the glass).
+    const bool freeze = debugCapturable_ && !capture->KeepsOwnWindowsOut();
+    DesktopBackdrop desktop(gpu, wake_); // the widgets' backdrop (D38)
+    GlassRenderer renderer(gpu, visual_, snap.window.right - snap.window.left, snap.window.bottom - snap.window.top);
+    BarPainter painter(renderer.D2D(), renderer.DWrite());
+
+    unsigned drawnGeneration = 0;
+    double blackSince = -1;        // since when the capture around the bar is all black
+    float backdropBrightest = 1;   // the brightest cell of the last backdrop read back
+    std::wstring drawnText;
+    bool darkClock = false, darkApps = false, drawnDark = false, drawnDarkIcons = false, animating = false;
+    InkFade clockInk, appsInk; // the inks fade to a new colour, not switch
+    Readback dotBackdrop; // newest completed luminance grid, reused while the desktop is still
+    ULONGLONG lastPresent = 0;
+    LARGE_INTEGER freq;
+    QueryPerformanceFrequency(&freq);
+    // Per-minute counters: captured frames, presents, frames skipped as echoes.
+    unsigned frames = 0, presents = 0, skipped = 0;
+    std::vector<double> workMs;    // capture copy + comparison (+ draw and present), per wake-up
+    std::vector<double> presentMs; // the same, only for wake-ups that presented
+    std::vector<double> panelsMs;  // of which the popups' and widgets' glass, when there was any
+    winrt::com_ptr<ID3D11Texture2D> frozen; // --debug-capturable only
+    ULONGLONG statsStart = GetTickCount64();
+    Log(L"render: started on %s, window %ldx%ld", gpu.adapterName.c_str(), snap.window.right - snap.window.left, snap.window.bottom - snap.window.top);
+    // Glass layers of the popups, created while they are shown.
+    struct PanelState {
+        explicit PanelState(HWND owner) : hwnd(owner) {}
+        ~PanelState() { ForgetGlass(hwnd); }
+        PanelState(const PanelState&) = delete;
+        PanelState& operator=(const PanelState&) = delete;
+        HWND hwnd; // frame/ink records leave with the layer, including device resets
+        std::unique_ptr<GlassRenderer> renderer;
+        unsigned pop = 0;
+        bool ready = false;   // presented once (the popup was told)
+        unsigned shown = 0;   // GlassPanel::shown that `ready` was for
+        unsigned presentedGen = 0;
+        int ink = -1;         // ink last posted: 1 dark, 0 light, -1 none yet
+        RECT window{};        // where it was last drawn: a moved panel is drawn again at once
+        unsigned desktopVersion = 0; // a widget: the desktop picture its backdrop came from
+        double desktopMs = -1e9;     // and when a new one came
+        bool inkOwed = false;        // its ink waits for the desktop to settle
+        // Presents of an animation, logged when it ends (smoothness checks).
+        double burstStart = 0, burstLast = 0, burstGap = 0;
+        int burstFrames = 0;
+        // Why it was drawn again, during the burst: moved or resized, a new desktop
+        // picture, what is under it changed (readback), its parameters changed.
+        int burstMoved = 0, burstDesktop = 0, burstReadback = 0, burstParams = 0;
+        bool owed = false;    // a frame to draw once its last one is on screen (Ready), or at the next tick
+        uint64_t drawnTick = 0; // the compositor frame it was last drawn in
+        bool dark = false;
+        InkGrid grid;         // ink region by region (published for the popup)
+        std::vector<GlassParams> params;
+    };
+    std::map<HWND, PanelState> panels;
+    struct PanelCapture {
+        std::unique_ptr<BackdropSource> source;
+        winrt::com_ptr<ID3D11Texture2D> texture;
+        RECT bounds{};
+        bool fresh = false;
+    };
+    std::map<HMONITOR, PanelCapture> panelCaptures;
+    bool mayShowInCapture = capture->KeepsOwnWindowsOut();
+    double slowLogged = -1e9;
+    uint64_t tick = 1; // compositor frames (every wake-up when not paced by the clock)
+    // A panel that moves (a widget dragged or gliding) needs the backdrop at
+    // its new place even when the screen has not changed and no frame comes:
+    // for a second after a move the newest frame is kept.
+    winrt::com_ptr<ID3D11Texture2D> lastFrame;
+    // Where the bar's backdrop was last taken, and whether a frame came while the bar was hidden:
+    // a source that sends frames only on change (the wallpaper, once a minute in a slideshow)
+    // gives its last one again when the bar shows, moves or is resized (its backdrop is blank).
+    RECT backdropAt{};
+    bool missedFrame = false;
+    // Until the first backdrop comes (the wallpaper takes a second to decode), the glass would
+    // show black: the bar waits for it, a little.
+    const double sessionStartMs = ClockMs();
+    double panelMovedMs = -1e9;
+    // A popup that opens needs it too (Atrium's own windows bring no frame):
+    // otherwise it is kept at most every 100 ms.
+    double keptMs = -1e9;
+    auto keepFrame = [&](ID3D11Texture2D* frame) {
+        if (!frame)
+            return;
+        double now = ClockMs();
+        if (now - panelMovedMs > 1000 && now - keptMs < 100)
+            return;
+        keptMs = now;
+        D3D11_TEXTURE2D_DESC d{};
+        frame->GetDesc(&d);
+        D3D11_TEXTURE2D_DESC have{};
+        if (lastFrame)
+            lastFrame->GetDesc(&have);
+        if (!lastFrame || have.Width != d.Width || have.Height != d.Height || have.Format != d.Format) {
+            lastFrame = nullptr;
+            d.BindFlags = D3D11_BIND_SHADER_RESOURCE;
+            d.MiscFlags = 0;
+            d.Usage = D3D11_USAGE_DEFAULT;
+            d.CPUAccessFlags = 0;
+            if (FAILED(gpu.device->CreateTexture2D(&d, nullptr, lastFrame.put())))
+                return;
+        }
+        gpu.context->CopyResource(lastFrame.get(), frame);
+    };
+    std::vector<GlassParams> gp;
+    // A widget's ink follows a desktop that keeps changing (a slideshow's fade, about a second) once it has
+    // settled: cell by cell all along, the widgets were painted at every frame of it, and the render thread
+    // (the bar's too) was held up to 50 ms.
+    constexpr double kDesktopSettleMs = 250;
+    bool inkDue = false;
+    // Draws the panels; true while one of them animates.
+    auto renderPanels = [&](const Snapshot& snap, ID3D11Texture2D* source, bool& lost) {
+        inkDue = false;
+        // A menu or Stage Manager can remain on a different display from the Dock.
+        std::erase_if(panelCaptures, [&](const auto& entry) {
+            return std::none_of(snap.panels.begin(), snap.panels.end(),
+                                [&](const GlassPanel& p) { return !p.desktop && MonitorFromRect(&p.window, MONITOR_DEFAULTTONEAREST) == entry.first; });
+        });
+        for (const GlassPanel& p : snap.panels) {
+            HMONITOR monitor = MonitorFromRect(&p.window, MONITOR_DEFAULTTONEAREST);
+            if (p.desktop || monitor == captureMonitor || panelCaptures.contains(monitor))
+                continue;
+            PanelCapture& extra = panelCaptures[monitor];
+            MONITORINFO info{sizeof(info)};
+            GetMonitorInfoW(monitor, &info);
+            extra.bounds = info.rcMonitor;
+            HRESULT why = S_OK;
+            bool elsewhere = false;
+            if (remote)
+                extra.source = std::make_unique<WallpaperCapture>(gpu, monitor, frame_);
+            else
+                extra.source = DuplicationCapture::Create(gpu, monitor, frame_, why, elsewhere);
+            if (!extra.source) {
+                ShowOwnWindowsToCapture(false);
+                mayShowInCapture = false;
+                extra.source = std::make_unique<MonitorCapture>(gpu, monitor, frame_);
+            }
+        }
+        const bool canShow =
+            capture->KeepsOwnWindowsOut() && std::ranges::all_of(panelCaptures, [](const auto& entry) { return entry.second.source->KeepsOwnWindowsOut(); });
+        if (canShow != mayShowInCapture) {
+            ShowOwnWindowsToCapture(canShow);
+            mayShowInCapture = canShow;
+        }
+        for (auto& [monitor, extra] : panelCaptures) {
+            ID3D11Texture2D* frame = extra.source->Acquire();
+            if (extra.source->Lost()) {
+                lost = true;
+                return false;
+            }
+            extra.fresh = frame && !(debugCapturable_ && extra.texture);
+            if (extra.fresh) {
+                D3D11_TEXTURE2D_DESC desc{}, previous{};
+                frame->GetDesc(&desc);
+                if (extra.texture)
+                    extra.texture->GetDesc(&previous);
+                if (!extra.texture || previous.Width != desc.Width || previous.Height != desc.Height || previous.Format != desc.Format) {
+                    extra.texture = nullptr;
+                    desc.BindFlags = D3D11_BIND_SHADER_RESOURCE;
+                    desc.MiscFlags = desc.CPUAccessFlags = 0;
+                    desc.Usage = D3D11_USAGE_DEFAULT;
+                    winrt::check_hresult(gpu.device->CreateTexture2D(&desc, nullptr, extra.texture.put()));
+                }
+                gpu.context->CopyResource(extra.texture.get(), frame);
+            }
+            extra.source->Release();
+        }
+        for (auto it = panels.begin(); it != panels.end();) {
+            bool listed = std::ranges::any_of(snap.panels, [&](const GlassPanel& p) { return p.hwnd == it->first; });
+            it = listed ? std::next(it) : panels.erase(it);
+        }
+        bool moving = false;
+        double now = ClockMs();
+        // Widgets sample the desktop, never the windows above them; only a
+        // new picture of it (or a move) draws their glass again.
+        bool widgets = std::ranges::any_of(snap.panels, [](const GlassPanel& p) { return p.desktop && p.visible; });
+        desktop.Update(widgets ? snap.settings.widgetBackdrop : std::wstring(L"off"));
+        for (auto& [hwnd, ps] : panels)
+            if (ps.burstFrames && now - ps.burstLast > 250) {
+                if (ps.burstFrames >= 4) {
+                    wchar_t title[64] = {};
+                    InternalGetWindowText(hwnd, title, 64); // no message to the UI thread (it may be waiting for this glass)
+                    double span = ps.burstLast - ps.burstStart;
+                    Log(L"render: %s glass animated %d presents in %.0f ms (%.0f fps), longest gap %.1f ms (moved %d, desktop %d, under %d, "
+                        L"params %d)",
+                        title, ps.burstFrames, span, span > 0 ? 1000.0 * (ps.burstFrames - 1) / span : 0.0, ps.burstGap, ps.burstMoved, ps.burstDesktop,
+                        ps.burstReadback, ps.burstParams);
+                }
+                ps.burstFrames = 0;
+                ps.burstMoved = ps.burstDesktop = ps.burstReadback = ps.burstParams = 0;
+            }
+        for (const GlassPanel& p : snap.panels) {
+            int w = p.window.right - p.window.left, h = p.window.bottom - p.window.top;
+            if (w <= 0 || h <= 0 || !IsWindow(p.hwnd))
+                continue;
+            const float panelScale = float(GetDpiForWindow(p.hwnd)) / 96.f;
+            PanelState& ps = panels.try_emplace(p.hwnd, p.hwnd).first->second;
+            const int bufferW = std::max(w, p.bufferW), bufferH = std::max(h, p.bufferH);
+            const double t0 = ClockMs();
+            double created = 0;
+            if (!ps.renderer) {
+                created = 1;
+                try {
+                    ps.renderer = std::make_unique<GlassRenderer>(gpu, p.hwnd, bufferW, bufferH, false, false, p.desktop);
+                } catch (const winrt::hresult_error& e) {
+                    Log(L"render: popup glass unavailable: 0x%08X", static_cast<unsigned>(e.code()));
+                    continue;
+                }
+            }
+            if (created)
+                created = ClockMs() - t0;
+            GlassRenderer& r = *ps.renderer;
+            const bool moved = !EqualRect(&ps.window, &p.window);
+            bool changed = r.Width() != bufferW || r.Height() != bufferH || moved;
+            if (ps.shown != p.shown) {
+                // Shown again (a menu replaced by the next one between two frames): it waits for
+                // its glass, which is drawn and announced anew; else a plain panel stands in.
+                ps.shown = p.shown;
+                ps.ready = false;
+                changed = true;
+            }
+            bool newDesktop = false, under = false;
+            ps.window = p.window;
+            if (moved)
+                panelMovedMs = now;
+            r.Resize(bufferW, bufferH);
+            if (p.desktop) {
+                ID3D11Texture2D* pic = desktop.Texture();
+                // Again once the glass is on screen if its ink was never measured: the
+                // first copy (before any present) is not compared, and a still desktop
+                // would leave a widget with the default ink over any wallpaper.
+                // A new picture of the desktop only counts where it changed under this glass (the
+                // backdrop it copies: the window, the refraction margin, rounded out to 64 px).
+                RECT around = p.window;
+                InflateRect(&around, 128, 128);
+                bool fresh = ps.desktopVersion != desktop.Version();
+                if (fresh && r.HasBackdrop() && ps.grid.w != 0 && !changed && !desktop.ChangedSince(ps.desktopVersion, around)) {
+                    ps.desktopVersion = desktop.Version();
+                    fresh = false;
+                }
+                // Consume the latest desktop frame on the same render loop as the bar.
+                if (pic && (changed || fresh || !r.HasBackdrop() || ps.grid.w == 0)) {
+                    r.UpdateBackdrop(pic, p.window.left - desktop.Origin().x, p.window.top - desktop.Origin().y);
+                    newDesktop = fresh;
+                    ps.desktopVersion = desktop.Version();
+                    if (fresh)
+                        ps.desktopMs = now;
+                }
+            } else if (auto extra = panelCaptures.find(MonitorFromRect(&p.window, MONITOR_DEFAULTTONEAREST)); extra != panelCaptures.end()) {
+                const auto& picture = extra->second;
+                if (picture.texture && (picture.fresh || moved || !r.HasBackdrop()))
+                    r.UpdateBackdrop(picture.texture.get(), p.window.left - picture.bounds.left, p.window.top - picture.bounds.top);
+            } else if (ID3D11Texture2D* below = source ? source : (moved || !r.HasBackdrop()) ? lastFrame.get() : nullptr) {
+                r.UpdateBackdrop(below, p.window.left - snap.monitor.left, p.window.top - snap.monitor.top);
+            }
+            PanelParams(snap.settings, panelScale, p, gp);
+            if (auto rb = r.Poll()) {
+                changed |= rb->changed;
+                under = rb->changed;
+                // The ink region by region (cells of about 20 DIP), from what
+                // the glass shows there, each cell with the bar's hysteresis;
+                // the popup's own ink is what most of it needs.
+                const float padX = float(rb->origin.x), padY = float(rb->origin.y);
+                const float cell = std::max(8.f, 20.f * panelScale);
+                InkGrid grid;
+                grid.w = std::max(1, int(std::ceil(float(w) / cell)));
+                grid.h = std::max(1, int(std::ceil(float(h) / cell)));
+                grid.cellX = float(w) / float(grid.w);
+                grid.cellY = float(h) / float(grid.h);
+                grid.dark.resize(size_t(grid.w) * size_t(grid.h));
+                const std::wstring& tc = snap.settings.textColor;
+                bool sameSize = ps.grid.w == grid.w && ps.grid.h == grid.h;
+                int darkCells = 0;
+                for (int y = 0; y < grid.h; ++y)
+                    for (int x = 0; x < grid.w; ++x) {
+                        size_t i = size_t(y) * size_t(grid.w) + size_t(x);
+                        bool was = sameSize ? ps.grid.dark[i] != 0 : ps.dark;
+                        bool d = was;
+                        if (tc == L"dark" || tc == L"light") {
+                            d = tc == L"dark";
+                        } else {
+                            float x0 = float(x) * grid.cellX, y0 = float(y) * grid.cellY;
+                            float lum = GlassLuma(snap.settings, rb->RegionLuma(x0 + padX, y0 + padY, x0 + grid.cellX + padX, y0 + grid.cellY + padY));
+                            if (!was && lum > kDarkInkAbove)
+                                d = true;
+                            else if (was && lum < kLightInkBelow)
+                                d = false;
+                        }
+                        grid.dark[i] = d ? 1 : 0;
+                        darkCells += d ? 1 : 0;
+                    }
+                ps.dark = 2 * darkCells >= int(grid.dark.size());
+                if (!(grid == ps.grid)) {
+                    ps.grid = grid;
+                    ps.inkOwed = true;
+                }
+            }
+            if (ps.inkOwed && ps.ink >= 0 && now - ps.desktopMs < kDesktopSettleMs) {
+                inkDue = true;
+            } else if (ps.inkOwed) {
+                ps.inkOwed = false;
+                PublishInk(p.hwnd, ps.grid);
+                ps.ink = ps.dark ? 1 : 0;
+                PostMessageW(p.hwnd, WM_GLASS_INK, WPARAM(ps.ink), 0);
+            }
+            if (p.pop != ps.pop) {
+                r.Pop(p.popOpen, p.popX, p.popY);
+                ps.pop = p.pop;
+            }
+            if (p.rippleMs > 0 && now - p.rippleMs < 720) {
+                float u = float((now - p.rippleMs) / 720);
+                for (GlassParams& g : gp) {
+                    g.rippleX = p.rippleX;
+                    g.rippleY = p.rippleY;
+                    g.rippleR = 150 * snap.scale * (1 - (1 - u) * (1 - u) * (1 - u));
+                    g.rippleA = 0.8f * (1 - u) * (1 - u);
+                }
+                moving = true;
+            }
+            if (!r.HasBackdrop())
+                continue; // waits for the first capture frame under it
+            // During a geometry animation the content supplies each frame.
+            // A background-only present just before that update would consume
+            // this composition's slot and push the matching geometry a frame
+            // late. Keep the latest backdrop and draw it with the new geometry.
+            if (p.animating && r.HasPresented() && p.gen == ps.presentedGen)
+                continue;
+            const double t1 = ClockMs();
+            bool same = gp.size() == ps.params.size() && memcmp(gp.data(), ps.params.data(), gp.size() * sizeof(GlassParams)) == 0;
+            if (!changed && !ps.owed && r.HasPresented() && same) {
+                ps.presentedGen = p.gen;
+                GlassPresented(p.hwnd, p.gen);
+                continue;
+            }
+            // Once per composed frame (a new picture under it or new shapes may come in between),
+            // and only when its last frame is on screen; else at the next tick.
+            if ((ps.drawnTick == tick && !moved) || !r.Ready()) {
+                ps.owed = true;
+                continue;
+            }
+            ps.owed = false;
+            ps.drawnTick = tick;
+            if (p.desktop)
+                r.SetOffset(p.offset);
+            if (!r.Present(gp, nullptr)) {
+                lost = true;
+                return false;
+            }
+            ps.presentedGen = p.gen;
+            GlassPresented(p.hwnd, p.gen);
+            // A panel that holds the render thread up: what took the time (rate-limited).
+            if (double t2 = ClockMs(); t2 - t0 > 16 && t2 - slowLogged > 2000) {
+                slowLogged = t2;
+                wchar_t title[64] = {};
+                InternalGetWindowText(p.hwnd, title, 64);
+                Log(L"render: slow glass for %s: %.1f ms (renderer created in %.1f ms, backdrop %.1f ms, present %.1f ms)", title, t2 - t0, created,
+                    t1 - t0 - created, t2 - t1);
+            }
+            ps.burstMoved += moved ? 1 : 0;
+            ps.burstDesktop += newDesktop ? 1 : 0;
+            ps.burstReadback += under ? 1 : 0;
+            ps.burstParams += same ? 0 : 1;
+            ps.params = gp;
+            if (!ps.burstFrames || now - ps.burstLast > 250) {
+                ps.burstStart = now;
+                ps.burstGap = 0;
+                ps.burstFrames = 0;
+            } else {
+                ps.burstGap = std::max(ps.burstGap, now - ps.burstLast);
+            }
+            ps.burstLast = now;
+            ++ps.burstFrames;
+            if (!ps.ready) {
+                ps.ready = true;
+                PostMessageW(p.hwnd, WM_GLASS_READY, 0, 0);
+                wchar_t title[64] = {};
+                InternalGetWindowText(p.hwnd, title, 64);
+                Log(L"render: popup glass ready for %s (%dx%d px, %zu shapes, radius %.0f px, tint %.2f, ink %s)", title, w, h, gp.size(),
+                    gp.empty() ? 0.f : gp[0].radius, gp.empty() ? 0.f : gp[0].tintMix, ps.dark ? L"dark" : L"light");
+            }
+        }
+        return moving;
+    };
+
+    HANDLE handles[] = {quit_, wake_, frame_};
+    bool panelsMoving = false, barOwed = false, paused = false, pendingSnap = !snap.visible;
+    for (;;) {
+        // Animations, and glass owed a frame (not Ready last time), run on the compositor's
+        // clock (D45): one wake-up per composed frame, at the display's rate. A timeout would
+        // be rounded up to 15.6 ms, and the popups' latency objects (no vsync) would spin.
+        // Pending readbacks are polled soon.
+        bool owed = barOwed || inkDue || std::ranges::any_of(panels, [](const auto& e) { return e.second.owed; });
+        bool paced = animating || panelsMoving || owed;
+        bool readback =
+            renderer.ReadbackPending() || std::ranges::any_of(panels, [](const auto& e) { return e.second.renderer && e.second.renderer->ReadbackPending(); });
+        const DWORD hc = 3 - DWORD(paused);
+        DWORD w = WAIT_OBJECT_0 + 1;
+        if (pendingSnap)
+            pendingSnap = false;
+        else if (paced && kWaitForCompositorClock) {
+            w = kWaitForCompositorClock(hc, handles, 100);
+            if (w == WAIT_OBJECT_0 + hc || w == WAIT_TIMEOUT)
+                ++tick;
+            else if (w > WAIT_OBJECT_0 + hc) {
+                w = WaitForMultipleObjects(hc, handles, FALSE, 6); // no clock (the display is off)
+                ++tick;
+            }
+        } else {
+            // Idle, a clock with seconds wakes just past the next whole second: a plain second's
+            // timeout drifts by the work of each pass, and every so often a second is skipped.
+            DWORD idle = paused ? INFINITE : 1000;
+            if (!paused && snap.settings.showClock && snap.settings.showClockSeconds) {
+                SYSTEMTIME t{};
+                GetLocalTime(&t);
+                idle = DWORD(1000 - t.wMilliseconds) + 16;
+            }
+            w = WaitForMultipleObjects(hc, handles, FALSE, paced ? 6 : readback ? 3 : idle);
+            ++tick;
+        }
+        if (w == WAIT_OBJECT_0)
+            return SessionEnd::Exit;
+        if (GetTickCount64() - statsStart >= 60000) {
+            std::ranges::sort(workMs);
+            auto pct = [&](double q) { return workMs.empty() ? 0.0 : workMs[std::min(workMs.size() - 1, size_t(q * double(workMs.size())))]; };
+            std::ranges::sort(presentMs);
+            double presentP95 = presentMs.empty() ? 0.0 : presentMs[std::min(presentMs.size() - 1, size_t(0.95 * double(presentMs.size())))];
+            std::ranges::sort(panelsMs);
+            double panelsP95 = panelsMs.empty() ? 0.0 : panelsMs[std::min(panelsMs.size() - 1, size_t(0.95 * double(panelsMs.size())))];
+            PROCESS_MEMORY_COUNTERS_EX mem{sizeof(mem)};
+            GetProcessMemoryInfo(GetCurrentProcess(), reinterpret_cast<PROCESS_MEMORY_COUNTERS*>(&mem), sizeof(mem));
+            Log(L"render: last minute %u frames, %u presents, %u echoes skipped; work p50 %.2f ms, p95 %.2f ms, max %.2f ms; "
+                L"presenting p95 %.2f ms; popups and widgets p95 %.2f ms, max %.2f ms; private %zu MB",
+                frames, presents, skipped, pct(0.5), pct(0.95), workMs.empty() ? 0.0 : workMs.back(), presentP95, panelsP95,
+                panelsMs.empty() ? 0.0 : panelsMs.back(), size_t(mem.PrivateUsage >> 20));
+            frames = presents = skipped = 0;
+            workMs.clear();
+            presentMs.clear();
+            panelsMs.clear();
+            statsStart = GetTickCount64();
+        }
+        LARGE_INTEGER t0;
+        QueryPerformanceCounter(&t0);
+        auto elapsedMs = [&] {
+            LARGE_INTEGER t1;
+            QueryPerformanceCounter(&t1);
+            return double(t1.QuadPart - t0.QuadPart) * 1000.0 / double(freq.QuadPart);
+        };
+        {
+            std::lock_guard g(lock_);
+            snap = snapshot_;
+        }
+        if (snap.hmonitor != captureMonitor || snap.displayGeneration != captureGeneration || RemoteVisible() != remote)
+            return SessionEnd::Switch; // selected display or its capture source changed
+        const bool needScreen = snap.visible || std::ranges::any_of(snap.panels, [](const GlassPanel& p) { return p.visible && !p.desktop; });
+        if (paused != !needScreen)
+            capture->SetPaused(paused = !needScreen), missedFrame |= paused;
+        ID3D11Texture2D* frame = needScreen ? capture->Acquire() : nullptr;
+        if (capture->Lost())
+            return SessionEnd::Retry; // a new source (display mode change, secure desktop)
+        // On Windows.Graphics.Capture after Desktop Duplication failed (it can after a lock or sleep):
+        // Desktop Duplication again once it works, not only after a restart (#19).
+        // One that came back black is not tried again on the same displays: it would start fine and be black again.
+        if (needScreen && !remote && duplicationFailed_ && !capture->KeepsOwnWindowsOut() && GetTickCount64() >= duplicationRetryAt_ &&
+            captureGeneration != blackGeneration_) {
+            duplicationRetryAt_ = GetTickCount64() + 30000;
+            HRESULT why = S_OK;
+            bool elsewhere = false;
+            if (DuplicationCapture::Create(gpu, snap.hmonitor, frame_, why, elsewhere)) {
+                duplicationFailed_ = false;
+                Log(L"render: desktop duplication available again");
+                return SessionEnd::Switch;
+            }
+        }
+        if (blackOut && GetTickCount64() >= wallpaperUntil_) {
+            Log(L"render: back to capturing the screen");
+            return SessionEnd::Switch;
+        }
+        if (!snap.visible) {
+            // Retire the bar's reads even while hidden. Otherwise its last pending
+            // slot keeps the idle loop waking every 3 ms until the bar is revealed.
+            renderer.Poll();
+            drawnGeneration = 0; // its ink and glass are measured again when revealed
+            missedFrame |= frame != nullptr;
+            bool lost = false;
+            winrt::com_ptr<ID3D11Texture2D> hidden;
+            hidden.copy_from(frame);
+            if (freeze && hidden) { // the popups show in screenshots: they must not sample themselves
+                if (!frozen) {
+                    D3D11_TEXTURE2D_DESC d{};
+                    hidden->GetDesc(&d);
+                    d.BindFlags = D3D11_BIND_SHADER_RESOURCE;
+                    d.MiscFlags = 0;
+                    winrt::check_hresult(gpu.device->CreateTexture2D(&d, nullptr, frozen.put()));
+                    gpu.context->CopyResource(frozen.get(), hidden.get());
+                }
+                hidden = frozen;
+            }
+            if (!freeze)
+                keepFrame(frame);
+            double p0 = elapsedMs();
+            panelsMoving = renderPanels(snap, hidden.get(), lost);
+            if (!snap.panels.empty())
+                panelsMs.push_back(elapsedMs() - p0);
+            hidden = nullptr;
+            // Submit the copies from the duplicated frame before handing it back: AcquireNextFrame
+            // waits for the GPU to be done with the last frame while it holds the shared device's
+            // lock, so unsubmitted copies would wait for a Flush that can no longer get the lock.
+            if (needScreen)
+                gpu.context->Flush(), capture->Release();
+            if (lost)
+                return SessionEnd::Retry;
+            animating = barOwed = false; // drawn afresh when the bar shows again
+            continue;
+        }
+        renderer.Resize(snap.window.right - snap.window.left, snap.window.bottom - snap.window.top);
+
+        // Backdrop source: the newest capture frame, or in --debug-capturable
+        // mode a private copy of the first one (later frames contain the glass).
+        winrt::com_ptr<ID3D11Texture2D> source;
+        if (frame) {
+            source.copy_from(frame);
+            ++frames;
+            if (freeze) {
+                if (!frozen) {
+                    D3D11_TEXTURE2D_DESC d{};
+                    source->GetDesc(&d);
+                    d.BindFlags = D3D11_BIND_SHADER_RESOURCE;
+                    d.MiscFlags = 0;
+                    winrt::check_hresult(gpu.device->CreateTexture2D(&d, nullptr, frozen.put()));
+                    gpu.context->CopyResource(frozen.get(), source.get());
+                }
+                source = frozen;
+            }
+        } else if (frozen && snap.generation != drawnGeneration) {
+            source = frozen; // size-dependent textures were recreated
+        } else if (missedFrame || !renderer.HasBackdrop() || !EqualRect(&backdropAt, &snap.window)) {
+            // No new frame, yet the glass needs one: its backdrop is blank (resized, a new
+            // session), stale (it moved) or a frame came while it was hidden. The newest picture
+            // held: the source's own (it sends only on change), else the frame kept for popups.
+            if (ID3D11Texture2D* again = capture->Again())
+                source.copy_from(again);
+            else if (!freeze && lastFrame)
+                source = lastFrame;
+        }
+        bool hadBackdrop = source != nullptr;
+        if (source) {
+            renderer.UpdateBackdrop(source.get(), snap.window.left - snap.monitor.left, snap.window.top - snap.monitor.top);
+            backdropAt = snap.window;
+            missedFrame = false;
+        }
+        {
+            bool lost = false;
+            if (!freeze)
+                keepFrame(frame);
+            double p0 = elapsedMs();
+            panelsMoving = renderPanels(snap, source.get(), lost);
+            if (!snap.panels.empty())
+                panelsMs.push_back(elapsedMs() - p0);
+            if (lost) {
+                Log(L"render: device lost (popup glass)");
+                return SessionEnd::Retry;
+            }
+        }
+        source = nullptr;
+        gpu.context->Flush(); // the panels' copies and comparisons start now, in one submission
+        capture->Release();   // after the Flush (see above)
+
+        // A taskbar gone black (reported by several users): what the capture shows around the bar
+        // is all black for a while, yet the screen above the bar is not. The capture is started
+        // again; black again soon after, Windows.Graphics.Capture instead (another capture path
+        // entirely); black there too, the wallpaper for a while.
+        if (!remote && !blackOut && renderer.HasBackdrop()) {
+            if (backdropBrightest > 0.01f) {
+                blackSince = -1;
+                if (ClockMs() - blackRestartMs_ > 30000)
+                    blackRestarts_ = 0;
+            } else if (blackSince < 0) {
+                blackSince = ClockMs();
+            } else if (ClockMs() - blackSince > 1500) {
+                blackSince = -1;
+                if (ScreenLitAbove(snap.scene.edge, snap.window)) {
+                    blackRestartMs_ = ClockMs();
+                    if (++blackRestarts_ >= 2) {
+                        blackRestarts_ = 0;
+                        if (duplicationFailed_) {
+                            wallpaperUntil_ = GetTickCount64() + 30000;
+                            Log(L"render: the capture stays black over a lit screen; the wallpaper for thirty seconds");
+                        } else {
+                            // Desktop Duplication keeps coming back black: try Windows.Graphics.Capture
+                            // before the wallpaper, so a capture that is black for any reason cannot
+                            // hide every window behind the wallpaper for minutes.
+                            duplicationFailed_ = true;
+                            duplicationRetryAt_ = GetTickCount64() + 30000;
+                            blackGeneration_ = captureGeneration;
+                            Log(L"render: the capture stays black over a lit screen; Windows.Graphics.Capture until the displays change");
+                        }
+                    } else {
+                        Log(L"render: the capture is black over a lit screen; starting it again");
+                    }
+                    return SessionEnd::Retry;
+                }
+            }
+        }
+        bool changed = !renderer.HasPresented();
+        if (auto rb = renderer.Poll()) {
+            changed |= rb->changed;
+            if (!rb->luma.empty())
+                backdropBrightest = *std::max_element(rb->luma.begin(), rb->luma.end());
+            SampleBarInks(snap.scene, snap.settings, snap.window, *rb, darkClock, darkApps);
+            dotBackdrop = std::move(*rb);
+        }
+        auto ink = [&](bool autoDark) { return snap.settings.textColor == L"dark" || (snap.settings.textColor == L"auto" && autoDark); };
+        bool dark = ink(darkClock), darkIcons = ink(darkApps);
+
+        std::wstring time, date;
+        if (snap.settings.showClock)
+            ClockStrings(time, date, snap.settings.showClockSeconds);
+        std::wstring textKey = time + L"|" + date;
+        const double nowMs = ClockMs();
+        animating = painter.Animate(snap.scene, nowMs);
+        animating |= painter.UpdateDotInk(snap.scene, dotBackdrop, snap.settings, nowMs);
+        clockInk.Target(dark ? 1.f : 0.f, nowMs);
+        appsInk.Target(darkIcons ? 1.f : 0.f, nowMs);
+        animating |= clockInk.Moving(nowMs) || appsInk.Moving(nowMs);
+        const Ink inks{clockInk.Value(nowMs), appsInk.Value(nowMs)};
+        ULONGLONG now = GetTickCount64();
+        bool force = snap.generation != drawnGeneration || textKey != drawnText || dark != drawnDark || darkIcons != drawnDarkIcons || animating || barOwed ||
+                     now - lastPresent > kStaleMs;
+        if (!changed && !force) {
+            ++skipped; // echo of our own present, or nothing new under the glass
+            if (hadBackdrop)
+                workMs.push_back(elapsedMs());
+            continue;
+        }
+        if (!renderer.Ready() || (!renderer.HasBackdrop() && ClockMs() - sessionStartMs < 1500)) {
+            barOwed = true; // the last frame is not on screen yet, or no backdrop: drawn when it is
+            continue;
+        }
+        barOwed = false;
+        GlassParams params = ParamsFor(snap.settings, snap.scale);
+        const BarFrame& bf = painter.Frame();
+        params.radius = std::min(params.radius, std::min(bf.shape.right - bf.shape.left, bf.shape.bottom - bf.shape.top) / 2);
+        params.shapeL = bf.shape.left;
+        params.shapeT = bf.shape.top;
+        params.shapeR = bf.shape.right;
+        params.shapeB = bf.shape.bottom;
+        params.rippleX = bf.rippleX;
+        params.rippleY = bf.rippleY;
+        params.rippleR = bf.rippleR;
+        params.rippleA = bf.rippleA;
+        params.waveX = bf.waveX;
+        params.waveWidth = bf.waveWidth;
+        params.waveHeight = bf.waveHeight;
+        params.fromArea =
+            EdgeFrame{snap.scene.edge, D2D1::RectF(0, 0, float(snap.window.right - snap.window.left), float(snap.window.bottom - snap.window.top))}
+                .FromAreaMatrix();
+        bool ok = renderer.Present(params, [&](ID2D1DeviceContext2* d2d) {
+            painter.Draw(d2d, snap.scene, inks, time, date, std::to_wstring(snap.generation) + textKey + (dark ? L"d" : L"l") + (darkIcons ? L"d" : L"l"),
+                         animating);
+        });
+        if (!ok) {
+            Log(L"render: device lost");
+            return SessionEnd::Retry;
+        }
+        ++presents;
+        workMs.push_back(elapsedMs());
+        presentMs.push_back(workMs.back());
+        drawnGeneration = snap.generation;
+        drawnText = textKey;
+        drawnDark = dark;
+        drawnDarkIcons = darkIcons;
+        lastPresent = now;
+    }
+}
+
+} // namespace atrium

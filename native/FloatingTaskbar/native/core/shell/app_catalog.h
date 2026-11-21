@@ -1,0 +1,107 @@
+// All installed apps, as the Windows start menu lists them (the shell's
+// AppsFolder: Store apps and start menu shortcuts), and the apps pinned to the
+// Windows start menu, in its order. Enumerated and iconified on a worker
+// thread; the UI thread reads snapshots.
+#pragma once
+
+#include "icon_image.h"
+#include "pinned_app.h"
+
+#include <windows.h>
+
+#include <condition_variable>
+#include <deque>
+#include <map>
+#include <mutex>
+#include <set>
+#include <string>
+#include <thread>
+#include <vector>
+
+namespace atrium {
+
+struct CatalogApp {
+    std::wstring name;    // display name
+    std::wstring id;      // parsing name inside AppsFolder (AUMID or known-folder path), or a shortcut's full path
+    std::wstring aumid;   // System.AppUserModel.ID, may be empty
+    std::wstring target;  // link target exe, may be empty
+    std::wstring args;    // the link's arguments (a browser's --app=..., a profile)
+};
+
+// A folder of the Windows start menu's All apps list (a folder of shortcuts under Start Menu\Programs,
+// "Git", "7-Zip"), by its shown name, with its apps; Windows' own folders and uninstallers left out.
+struct CatalogFolder {
+    std::wstring name;
+    std::vector<CatalogApp> apps;
+};
+
+class AppCatalog {
+public:
+    // Posts `readyMsg` to `notify` when the list or an icon becomes available.
+    AppCatalog(HWND notify, UINT readyMsg);
+    ~AppCatalog();
+    AppCatalog(const AppCatalog&) = delete;
+    AppCatalog& operator=(const AppCatalog&) = delete;
+
+    void Refresh();                       // enumerate again (asynchronous)
+    bool Loaded() const;
+    std::vector<CatalogApp> Apps() const; // sorted by name (user locale)
+    // Pinned to the Windows start menu (not the taskbar: those are the bar's pins).
+    std::vector<CatalogApp> StartPins() const;
+    // The All apps list's folders holding two apps or more (read with the apps).
+    std::vector<CatalogFolder> StartFolders() const;
+    IconImage Icon(const std::wstring& id, int px); // empty until loaded
+    // The start pins' icons at `px` are read after every refresh, so the start
+    // menu's first opening shows them at once (requests for icons on screen go first).
+    void PrefetchStartIcons(int px);
+    // The apps of the start menu's own arrangement (start.json): read ahead and kept like the pins'.
+    void SetStartIds(std::vector<std::wstring> ids);
+    void SetVisibleIcons(std::vector<std::pair<std::wstring, int>> icons);
+
+    static bool Launch(const CatalogApp& app);
+    // Desktop apps only (a packaged app has no exe to elevate or to show): run elevated (the
+    // UAC prompt), and the file to select in File Explorer (the exe, else the shortcut); empty: none.
+    static bool LaunchAsAdmin(const CatalogApp& app);
+    static std::wstring FileLocation(const CatalogApp& app);
+    static PinnedApp PinFor(const CatalogApp& app);
+    // Case-insensitive match of `query` against the name (and words in it), or the start of
+    // its initials (NameInitials: "wx" finds 微信).
+    static bool Matches(const CatalogApp& app, const std::wstring& query);
+
+private:
+    void Worker();
+    HWND notify_;
+    UINT msg_;
+    HANDLE stopEvent_ = nullptr;
+    mutable std::mutex mutex_;
+    std::condition_variable cv_;
+    std::vector<CatalogApp> apps_, startPins_;
+    std::vector<CatalogFolder> startFolders_;
+    // Worker only: the exported layout and the layout file's time it is from.
+    std::vector<std::pair<std::wstring, std::wstring>> layout_; // key (packagedAppId | desktopAppLink), value
+    FILETIME layoutTime_{};
+    bool layoutLoaded_ = false;
+    bool loaded_ = false, refresh_ = false, stop_ = false;
+    int prefetchPx_ = 0;
+    void QueuePrefetch(); // under mutex_
+    void PruneIcons(); // under mutex_
+    bool QueueIcon(const std::pair<std::wstring, int>& key, bool prefetch);
+    void RefreshStartLayout(); // worker only
+    std::deque<std::pair<std::wstring, int>> iconJobs_;
+    struct CachedIcon {
+        IconImage image;
+        uint64_t used = 0;
+    };
+    struct FailedIcon {
+        unsigned attempts = 0;
+        ULONGLONG time = 0;
+    };
+    std::map<std::pair<std::wstring, int>, CachedIcon> icons_;
+    std::map<std::pair<std::wstring, int>, FailedIcon> failed_;
+    std::set<std::pair<std::wstring, int>> requested_, visibleIcons_;
+    std::set<std::wstring> liveIds_, startIds_;
+    uint64_t iconUse_ = 0;
+    std::thread thread_;
+};
+
+} // namespace atrium

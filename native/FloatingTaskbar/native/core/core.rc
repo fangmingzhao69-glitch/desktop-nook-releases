@@ -1,0 +1,30 @@
+#include <winres.h>
+#include "resource.h"
+
+IDI_ATRIUM ICON "../../assets/atrium.ico"
+
+VS_VERSION_INFO VERSIONINFO
+ FILEVERSION 2,7,0,0
+ PRODUCTVERSION 2,7,0,0
+ FILEOS VOS_NT_WINDOWS32
+ FILETYPE VFT_APP
+BEGIN
+    BLOCK "StringFileInfo"
+    BEGIN
+        BLOCK "080404b0"
+        BEGIN
+            VALUE "CompanyName", "ZHEYE and Atrium contributors"
+            VALUE "FileDescription", "ZHEYE Floating Taskbar"
+            VALUE "FileVersion", "2.7.0"
+            VALUE "InternalName", "ZheyeDock"
+            VALUE "LegalCopyright", "MIT License"
+            VALUE "OriginalFilename", "ZheyeDock.exe"
+            VALUE "ProductName", "ZHEYE Floating Taskbar"
+            VALUE "ProductVersion", "2.7.0"
+        END
+    END
+    BLOCK "VarFileInfo"
+    BEGIN
+        VALUE "Translation", 0x804, 1200
+    END
+END

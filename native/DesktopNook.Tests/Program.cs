@@ -5,6 +5,20 @@ var results = new List<object>();
 var runRoot = Path.Combine(Path.GetTempPath(), "DesktopNook-Tests-" + Guid.NewGuid().ToString("N"));
 Directory.CreateDirectory(runRoot);
 void Assert(bool value, string message) { if (!value) throw new Exception(message); }
+Test("Floating taskbar defaults, validation, atomic persistence and backup", root=>{
+    var store=new FloatingTaskbarStore(root);
+    Assert(store.Load().Mode=="system", "legacy default");
+    var selected=new FloatingTaskbarSettings{Mode="floating",Material="frosted",DisplayMode="all",HideSystemTaskbar=true};
+    store.Save(selected);store.Save(selected with{Material="liquid"});
+    Assert(store.Load().Material=="liquid", "latest config");
+    File.WriteAllText(store.SettingsPath,"{broken");
+    Assert(store.Load()==selected,"recover valid backup");
+    foreach(var invalid in new[]{selected with{Height=double.NaN},selected with{IconSize=80},selected with{DisplayMode="fixed",Display=""},selected with{Mode="unknown"}}){
+        bool refused=false;try{store.Save(invalid);}catch(IOException){refused=true;} Assert(refused,"invalid input rejected");
+    }
+    File.WriteAllText(store.SettingsPath+".bak","{broken");
+    bool corrupt=false;try{store.Load();}catch(IOException){corrupt=true;}Assert(corrupt,"do not silently reset damaged configuration");
+});
 void Test(string name, Action<string> run)
 {
     var directory = Path.Combine(runRoot, Guid.NewGuid().ToString("N")); Directory.CreateDirectory(directory);

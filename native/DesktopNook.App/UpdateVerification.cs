@@ -17,6 +17,10 @@ internal static class UpdateVerification
         options.DefaultCollectView="details";
         options.MotionMode="off";
         options.UpdateChannel=UpdateSource.GiteeOnly;
+        options.VisualStyle="mist";
+        var floatingStore=new DesktopNook.Core.FloatingTaskbarStore(data);
+        floatingStore.Save(new(){Material="frosted",BottomGap=18});
+        var floatingBefore=LocalUpdater.Hash(floatingStore.SettingsPath);
         foreach(var category in store.State.Categories)
         {
             for(int n=0;n<3;n++){var path=Path.Combine(desktop,category.Id+n+".url");File.WriteAllText(path,"[InternetShortcut]\r\nURL=https://example.invalid/\r\n");store.Collect(path,category.Id);}
@@ -44,9 +48,12 @@ internal static class UpdateVerification
         bool notesRetained=LocalUpdater.Hash(notes.FilePath)==notesBefore&&new DesktopNook.Core.NotesStore(data).State.Notes.Last().Tasks[0].Done;
         bool notesBackupRetained=LocalUpdater.Hash(Path.Combine(Path.GetDirectoryName(staged.Plan)!,"metadata-backup","Notes","notes.json"))==notesBefore;
         bool updateSourceRetained=savedPreferences.RootElement.TryGetProperty("UpdateChannel",out var channel)&&channel.GetString()=="gitee";
+        bool visualStyleRetained=savedPreferences.RootElement.TryGetProperty("VisualStyle",out var visual)&&visual.GetString()=="mist";
+        bool floatingSettingsRetained=LocalUpdater.Hash(floatingStore.SettingsPath)==floatingBefore;
+        bool floatingBackupRetained=LocalUpdater.Hash(Path.Combine(Path.GetDirectoryName(staged.Plan)!,"metadata-backup","FloatingTaskbar","settings.json"))==floatingBefore;
         var ok=result==0&&notesRetained&&notesBackupRetained&&deletedCategoryRetained&&uncheckedPreferenceRetained&&collectViewRetained&&motionModeRetained&&updateSourceRetained&&categoryOrdersRetained&&LocalUpdater.Inspect(target).Version==LocalUpdater.Inspect(candidate).Version&&LocalUpdater.Hash(Path.Combine(data,"state.json"))==before&&File.ReadAllText(store.ManagedPath(item))=="user edited data";
         var stop=new ProcessStartInfo(target){UseShellExecute=false,CreateNoWindow=true};stop.ArgumentList.Add("--maintenance=stop");stop.ArgumentList.Add("--sandbox");stop.ArgumentList.Add(profile);using(var process=Process.Start(stop)!){process.WaitForExit();}
-        File.WriteAllText(Path.Combine(root,"update-verification.json"),JsonSerializer.Serialize(new{success=ok,helperExit=result,oldVersion=LocalUpdater.Inspect(oldExe).Version.ToString(),newVersion=LocalUpdater.Inspect(target).Version.ToString(),notesRetained,notesBackupRetained,deletedCategoryRetained,uncheckedPreferenceRetained,collectViewRetained,motionModeRetained,updateSourceRetained,categoryOrdersRetained,orderedCategories=orders.Count,configurationHashUnchanged=LocalUpdater.Hash(Path.Combine(data,"state.json"))==before,payloadUnchanged=File.ReadAllText(store.ManagedPath(item))=="user edited data",newProcessConfirmed=updateResult.RootElement.GetProperty("success").GetBoolean()},new JsonSerializerOptions{WriteIndented=true}));
-        return ok?0:1;
+        File.WriteAllText(Path.Combine(root,"update-verification.json"),JsonSerializer.Serialize(new{success=ok&&visualStyleRetained&&floatingSettingsRetained&&floatingBackupRetained,visualStyleRetained,floatingSettingsRetained,floatingBackupRetained,helperExit=result,oldVersion=LocalUpdater.Inspect(oldExe).Version.ToString(),newVersion=LocalUpdater.Inspect(target).Version.ToString(),notesRetained,notesBackupRetained,deletedCategoryRetained,uncheckedPreferenceRetained,collectViewRetained,motionModeRetained,updateSourceRetained,categoryOrdersRetained,orderedCategories=orders.Count,configurationHashUnchanged=LocalUpdater.Hash(Path.Combine(data,"state.json"))==before,payloadUnchanged=File.ReadAllText(store.ManagedPath(item))=="user edited data",newProcessConfirmed=updateResult.RootElement.GetProperty("success").GetBoolean()},new JsonSerializerOptions{WriteIndented=true}));
+        return ok&&visualStyleRetained&&floatingSettingsRetained&&floatingBackupRetained?0:1;
     }
 }

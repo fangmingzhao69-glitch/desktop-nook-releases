@@ -71,6 +71,7 @@ internal static class ThemePalette
         if (changed)
             foreach (Window window in Application.Current.Windows)
                 RefreshControls(window);
+        if (Application.Current.MainWindow is MainWindow main) PanelVisualStyle.Apply(main);
     }
 
     private static void RefreshControls(DependencyObject parent)
