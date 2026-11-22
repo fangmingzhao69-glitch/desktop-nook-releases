@@ -1,5 +1,7 @@
 #include "taskbarappearanceservice.hpp"
 #include <RpcProxy.h>
+#include <CommCtrl.h>
+#include <cstdint>
 #include <shellapi.h>
 #include <wil/cppwinrt_helpers.h>
 #include <winrt/Windows.Management.Deployment.h>
@@ -12,6 +14,58 @@
 extern "C"
 {
 	_Check_return_ HRESULT STDAPICALLTYPE DLLGETCLASSOBJECT_ENTRY(_In_ REFCLSID rclsid, _In_ REFIID riid, _Outptr_ void** ppv);
+}
+
+namespace
+{
+	constexpr wchar_t CapsuleOwner[] = L"DesktopNook.NativeTaskbarShape.Owner";
+	constexpr wchar_t CapsulePosition[] = L"DesktopNook.NativeTaskbarShape.Position";
+	constexpr wchar_t CapsuleGeometryLock[] = L"DesktopNook.NativeTaskbarShape.GeometryLock";
+	constexpr UINT_PTR CapsuleSubclassId = 1;
+
+	LRESULT CALLBACK KeepCapsulePosition(HWND window, UINT message, WPARAM wParam, LPARAM lParam,
+		UINT_PTR subclassId, DWORD_PTR)
+	{
+		if (message == WM_WINDOWPOSCHANGING && lParam)
+		{
+			// Let Explorer perform its normal validation first, then retain the managed
+			// capsule coordinates even if its default handler proposed a full-width child.
+			const auto result = DefSubclassProc(window, message, wParam, lParam);
+			const auto packed = GetPropW(window, CapsuleOwner)
+				? reinterpret_cast<std::uintptr_t>(GetPropW(window, CapsulePosition)) : 0;
+			auto& position = *reinterpret_cast<WINDOWPOS*>(lParam);
+			if (packed && (position.flags & (SWP_NOMOVE | SWP_NOSIZE)) != (SWP_NOMOVE | SWP_NOSIZE))
+			{
+				const auto x = static_cast<int>(packed & 0xffff);
+				const auto y = static_cast<std::int16_t>((packed >> 16) & 0xffff);
+				const auto width = static_cast<int>((packed >> 32) & 0xffff);
+				const auto height = static_cast<int>((packed >> 48) & 0xffff);
+				RECT parent{};
+				if (GetClientRect(GetParent(window), &parent) && width > 0 && x + width <= parent.right &&
+					height == parent.bottom && y >= -16 && y <= 0)
+				{
+					position.x = x;
+					position.y = y;
+					position.cx = width;
+					position.cy = height;
+					position.flags &= ~(SWP_NOMOVE | SWP_NOSIZE);
+				}
+			}
+			return result;
+		}
+		else if (message == WM_NCDESTROY)
+		{
+			RemovePropW(window, CapsuleGeometryLock);
+			RemoveWindowSubclass(window, KeepCapsulePosition, subclassId);
+		}
+		return DefSubclassProc(window, message, wParam, lParam);
+	}
+
+	void DetachCapsulePositionLock(HWND window)
+	{
+		if (RemoveWindowSubclass(window, KeepCapsulePosition, CapsuleSubclassId))
+			RemovePropW(window, CapsuleGeometryLock);
+	}
 }
 
 DWORD TaskbarAppearanceService::s_ProxyStubRegistrationCookie = 0;
@@ -232,6 +286,9 @@ catch (...)
 void TaskbarAppearanceService::RegisterTaskbar(InstanceHandle frameHandle, HWND window)
 {
 	m_Taskbars.insert_or_assign(frameHandle, TaskbarInfo { { }, { }, window });
+	if (SetWindowSubclass(window, KeepCapsulePosition, CapsuleSubclassId, 0) &&
+		!SetPropW(window, CapsuleGeometryLock, reinterpret_cast<HANDLE>(static_cast<UINT_PTR>(1))))
+		RemoveWindowSubclass(window, KeepCapsulePosition, CapsuleSubclassId);
 }
 
 void TaskbarAppearanceService::RegisterTaskbarBackground(InstanceHandle frameHandle, wux::Shapes::Shape element)
@@ -264,6 +321,7 @@ void TaskbarAppearanceService::UnregisterTaskbar(InstanceHandle frameHandle)
 {
 	if (auto it = m_Taskbars.find(frameHandle); it != m_Taskbars.end())
 	{
+		DetachCapsulePositionLock(it->second.window);
 		const auto fillProperty = wux::Shapes::Shape::FillProperty();
 		if (it->second.background.fillChangedToken != 0)
 		{

@@ -41,13 +41,35 @@ internal static class NativeTaskbarShapeVerification
             Check(IsCentered(floating, before) && floating.Right - floating.Left < (before.Right - before.Left) - 100,
                 "The capsule packs its contents and centers on the screen.");
             nint region = CreateRectRgn(0, 0, 0, 0);
+            Rect clip = default;
             try
             {
                 Check(region != 0 && GetWindowRgn(bridge, region) != 0 && !PtInRegion(region, 0, 0) &&
-                    PtInRegion(region, (floating.Right - floating.Left) / 2, (floating.Bottom - floating.Top) / 2),
+                    PtInRegion(region, (floating.Right - floating.Left) / 2, (floating.Bottom - floating.Top) / 2) &&
+                    GetRgnBox(region, out clip) != 0,
                     "The visible silhouette of the native child has rounded corners.");
             }
             finally { if (region != 0) DeleteObject(region); }
+            await Task.Delay(350);
+            var packed = await Task.Run(() => NativeTaskbarContents.Measure(taskbar));
+            double visibleMiddle = floating.Top + (clip.Top + clip.Bottom) / 2d;
+            Check(packed is { } layout && layout.AppButtons.Length > 0 &&
+                Math.Abs(layout.AppButtons[0].Top + layout.AppButtons[0].Height / 2 - visibleMiddle) <= 2,
+                "The native icon row is centered vertically inside the visible capsule.");
+            Check(packed!.Value.TrayGap is >= 0 and <= 55 && packed.Value.Right <= floating.Right + 2,
+                "The application strip and tray have a compact gap with both groups visible.");
+            for (int attempt = 0; attempt < 3; attempt++)
+            {
+                Check(SetWindowPos(bridge, 0, 0, 0, before.Right - before.Left, before.Bottom - before.Top, 0x4214),
+                    "Queued an Explorer-style request to restore full width.");
+                for (int sample = 0; sample < 4; sample++)
+                {
+                    await Task.Delay(24);
+                    if (!GetWindowRect(bridge, out var retained) || !retained.Equals(floating))
+                        throw new IOException("The native bridge accepted an intermediate full-width position.");
+                }
+            }
+            checks.Add("The geometry stays compact during native full-width requests.");
 
             var iconRoot = Path.Combine(root, "icon-probe");
             var launchIcon = new ProcessStartInfo(Environment.ProcessPath!) { UseShellExecute = false };
@@ -156,8 +178,10 @@ internal static class NativeTaskbarShapeVerification
     [DllImport("user32.dll", CharSet = CharSet.Unicode)] private static extern nint FindWindowEx(nint parent, nint after, string name, string? title);
     [DllImport("user32.dll")] private static extern bool IsWindowVisible(nint window);
     [DllImport("user32.dll")] private static extern bool GetWindowRect(nint window, out Rect bounds);
+    [DllImport("user32.dll")] private static extern bool SetWindowPos(nint window, nint after, int x, int y, int width, int height, uint flags);
     [DllImport("user32.dll")] private static extern int GetWindowRgn(nint window, nint region);
     [DllImport("gdi32.dll")] private static extern nint CreateRectRgn(int left, int top, int right, int bottom);
     [DllImport("gdi32.dll")] private static extern bool PtInRegion(nint region, int x, int y);
+    [DllImport("gdi32.dll")] private static extern int GetRgnBox(nint region, out Rect bounds);
     [DllImport("gdi32.dll")] private static extern bool DeleteObject(nint handle);
 }

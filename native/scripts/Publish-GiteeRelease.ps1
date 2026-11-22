@@ -26,8 +26,8 @@ $files = @(
 )
 $component = Get-Item -LiteralPath $TaskbarComponent
 $componentHash = (Get-FileHash -LiteralPath $component.FullName -Algorithm SHA256).Hash
-if ($component.Name -cne 'Qingxia-TaskbarCore-win-x64.zip' -or $component.Length -ne 811773 -or
-    $componentHash -cne '8315C4B8E00ACF04815A672BE9A671BDC242D38EAEE9B4F89A9A95F3A9FAD092') {
+if ($component.Name -cne 'Qingxia-TaskbarCore-win-x64.zip' -or $component.Length -ne 811861 -or
+    $componentHash -cne '6E7961E6A0A135D946FD87E55A0AD6C516368BF2B7434B33A4800A79CA25C649') {
     throw '任务栏外观附件与客户端固定的发行资产不一致。'
 }
 $files += $component

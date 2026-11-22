@@ -376,7 +376,7 @@ internal sealed class TaskbarAppearancePage : UserControl
             _message.Text = restriction;
             return false;
         }
-        if (settings.UsesMaterialComponent && _session.NeedsDownload && !_downloadApproved)
+        if (settings.UsesComponent && _session.NeedsDownload && !_downloadApproved)
         {
             _downloadApproved = UiDialogs.Show(_owner, "首次启用需从 GitHub 下载并校验任务栏组件（约 0.8 MB）。", SettingsWindow.TaskbarPage,
                 MessageBoxButton.OKCancel) == MessageBoxResult.OK;

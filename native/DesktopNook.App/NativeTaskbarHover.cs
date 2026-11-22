@@ -9,6 +9,7 @@ namespace DesktopNook.App;
 // The shell still creates its own flyouts. Only app previews and app tooltips are reanchored.
 internal sealed class NativeTaskbarHover : IDisposable
 {
+    private const uint ObjectDestroy = 0x8001;
     private const uint ObjectShow = 0x8002;
     private const uint ObjectHide = 0x8003;
     private const uint ObjectLocationChange = 0x800B;
@@ -16,6 +17,8 @@ internal sealed class NativeTaskbarHover : IDisposable
     private readonly Dispatcher _dispatcher = Dispatcher.CurrentDispatcher;
     private readonly Dictionary<nint, (Rect Shell, Rect Capsule, Rect[] Buttons, double Scale)> _bars = new();
     private readonly Dictionary<nint, long> _pending = new();
+    private readonly Dictionary<nint, HoverAnchor> _anchored = new();
+    private HoverAnchor? _recent;
     private uint _processId;
     private nint _hook;
     private long _sequence;
@@ -29,10 +32,12 @@ internal sealed class NativeTaskbarHover : IDisposable
         {
             Dispose();
             if (pid == 0) return;
-            _hook = SetWinEventHook(ObjectShow, ObjectLocationChange, 0, _callback, pid, 0, 0);
+            _hook = SetWinEventHook(ObjectDestroy, ObjectLocationChange, 0, _callback, pid, 0, 0);
             _processId = pid;
         }
         _bars[taskbar] = (shell, capsule, icons, dpi == 0 ? 1 : dpi / 96d);
+        if (GetCursorPos(out var pointer))
+            ObserveButton(new System.Windows.Point(pointer.X, pointer.Y));
     }
 
     internal void Remove(nint taskbar) => _bars.Remove(taskbar);
@@ -43,14 +48,16 @@ internal sealed class NativeTaskbarHover : IDisposable
         _hook = 0;
         _processId = 0;
         _pending.Clear();
+        _anchored.Clear();
+        _recent = null;
         _bars.Clear();
     }
 
     private void OnWindowEvent(nint hook, uint eventId, nint window, int objectId, int childId, uint thread, uint time)
     {
-        if (hook != _hook || window == 0 || objectId != 0 || childId != 0 ||
-            eventId is not (ObjectShow or ObjectHide or ObjectLocationChange)) return;
-        if (eventId == ObjectHide) { _pending.Remove(window); return; }
+        if (hook != _hook || window == 0 || objectId is not (0 or -4) || childId != 0 ||
+            eventId is not (ObjectDestroy or ObjectShow or ObjectHide or ObjectLocationChange)) return;
+        if (eventId is ObjectHide or ObjectDestroy) { _pending.Remove(window); _anchored.Remove(window); return; }
         if (!GetCursorPos(out var pointer)) return;
 
         var point = new System.Windows.Point(pointer.X, pointer.Y);
@@ -58,41 +65,55 @@ internal sealed class NativeTaskbarHover : IDisposable
         if (GetClassName(window, className, className.Capacity) == 0) return;
         string name = className.ToString();
         if (name is not ("TaskListThumbnailWnd" or "tooltips_class32" or "Xaml_WindowedPopupClass")) return;
+        if (_pending.ContainsKey(window)) return;
+        var anchor = ObserveButton(point);
+        if (anchor is null && GetWindowRect(window, out var surface) && surface.Contains(point))
+        {
+            if (_anchored.TryGetValue(window, out var current)) anchor = current;
+            else if (_recent is { } recent && Environment.TickCount64 - recent.Observed <= 650) anchor = recent;
+        }
+        if (anchor is not { } target || !_bars.TryGetValue(target.Taskbar, out var bar) ||
+            (name != "TaskListThumbnailWnd" && GetAncestor(window, 3) != target.Taskbar)) return;
+
+        long sequence = ++_sequence;
+        _pending[window] = sequence;
+        _dispatcher.BeginInvoke(() => _ = RepositionAsync(window, target, bar.Shell, bar.Scale, name, sequence));
+    }
+
+    private HoverAnchor? ObserveButton(System.Windows.Point point)
+    {
         foreach (var (taskbar, bar) in _bars)
         {
             if (!bar.Capsule.Contains(point)) continue;
-            var icon = bar.Buttons.FirstOrDefault(rect => rect.Contains(point));
-            if (icon.Width <= 0) continue;
-            if (name != "TaskListThumbnailWnd" && GetAncestor(window, 3) != taskbar)
-                continue;
-            if (_pending.ContainsKey(window)) return;
-            // The hover target itself must be an app button. System tray routes are not eligible.
-            long sequence = ++_sequence;
-            _pending[window] = sequence;
-            _dispatcher.BeginInvoke(() => _ = RepositionAsync(window, taskbar, bar.Shell, icon, bar.Scale, name, sequence));
-            return;
+            var button = bar.Buttons.FirstOrDefault(rect => rect.Contains(point));
+            // Moving across the tray clears app-hover context. Its flyouts use the system position.
+            return _recent = button.Width > 0 ? new(taskbar, button, Environment.TickCount64) : null;
         }
+        return null;
     }
 
-    private async Task RepositionAsync(nint window, nint taskbar, Rect shell, Rect icon, double scale, string name, long sequence)
+    private async Task RepositionAsync(nint window, HoverAnchor anchor, Rect shell, double scale, string name, long sequence)
     {
         try
         {
-            // XAML puts several unrelated flyouts in the same window class.
-            if (name == "Xaml_WindowedPopupClass" && !await Task.Run(() => IsAppFlyout(window)).WaitAsync(TimeSpan.FromMilliseconds(300)))
+            if (name == "Xaml_WindowedPopupClass" && !_anchored.ContainsKey(window) &&
+                !await Task.Run(() => IsAppFlyout(window)).WaitAsync(TimeSpan.FromMilliseconds(300)))
                 return;
+            nint taskbar = anchor.Taskbar;
             if (!_pending.TryGetValue(window, out long current) || current != sequence ||
                 !_bars.ContainsKey(taskbar) || !IsWindowVisible(window) || !GetWindowRect(window, out var bounds))
                 return;
             if (bounds.Right <= bounds.Left || bounds.Bottom <= bounds.Top) return;
             GetWindowThreadProcessId(window, out uint pid);
-            if (pid == 0 || pid != _processId || !GetCursorPos(out var pointer) ||
-                !icon.Contains(new System.Windows.Point(pointer.X, pointer.Y))) return;
+            if (pid == 0 || pid != _processId || !GetCursorPos(out var pointer)) return;
+            var point = new System.Windows.Point(pointer.X, pointer.Y);
+            if (!anchor.Button.Contains(point) && !bounds.Contains(point)) return;
             nint monitor = MonitorFromWindow(taskbar, 2);
             var info = new MonitorInfo { Size = (uint)Marshal.SizeOf<MonitorInfo>() };
             if (monitor == 0 || !GetMonitorInfo(monitor, ref info)) return;
             var size = new Size(bounds.Right - bounds.Left, bounds.Bottom - bounds.Top);
-            var placement = Place(icon, shell, info.Work.ToRect(), size, scale);
+            var placement = Place(anchor.Button, shell, info.Work.ToRect(), size, scale);
+            _anchored[window] = anchor;
             if (Math.Abs(placement.X - bounds.Left) <= 2 && Math.Abs(placement.Y - bounds.Top) <= 2) return;
             SetWindowPos(window, 0, (int)Math.Round(placement.X), (int)Math.Round(placement.Y), 0, 0, 0x4215);
         }
@@ -135,11 +156,14 @@ internal sealed class NativeTaskbarHover : IDisposable
         { return false; }
     }
 
+    private readonly record struct HoverAnchor(nint Taskbar, Rect Button, long Observed);
     [StructLayout(LayoutKind.Sequential)] private struct NativePoint { public int X, Y; }
     [StructLayout(LayoutKind.Sequential)] private struct NativeRect
     {
         public int Left, Top, Right, Bottom;
         public readonly Rect ToRect() => new(Left, Top, Right - Left, Bottom - Top);
+        public readonly bool Contains(System.Windows.Point point) =>
+            point.X >= Left && point.X < Right && point.Y >= Top && point.Y < Bottom;
     }
     [StructLayout(LayoutKind.Sequential)] private struct MonitorInfo { public uint Size; public NativeRect Monitor, Work; public uint Flags; }
     private delegate void Callback(nint eventHook, uint eventId, nint window, int objectId, int childId, uint thread, uint time);

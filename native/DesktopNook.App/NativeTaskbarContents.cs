@@ -6,7 +6,8 @@ namespace DesktopNook.App;
 
 internal static class NativeTaskbarContents
 {
-    internal readonly record struct Measurement(int PackedWidth, double Left, double Right, bool HasOverflow, Rect[] AppButtons);
+    internal readonly record struct Measurement(int PackedWidth, double Left, double Right, bool HasOverflow,
+        Rect[] AppButtons, double? TrayGap, double AppSlot, int ChromeCount, double ChromeWidth);
 
     // This runs on a background thread: an Explorer automation call can wait on its UI thread.
     internal static Measurement? Measure(nint taskbar)
@@ -53,9 +54,14 @@ internal static class NativeTaskbarContents
             var widths = appButtons.Select(rect => rect.Width).Order().ToArray();
             double slot = widths.Length > 2 ? widths[widths.Length / 2] : 0;
             double apps = widths.Sum(width => width < slot * .88 ? slot : width);
-            int width = (int)Math.Ceiling(PackedWidth(items) + apps + PackedWidth(tray));
+            double chromeWidth = PackedWidth(items);
+            int width = (int)Math.Ceiling(chromeWidth + apps + PackedWidth(tray));
             var all = items.Concat(appButtons).Concat(tray).ToArray();
-            return new(width, all.Min(rect => rect.Left), all.Max(rect => rect.Right), overflow, appButtons.ToArray());
+            double? trayGap = appButtons.Count > 0 && tray.Count > 0
+                ? tray.Min(rect => rect.Left) - appButtons.Max(rect => rect.Right)
+                : null;
+            return new(width, all.Min(rect => rect.Left), all.Max(rect => rect.Right), overflow, appButtons.ToArray(), trayGap,
+                widths.Length == 0 ? 0 : widths[widths.Length / 2], items.Count, chromeWidth);
         }
         catch (Exception error) when (error is ElementNotAvailableException or COMException or InvalidOperationException or ArgumentException)
         {

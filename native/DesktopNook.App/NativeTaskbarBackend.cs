@@ -48,29 +48,24 @@ internal sealed class NativeTaskbarBackend(string storePath, bool sandbox, bool 
         _starting = true;
         try
         {
-            if (settings.UsesMaterialComponent || dryRun)
-            {
-                if (!dryRun && _worker is not { Running: true })
-                    await Task.Run(NativeTaskbarModule.CheckExplorerCompatibility);
+            if (!dryRun && _worker is not { Running: true })
+                await Task.Run(NativeTaskbarModule.CheckExplorerCompatibility);
 
-                Directory.CreateDirectory(Path.GetDirectoryName(_configuration)!);
-                TaskbarAppearanceStore.WriteComponentSettings(_configuration, settings);
-                if (_worker is not { Running: true })
+            Directory.CreateDirectory(Path.GetDirectoryName(_configuration)!);
+            TaskbarAppearanceStore.WriteComponentSettings(_configuration, settings);
+            if (_worker is not { Running: true })
+            {
+                if (!StopWorker()) throw new IOException("无法清理已退出的外观组件。");
+                if (_module is null)
                 {
-                    if (!StopWorker()) throw new IOException("无法清理已退出的外观组件。");
-                    if (_module is null)
-                    {
-                        string directory = await _package.PrepareAsync(allowDownload);
-                        _module = await Task.Run(() => NativeTaskbarModule.Load(directory));
-                    }
-                    if (Restriction is { } changed) throw new IOException(changed);
-                    var worker = new Worker(_module, Path.Combine(storePath, "Native"), dryRun);
-                    _worker = worker;
-                    await worker.WaitForStartAsync();
+                    string directory = await _package.PrepareAsync(allowDownload);
+                    _module = await Task.Run(() => NativeTaskbarModule.Load(directory));
                 }
+                if (Restriction is { } changed) throw new IOException(changed);
+                var worker = new Worker(_module, Path.Combine(storePath, "Native"), dryRun);
+                _worker = worker;
+                await worker.WaitForStartAsync();
             }
-            else if (!StopWorker())
-                throw new IOException("任务栏材质组件尚未退出。");
 
             if (settings.FloatingLayout && !dryRun)
             {
@@ -202,13 +197,13 @@ internal sealed class NativeTaskbarModule
     private const string Filename = "QingxiaTaskbarCore.dll";
     private const string ExplorerModule = "ExplorerTAP.dll";
     internal const string ExplorerRestartNeeded =
-        "Windows 资源管理器仍载有另一版本的任务栏材质组件。请在任务管理器中重启「Windows 资源管理器」后再试。胶囊形态可使用「系统默认」材质。";
+        "Windows 资源管理器仍载有另一版本的任务栏材质组件。请在任务管理器中重启「Windows 资源管理器」后再试。";
     private static readonly Dictionary<string, string> Hashes = new(StringComparer.OrdinalIgnoreCase)
     {
-        [Filename] = "91F2D6CBECE6F120415F004D974300708859FA2E9D88D865E4CD630B8A26336B",
-        ["ProgramLog.dll"] = "0EC63B02AA66BA4D3CC66CD724223E03A7160BAD7118ADBEC1403FEDF99BFF80",
-        [ExplorerModule] = "6D8D2E025EC30911DA7DE9EA04F171F03B658196FAAE737E15D0DCC0C6739844",
-        ["ExplorerHooks.dll"] = "896727368CE616E6F4962083CD11295F54DCBA35EC72B3FC6FB2DFCF120A1BBC"
+        [Filename] = "BFB337B1773605E66FD167466711867223F72847095C4E2B0F3DFD8965027107",
+        ["ProgramLog.dll"] = "5059806E10A0AE34B4D73AC489B0A96FD4352CAEDFDEF5724D3C624757E5A2F8",
+        [ExplorerModule] = "0E3D75CCEA95F823A388B63C61B008F0EAC5FD4F04732964375286B8B985A9FE",
+        ["ExplorerHooks.dll"] = "880D9194F73608D6BDA44BC9B7E569866337B63A44F38CFF9A4D1D5C65DF96AA"
     };
 
     [UnmanagedFunctionPointer(CallingConvention.Winapi)]

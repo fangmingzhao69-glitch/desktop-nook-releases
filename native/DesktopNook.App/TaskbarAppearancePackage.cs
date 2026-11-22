@@ -7,11 +7,11 @@ namespace DesktopNook.App;
 
 internal sealed class TaskbarAppearancePackage(string storePath)
 {
-    internal const string ReleaseTag = "v0.17.6";
+    internal const string ReleaseTag = "v0.21.6";
     internal const string PackageFile = "Qingxia-TaskbarCore-win-x64.zip";
-    private const int Size = 811773;
+    private const int Size = 811861;
     private const string ResourceName = "DesktopNook.NativeTaskbarPackage";
-    private const string Sha256 = "8315C4B8E00ACF04815A672BE9A671BDC242D38EAEE9B4F89A9A95F3A9FAD092";
+    private const string Sha256 = "6E7961E6A0A135D946FD87E55A0AD6C516368BF2B7434B33A4800A79CA25C649";
     private static readonly Uri Source = new($"https://github.com/{OnlineUpdater.Repository}/releases/download/{ReleaseTag}/{PackageFile}");
     internal static readonly IReadOnlyList<string> Files = Array.AsReadOnly(new[]
     {
