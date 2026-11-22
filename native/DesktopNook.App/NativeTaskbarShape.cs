@@ -14,14 +14,22 @@ internal sealed class NativeTaskbarShape
     private const string OwnerProperty = "DesktopNook.NativeTaskbarShape.Owner";
     private const string PositionProperty = "DesktopNook.NativeTaskbarShape.Position";
     private const string GeometryLockProperty = "DesktopNook.NativeTaskbarShape.GeometryLock";
+    private const string InsetProperty = "DesktopNook.NativeTaskbarShape.Inset";
+    private const string DividerProperty = "DesktopNook.NativeTaskbarShape.Divider";
+    private const string TrimProperty = "DesktopNook.NativeTaskbarShape.Trim";
+    internal const string TrimAppliedProperty = "DesktopNook.NativeTaskbarShape.TrimApplied";
+    internal const string SmoothProperty = "DesktopNook.NativeTaskbarShape.Smooth";
+    private static readonly uint VisualRefresh = RegisterWindowMessage("DesktopNook.NativeTaskbarShape.VisualRefresh");
     private const uint MoveFlags = 0x4214; // async, no activation, no z-order changes
     private readonly DispatcherTimer _timer = new() { Interval = TimeSpan.FromMilliseconds(350) };
     private readonly Dictionary<nint, Placement> _owned = new();
     private readonly Dictionary<nint, int> _pendingWidths = new();
     private readonly NativeTaskbarHover _hover = new();
+    private readonly NativeTaskbarInfoBall _infoBall = new();
     private Task<Dictionary<nint, NativeTaskbarContents.Measurement>>? _pendingMeasure;
     private int _revision;
     private bool _refreshing;
+    private bool _settling;
     private EventWaitHandle? _guardStop;
 
     internal NativeTaskbarShape()
@@ -54,13 +62,24 @@ internal sealed class NativeTaskbarShape
             using var guard = Process.Start(launch) ?? throw new IOException("无法启动原生任务栏恢复组件。");
             if (!await Task.Run(() => ready.WaitOne(TimeSpan.FromSeconds(8))) || guard.HasExited)
                 throw new IOException("原生任务栏恢复组件未就绪。");
-            await RefreshAsync();
-            var deadline = Stopwatch.StartNew();
-            while (!_owned.Any(entry => IsInPosition(entry.Key, entry.Value.Parent, entry.Value.Shape)) &&
-                deadline.Elapsed < TimeSpan.FromSeconds(2))
-                await Task.Delay(50);
+            // Explorer may switch from regular to small buttons after the first narrow
+            // layout. Learn its resulting sizes before showing a successful preview.
+            _settling = true;
+            for (int sample = 0; sample < 8; sample++)
+            {
+                if (sample != 0) await Task.Delay(205);
+                await RefreshAsync();
+                if (sample >= 4 && _pendingWidths.Count == 0 &&
+                    _owned.Count > 0 && _owned.All(entry => !entry.Value.Overflow &&
+                        GetProp(entry.Key, TrimProperty) == GetProp(entry.Key, TrimAppliedProperty) &&
+                        GetClientRect(entry.Value.Parent, out var parent) &&
+                        entry.Value.Shape.X == CenteredX(parent.Right, entry.Value.Shape.Width,
+                            (int)GetProp(entry.Key, TrimAppliedProperty))))
+                    break;
+            }
             if (!_owned.Any(entry => IsInPosition(entry.Key, entry.Value.Parent, entry.Value.Shape)))
                 throw new IOException("未能调整当前 Windows 原生任务栏。请确认任务栏处于水平方向，且没有其他工具正在修改它。");
+            _settling = false;
             _timer.Start();
         }
         catch
@@ -73,8 +92,10 @@ internal sealed class NativeTaskbarShape
     internal void Stop()
     {
         _timer.Stop();
+        _settling = false;
         _revision++;
         _hover.Dispose();
+        _infoBall.Stop();
         _pendingWidths.Clear();
         RestoreOwned(Environment.ProcessId);
         if (_owned.Count != 0) TaskbarPlacement.Invalidate();
@@ -130,11 +151,12 @@ internal sealed class NativeTaskbarShape
             }
             if (!measurements.TryGetValue(bridge, out var contents)) continue;
             _owned.TryGetValue(bridge, out var previous);
-            int padding = Math.Max(22, (int)Math.Round(bounds.Bottom * .55));
+            int ballWidth = _infoBall.WidthFor(taskbar);
+            int padding = Math.Max(8, (int)Math.Round(bounds.Bottom * .22)) + (ballWidth > 0 ? ballWidth + 2 : 0);
             int maximum = bounds.Right - 8;
             // When the new button cannot fit Windows may compress every app button at once.
             // Remember the regular slot from the unconstrained/native layout for this DPI.
-            double normalSlot = previous.Shape.Height == bounds.Bottom
+            double normalSlot = !_settling && previous.Shape.Height == bounds.Bottom
                 ? Math.Max(previous.NormalAppSlot, contents.AppSlot)
                 : contents.AppSlot;
             bool squeezed = contents.AppSlot > 0 && contents.AppSlot < normalSlot * .9;
@@ -144,10 +166,17 @@ internal sealed class NativeTaskbarShape
             int squeezedSpace = squeezed ? (int)Math.Ceiling((normalSlot - contents.AppSlot) * contents.AppButtons.Length +
                 normalChrome - contents.ChromeWidth) : 0;
             int measuredWidth = Math.Min(maximum, contents.PackedWidth + squeezedSpace);
-            int minimum = Math.Abs(previous.PackedWidth - measuredWidth) <= 2 ? previous.MinimumWidth : 0;
+            int count = contents.AppButtons.Length;
+            // Hidden app buttons do not contribute to UI Automation's measured width.
+            // Preserve the last known fit when Explorer exposes more of them after a resize.
+            int minimum = previous.MinimumWidth;
+            if (minimum > 0 && !contents.HasOverflow && !previous.Overflow)
+                minimum = Math.Max(0, minimum + (int)Math.Round((count - previous.AppCount) * normalSlot));
             bool laidOut = previous.Shape.Width > 0 && IsInPosition(bridge, taskbar, previous.Shape);
-            if (laidOut && GetWindowRect(bridge, out var position) &&
-                (contents.HasOverflow || contents.Left < position.Left - 2 || contents.Right > position.Right + 2))
+            if (laidOut && contents.HasOverflow)
+                minimum = Math.Max(minimum, previous.Shape.Width + Math.Max(padding, (int)Math.Ceiling(normalSlot)));
+            else if (laidOut && GetWindowRect(bridge, out var position) &&
+                (contents.Left < position.Left - 2 || contents.Right > position.Right + 2))
                 minimum = Math.Max(minimum, previous.Shape.Width + padding);
             else if (previous.Shape.Width == 0 && contents.HasOverflow)
                 minimum = maximum;
@@ -161,15 +190,17 @@ internal sealed class NativeTaskbarShape
                 // Explorer can report an intermediate set of button bounds during reflow.
                 // Commit a resize only when the next scan agrees with the proposed width.
                 _pendingWidths[bridge] = width;
-                if (laidOut) UpdateHover(taskbar, bridge, contents);
+                if (laidOut) UpdateHover(taskbar, bridge, contents, ballWidth);
                 continue;
             }
             _pendingWidths.Remove(bridge);
             // Clip around the middle of the original icon row. Shrinking the native control's
             // height can leave its normal-height contents sitting too low in the capsule.
-            int inset = Math.Clamp((int)Math.Round(bounds.Bottom * .09), 3, 8);
-            int gap = Math.Clamp((int)Math.Round(bounds.Bottom * .14), inset, 12);
-            var desired = new Layout((bounds.Right - width) / 2, inset - gap, width, bounds.Bottom, inset);
+            int inset = Math.Clamp((int)Math.Round(bounds.Bottom * .065), 2, 8);
+            int gap = Math.Clamp((int)Math.Round(bounds.Bottom * .10), inset, 8);
+            int trim = (int)GetProp(bridge, TrimAppliedProperty);
+            var desired = new Layout(CenteredX(bounds.Right, width, trim),
+                inset - gap, width, bounds.Bottom, inset);
             if (GetProp(bridge, OwnerProperty) != owner)
             {
                 // A non-default geometry or region may belong to another customizer.
@@ -185,9 +216,14 @@ internal sealed class NativeTaskbarShape
                 _hover.Remove(taskbar);
                 continue;
             }
-            _owned[bridge] = new(taskbar, desired, measuredWidth, minimum, normalSlot, contents.ChromeCount, normalChrome);
+            _owned[bridge] = new(taskbar, desired, minimum, normalSlot, contents.ChromeCount, normalChrome, count, contents.HasOverflow);
             if (!unchanged) TaskbarPlacement.Invalidate();
-            else UpdateHover(taskbar, bridge, contents);
+            else
+            {
+                UpdateHover(taskbar, bridge, contents, ballWidth);
+                if (!contents.HasOverflow)
+                    UpdateTrim(bridge, contents.TrayGap, trim, bounds.Right - width, ballWidth, bounds.Bottom);
+            }
         }
         foreach (nint bridge in _owned.Keys.Where(window => !found.Contains(window)).ToArray())
         {
@@ -199,26 +235,72 @@ internal sealed class NativeTaskbarShape
         }
     }
 
-    private void UpdateHover(nint taskbar, nint bridge, NativeTaskbarContents.Measurement contents)
+    private void UpdateHover(nint taskbar, nint bridge, NativeTaskbarContents.Measurement contents, int ballWidth)
     {
         if (GetWindowRect(taskbar, out var shell) && GetWindowRect(bridge, out var shape))
-            _hover.Update(taskbar, shell.ToRect(), shape.ToRect(), contents.AppButtons, GetDpiForWindow(taskbar));
+        {
+            var visible = shape;
+            visible.Right -= (int)GetProp(bridge, TrimAppliedProperty);
+            _hover.Update(taskbar, shell.ToRect(), visible.ToRect(), contents.AppButtons, contents.OverflowButton, GetDpiForWindow(taskbar));
+            if (contents.TrayStart is double tray && contents.LeftEnd is double end && tray >= end &&
+                end >= shape.Left && tray <= shape.Right)
+            {
+                _infoBall.Align(taskbar, tray, end, shape.Top, shape.Bottom);
+                double groupStart = tray - (ballWidth > 0 ? ballWidth + 2 : 0);
+                int divider = (int)Math.Round((end + Math.Max(end, groupStart)) / 2 - shape.Left);
+                if (GetProp(bridge, DividerProperty) != divider && SetProp(bridge, DividerProperty, divider))
+                    NotifyVisual(bridge);
+            }
+            else if (RemoveProp(bridge, DividerProperty) != 0)
+                NotifyVisual(bridge);
+        }
+    }
+
+    private static int CenteredX(int shellWidth, int logicalWidth, int trim) =>
+        Math.Min(shellWidth - logicalWidth, (shellWidth - logicalWidth + trim) / 2);
+
+    private static void UpdateTrim(nint bridge, double? measuredGap, int applied, int available, int ballWidth, int height)
+    {
+        // Keep the logical width Explorer needs to lay out every app. Move the
+        // native tray into the space Explorer otherwise reserves for overflow.
+        int requested = (int)GetProp(bridge, TrimProperty);
+        if (requested != applied) return;
+        int target = Math.Max(8, height / 5) + (ballWidth > 0 ? ballWidth + 2 : 0);
+        int trim = measuredGap is double gap
+            ? Math.Clamp((int)Math.Round(gap) + applied - target, 0, Math.Min(available, height * 2))
+            : 0;
+        if (Math.Abs(trim - requested) < 3) return;
+        if (trim == 0) RemoveProp(bridge, TrimProperty);
+        else if (!SetProp(bridge, TrimProperty, trim)) return;
+        NotifyVisual(bridge);
     }
 
     private static bool Apply(nint bridge, Layout shape)
     {
         int visibleHeight = shape.Height - 2 * shape.Inset;
-        nint region = CreateRoundRectRgn(1, shape.Inset, shape.Width - 1, shape.Height - shape.Inset, visibleHeight, visibleHeight);
+        int trim = (int)GetProp(bridge, TrimAppliedProperty);
+        nint region = GetProp(bridge, SmoothProperty) != 0
+            ? CreateRectRgn(0, shape.Inset, shape.Width - trim, shape.Height - shape.Inset)
+            : CreateRoundRectRgn(1, shape.Inset, shape.Width - 1, shape.Height - shape.Inset, visibleHeight, visibleHeight);
         if (region == 0) return false;
         // Share the four coordinates atomically with Explorer's WINDOWPOS callback.
         ulong packed = (ushort)shape.X | (ulong)(ushort)shape.Y << 16 |
             (ulong)(ushort)shape.Width << 32 | (ulong)(ushort)shape.Height << 48;
         if (SetProp(bridge, PositionProperty, unchecked((nint)packed)) &&
+            SetProp(bridge, InsetProperty, shape.Inset + 1) &&
             SetWindowPos(bridge, 0, shape.X, shape.Y, shape.Width, shape.Height, MoveFlags) &&
             SetWindowRgn(bridge, region, true) != 0)
+        {
+            NotifyVisual(bridge);
             return true; // Windows owns the region after SetWindowRgn succeeds.
+        }
         DeleteObject(region);
         return false;
+    }
+
+    private static void NotifyVisual(nint bridge)
+    {
+        if (VisualRefresh != 0) PostMessage(bridge, VisualRefresh, 0, 0);
     }
 
     private static bool HasRegion(nint bridge)
@@ -259,6 +341,7 @@ internal sealed class NativeTaskbarShape
     private static void RestoreOwned(int pid)
     {
         foreach (var (taskbar, bridge) in Bridges()) Restore(taskbar, bridge, pid);
+        NativeTaskbarInfoBall.RestoreOwned(pid);
     }
 
     private static void Restore(nint taskbar, nint bridge, nint owner)
@@ -266,6 +349,10 @@ internal sealed class NativeTaskbarShape
         if (GetProp(bridge, OwnerProperty) != owner || GetParent(bridge) != taskbar || !GetClientRect(taskbar, out var bounds))
             return;
         RemoveProp(bridge, PositionProperty);
+        RemoveProp(bridge, InsetProperty);
+        RemoveProp(bridge, DividerProperty);
+        RemoveProp(bridge, TrimProperty);
+        NotifyVisual(bridge);
         if (SetWindowRgn(bridge, 0, true) != 0 && SetWindowPos(bridge, 0, 0, 0, bounds.Right, bounds.Bottom, MoveFlags))
             RemoveProp(bridge, OwnerProperty);
     }
@@ -294,8 +381,8 @@ internal sealed class NativeTaskbarShape
     }
 
     private readonly record struct Layout(int X, int Y, int Width, int Height, int Inset);
-    private readonly record struct Placement(nint Parent, Layout Shape, int PackedWidth, int MinimumWidth,
-        double NormalAppSlot, int ChromeCount, double NormalChromeWidth);
+    private readonly record struct Placement(nint Parent, Layout Shape, int MinimumWidth,
+        double NormalAppSlot, int ChromeCount, double NormalChromeWidth, int AppCount, bool Overflow);
 
     [StructLayout(LayoutKind.Sequential)] private struct Rect
     {
@@ -317,6 +404,8 @@ internal sealed class NativeTaskbarShape
     [DllImport("user32.dll", CharSet = CharSet.Unicode)] private static extern bool SetProp(nint window, string name, nint data);
     [DllImport("user32.dll", CharSet = CharSet.Unicode)] private static extern nint GetProp(nint window, string name);
     [DllImport("user32.dll", CharSet = CharSet.Unicode)] private static extern nint RemoveProp(nint window, string name);
+    [DllImport("user32.dll", CharSet = CharSet.Unicode)] private static extern uint RegisterWindowMessage(string name);
+    [DllImport("user32.dll")] private static extern bool PostMessage(nint window, uint message, nint wParam, nint lParam);
     [DllImport("gdi32.dll")] private static extern nint CreateRectRgn(int left, int top, int right, int bottom);
     [DllImport("gdi32.dll")] private static extern nint CreateRoundRectRgn(int left, int top, int right, int bottom, int ellipseWidth, int ellipseHeight);
     [DllImport("gdi32.dll")] private static extern bool DeleteObject(nint handle);

@@ -39,7 +39,7 @@ public:
 
 	HRESULT STDMETHODCALLTYPE KillExplorerWhenPackageUninstalls(LPCWSTR packageFullName) override;
 
-	void RegisterTaskbar(InstanceHandle frameHandle, HWND window);
+	void RegisterTaskbar(InstanceHandle frameHandle, HWND window, const wux::UIElement& content);
 	void RegisterTaskbarBackground(InstanceHandle frameHandle, wux::Shapes::Shape element);
 	void RegisterTaskbarBorder(InstanceHandle frameHandle, wux::Shapes::Shape element);
 	void UnregisterTaskbar(InstanceHandle frameHandle);

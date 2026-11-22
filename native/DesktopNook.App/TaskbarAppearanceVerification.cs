@@ -54,6 +54,17 @@ internal static class TaskbarAppearanceVerification
             window.KeepOpenForVerification = true;
             window.FinishPanelMotion();
             await window.Dispatcher.InvokeAsync(window.UpdateLayout, DispatcherPriority.ContextIdle);
+            int w = (int)Math.Ceiling(window.Surface.ActualWidth), h = (int)Math.Ceiling(window.Surface.ActualHeight);
+            var panelPixels = new RenderTargetBitmap(w, h, 96, 96, PixelFormats.Pbgra32);
+            panelPixels.Render(window.Surface);
+            byte AlphaAt(int x, int y)
+            {
+                var pixel = new byte[4];
+                panelPixels.CopyPixels(new Int32Rect(x, y, 1, 1), pixel, 4, 0);
+                return pixel[3];
+            }
+            Check(AlphaAt(1, h - 2) < 16 && AlphaAt(w - 2, h - 2) < 16 && AlphaAt(w / 2, h - 2) > 240,
+                "折页两页底栏共用一个圆角，底边中段填满");
             var store = new TaskbarAppearanceStore(App.Store.DataDirectory);
             var probe = new ProbeBackend();
             var session = new TaskbarAppearanceSession(store, probe);

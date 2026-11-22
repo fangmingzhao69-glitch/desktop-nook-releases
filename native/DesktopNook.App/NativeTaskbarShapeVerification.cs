@@ -3,6 +3,7 @@ using System.IO;
 using System.Runtime.InteropServices;
 using System.Text.Json;
 using System.Windows;
+using System.Windows.Automation;
 using DesktopNook.Core;
 
 namespace DesktopNook.App;
@@ -23,6 +24,7 @@ internal static class NativeTaskbarShapeVerification
         var checks = new List<string>();
         string? failure = null;
         Rect before = default, floating = default, expanded = default;
+        double? trayGap = null;
         var store = new TaskbarAppearanceStore(root);
         var session = new TaskbarAppearanceSession(store, new NativeTaskbarBackend(store.DirectoryPath, sandbox: false));
         try
@@ -36,9 +38,11 @@ internal static class NativeTaskbarShapeVerification
             await session.PreviewAsync(new TaskbarAppearanceSettings { Enabled = true, Style = "normal", FloatingLayout = true }, allowDownload: false);
             Check(FindWindowEx(0, 0, "Shell_TrayWnd", null) == taskbar && IsWindowVisible(taskbar),
                 "The same Explorer taskbar remains visible in capsule mode.");
-            Check(GetWindowRect(bridge, out floating) && floating.Left > before.Left && floating.Right < before.Right && floating.Bottom < before.Bottom,
+            var centered = await WaitForBounds(rect => rect.Left > before.Left && rect.Right < before.Right &&
+                rect.Bottom < before.Bottom && IsCentered(rect, before));
+            Check(centered.HasValue && GetWindowRect(bridge, out floating),
                 "The original native composition child moves inward, with left, right and bottom gaps.");
-            Check(IsCentered(floating, before) && floating.Right - floating.Left < (before.Right - before.Left) - 100,
+            Check(centered!.Value.Right - centered.Value.Left < (before.Right - before.Left) - 100,
                 "The capsule packs its contents and centers on the screen.");
             nint region = CreateRectRgn(0, 0, 0, 0);
             Rect clip = default;
@@ -52,12 +56,45 @@ internal static class NativeTaskbarShapeVerification
             finally { if (region != 0) DeleteObject(region); }
             await Task.Delay(350);
             var packed = await Task.Run(() => NativeTaskbarContents.Measure(taskbar));
+            trayGap = packed?.TrayGap;
             double visibleMiddle = floating.Top + (clip.Top + clip.Bottom) / 2d;
             Check(packed is { } layout && layout.AppButtons.Length > 0 &&
                 Math.Abs(layout.AppButtons[0].Top + layout.AppButtons[0].Height / 2 - visibleMiddle) <= 2,
                 "The native icon row is centered vertically inside the visible capsule.");
-            Check(packed!.Value.TrayGap is >= 0 and <= 55 && packed.Value.Right <= floating.Right + 2,
-                "The application strip and tray have a compact gap with both groups visible.");
+            Check(packed!.Value is { HasOverflow: false, TrayGap: >= 0 } &&
+                TryGetFace(bridge, out floating) && packed.Value.Right <= floating.Right + 2,
+                "The application strip and tray both fit without overflowing.");
+            Check(IsCentered(floating, before) && trayGap <= Math.Max(20, (floating.Bottom - floating.Top) / 2),
+                "Only a narrow separator gap remains after compacting the native tray.");
+            Check(GetProp(bridge, NativeTaskbarShape.SmoothProperty) != 0,
+                "Explorer activated the antialiased Composition clip.");
+            Check(GetProp(bridge, "DesktopNook.NativeTaskbarShape.DividerVisible") != 0,
+                "Explorer drew the separator between the application strip and tray.");
+            if (!packed.Value.OverflowButton.IsEmpty)
+            {
+                var arrow = packed.Value.OverflowButton;
+                Check(ClickOverflow(taskbar, arrow), "Clicked the chevron inside the original Explorer taskbar.");
+                try
+                {
+                    var wait = Stopwatch.StartNew();
+                    bool aligned = false;
+                    do
+                    {
+                        await Task.Delay(120);
+                        var popup = FindWindowEx(0, 0, "TopLevelWindowForOverflowXamlIsland", null);
+                        if (popup == 0) popup = FindWindowEx(0, 0, "NotifyIconOverflowWindow", null);
+                        aligned = popup != 0 && IsWindowVisible(popup) && GetWindowRect(popup, out var flyout) &&
+                            Math.Abs((flyout.Left + flyout.Right) / 2d - (arrow.Left + arrow.Width / 2)) <= 14;
+                    } while (!aligned && wait.Elapsed < TimeSpan.FromSeconds(4));
+                    Check(aligned, "The hidden-icons flyout centers above the capsule tray arrow.");
+                }
+                finally
+                {
+                    var popup = FindWindowEx(0, 0, "TopLevelWindowForOverflowXamlIsland", null);
+                    if (popup == 0) popup = FindWindowEx(0, 0, "NotifyIconOverflowWindow", null);
+                    if (popup != 0 && IsWindowVisible(popup)) await Task.Run(() => InvokeOverflow(taskbar, arrow));
+                }
+            }
             for (int attempt = 0; attempt < 3; attempt++)
             {
                 Check(SetWindowPos(bridge, 0, 0, 0, before.Right - before.Left, before.Bottom - before.Top, 0x4214),
@@ -65,8 +102,10 @@ internal static class NativeTaskbarShapeVerification
                 for (int sample = 0; sample < 4; sample++)
                 {
                     await Task.Delay(24);
-                    if (!GetWindowRect(bridge, out var retained) || !retained.Equals(floating))
-                        throw new IOException("The native bridge accepted an intermediate full-width position.");
+                    if (!TryGetFace(bridge, out var retained) || !retained.Equals(floating))
+                        throw new IOException($"Native geometry changed from {floating.Left}..{floating.Right} to " +
+                            $"{retained.Left}..{retained.Right} on a full-width request (trim " +
+                            $"{GetProp(bridge, NativeTaskbarShape.TrimAppliedProperty)}).");
                 }
             }
             checks.Add("The geometry stays compact during native full-width requests.");
@@ -90,7 +129,7 @@ internal static class NativeTaskbarShapeVerification
                     for (int sample = 0; sample < 6; sample++)
                     {
                         await Task.Delay(160);
-                        if (!GetWindowRect(bridge, out var stable) || Math.Abs(stable.Left - expanded.Left) > 3 ||
+                        if (!TryGetFace(bridge, out var stable) || Math.Abs(stable.Left - expanded.Left) > 3 ||
                             Math.Abs(stable.Right - expanded.Right) > 3)
                             throw new IOException("The expanded capsule moved again without another taskbar change.");
                     }
@@ -113,7 +152,7 @@ internal static class NativeTaskbarShapeVerification
                 var timeout = Stopwatch.StartNew();
                 while (!File.Exists(Path.Combine(root, "guard-probe", "ready")) && !process.HasExited && timeout.Elapsed < TimeSpan.FromSeconds(12))
                     await Task.Delay(100);
-                Check(!process.HasExited && GetWindowRect(bridge, out var probeBounds) && probeBounds.Equals(floating),
+                Check(!process.HasExited && (await WaitForBounds(rect => rect.Equals(floating))).HasValue,
                     "An isolated application process applied the native capsule.");
                 process.Kill();
                 await process.WaitForExitAsync();
@@ -137,7 +176,7 @@ internal static class NativeTaskbarShapeVerification
                 var watch = Stopwatch.StartNew();
                 while (watch.Elapsed < TimeSpan.FromSeconds(9))
                 {
-                    if (GetWindowRect(bridge, out var rect) && predicate(rect)) return rect;
+                    if (TryGetFace(bridge, out var rect) && predicate(rect)) return rect;
                     await Task.Delay(150);
                 }
                 return null;
@@ -146,7 +185,7 @@ internal static class NativeTaskbarShapeVerification
         catch (Exception error) { failure = error.ToString(); }
         finally { session.Stop(); }
         File.WriteAllText(Path.Combine(root, "native-taskbar-shape.json"), JsonSerializer.Serialize(
-            new { passed = checks.Count, failure, checks, original = before, capsule = floating, expanded },
+            new { passed = checks.Count, failure, checks, original = before, capsule = floating, expanded, trayGap },
             new JsonSerializerOptions { WriteIndented = true, IncludeFields = true }));
         return failure is null ? 0 : 1;
 
@@ -158,6 +197,62 @@ internal static class NativeTaskbarShapeVerification
     }
 
     private static bool IsCentered(Rect rect, Rect before) => Math.Abs(rect.Left + rect.Right - before.Left - before.Right) <= 2;
+    private static bool TryGetFace(nint bridge, out Rect rect)
+    {
+        if (!GetWindowRect(bridge, out rect)) return false;
+        rect.Right -= (int)GetProp(bridge, NativeTaskbarShape.TrimAppliedProperty);
+        return true;
+    }
+
+    private static bool ClickOverflow(nint taskbar, System.Windows.Rect button)
+    {
+        var center = new NativePoint { X = (int)(button.Left + button.Width / 2), Y = (int)(button.Top + button.Height / 2) };
+        nint hit = WindowFromPoint(center);
+        if ((hit != taskbar && GetAncestor(hit, 2) != taskbar) || !GetCursorPos(out var original) ||
+            !SetCursorPos(center.X, center.Y))
+            return false;
+        try
+        {
+            if (!GetCursorPos(out var actual) || !actual.Equals(center)) return false;
+            mouse_event(2, 0, 0, 0, 0);
+            mouse_event(4, 0, 0, 0, 0);
+            return true;
+        }
+        finally
+        {
+            if (GetCursorPos(out var actual) && actual.Equals(center)) SetCursorPos(original.X, original.Y);
+        }
+    }
+
+    private static bool InvokeOverflow(nint taskbar, System.Windows.Rect button)
+    {
+        try
+        {
+            var center = new Point(button.Left + button.Width / 2, button.Top + button.Height / 2);
+            var candidates = AutomationElement.FromHandle(taskbar).FindAll(TreeScope.Descendants,
+                new PropertyCondition(AutomationElement.ClassNameProperty, "SystemTray.NormalButton"));
+            foreach (AutomationElement item in candidates)
+            {
+                if (!item.Current.BoundingRectangle.Contains(center) ||
+                    (!item.Current.Name.Contains("显示隐藏的图标", StringComparison.Ordinal) &&
+                    !item.Current.Name.Contains("顯示隱藏的圖示", StringComparison.Ordinal) &&
+                    !item.Current.Name.Contains("show hidden icons", StringComparison.OrdinalIgnoreCase))) continue;
+                if (item.TryGetCurrentPattern(InvokePattern.Pattern, out var invoke))
+                {
+                    ((InvokePattern)invoke).Invoke();
+                    return true;
+                }
+                if (item.TryGetCurrentPattern(TogglePattern.Pattern, out var toggle))
+                {
+                    ((TogglePattern)toggle).Toggle();
+                    return true;
+                }
+            }
+            return false;
+        }
+        catch (Exception error) when (error is ElementNotAvailableException or InvalidOperationException or COMException)
+        { return false; }
+    }
 
     internal static void ShowIconProbe(string root)
     {
@@ -175,8 +270,15 @@ internal static class NativeTaskbarShapeVerification
         window.Show();
     }
     [StructLayout(LayoutKind.Sequential)] private struct Rect { public int Left, Top, Right, Bottom; }
+    [StructLayout(LayoutKind.Sequential)] private struct NativePoint { public int X, Y; }
     [DllImport("user32.dll", CharSet = CharSet.Unicode)] private static extern nint FindWindowEx(nint parent, nint after, string name, string? title);
+    [DllImport("user32.dll", CharSet = CharSet.Unicode)] private static extern nint GetProp(nint window, string name);
     [DllImport("user32.dll")] private static extern bool IsWindowVisible(nint window);
+    [DllImport("user32.dll")] private static extern nint WindowFromPoint(NativePoint point);
+    [DllImport("user32.dll")] private static extern nint GetAncestor(nint window, uint flags);
+    [DllImport("user32.dll")] private static extern bool GetCursorPos(out NativePoint point);
+    [DllImport("user32.dll")] private static extern bool SetCursorPos(int x, int y);
+    [DllImport("user32.dll")] private static extern void mouse_event(uint flags, uint x, uint y, uint data, nint extra);
     [DllImport("user32.dll")] private static extern bool GetWindowRect(nint window, out Rect bounds);
     [DllImport("user32.dll")] private static extern bool SetWindowPos(nint window, nint after, int x, int y, int width, int height, uint flags);
     [DllImport("user32.dll")] private static extern int GetWindowRgn(nint window, nint region);

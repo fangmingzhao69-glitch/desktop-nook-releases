@@ -105,8 +105,8 @@ internal static class NativeTaskbarVerification
             await session.PreviewAsync(opaque with { FloatingLayout = true }, allowDownload: false);
             await Task.Delay(1250);
             colors.Add("capsuleEdges", TakeCapsuleEdgeSamples());
-            Check(colors["capsuleEdges"][0] != "#D020E0" && colors["capsuleEdges"][1] != "#D020E0" &&
-                colors["capsuleEdges"].Skip(2).Contains("#D020E0"), "The solid fill stays inside the native capsule.");
+            Check(colors["capsuleEdges"].Take(4).All(color => color != "#D020E0") &&
+                colors["capsuleEdges"].Skip(4).Contains("#D020E0"), "The solid fill stays inside the native capsule.");
             await session.CancelPreviewAsync();
             await WaitForColor("#D020E0");
 
@@ -197,13 +197,14 @@ internal static class NativeTaskbarVerification
         nint bridge = FindWindowEx(shell, 0, "Windows.UI.Composition.DesktopWindowContentBridge", null);
         if (bridge == 0 || !GetWindowRect(bridge, out var child))
             throw new IOException("Could not locate the original Explorer composition child.");
+        int right = child.Right - (int)GetProp(bridge, NativeTaskbarShape.TrimAppliedProperty);
         nint dc = GetDC(0);
         if (dc == 0) throw new IOException("Could not sample the capsule edge.");
         try
         {
             int middle = (child.Top + child.Bottom) / 2;
-            return new[] { (child.Left, middle), (child.Right - 1, middle), (child.Left + 5, middle), (child.Right - 6, middle),
-                ((child.Left + child.Right) / 2, middle) }
+            return new[] { (child.Left - 1, middle), (right, middle), (child.Left + 2, child.Top + 5),
+                (right - 3, child.Bottom - 6), (child.Left + 5, middle), (right - 6, middle), ((child.Left + right) / 2, middle) }
                 .Select(point =>
                 {
                     uint bgr = GetPixel(dc, point.Item1, point.Item2);
@@ -219,6 +220,7 @@ internal static class NativeTaskbarVerification
     [DllImport("user32.dll", ExactSpelling = true, CharSet = CharSet.Unicode)]
     private static extern IntPtr FindWindowW(string className, string? title);
     [DllImport("user32.dll", CharSet = CharSet.Unicode)] private static extern nint FindWindowEx(nint parent, nint after, string cls, string? title);
+    [DllImport("user32.dll", CharSet = CharSet.Unicode)] private static extern nint GetProp(nint window, string name);
     [DllImport("user32.dll")]
     [return: MarshalAs(UnmanagedType.Bool)]
     private static extern bool GetWindowRect(IntPtr window, out Rect bounds);

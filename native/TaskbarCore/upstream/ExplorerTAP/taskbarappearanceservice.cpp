@@ -2,9 +2,12 @@
 #include <RpcProxy.h>
 #include <CommCtrl.h>
 #include <cstdint>
+#include <memory>
 #include <shellapi.h>
 #include <wil/cppwinrt_helpers.h>
+#include <winrt/Windows.Foundation.Collections.h>
 #include <winrt/Windows.Management.Deployment.h>
+#include <winrt/Windows.UI.Xaml.Controls.h>
 
 #include "constants.hpp"
 #include "util/color.hpp"
@@ -21,11 +24,213 @@ namespace
 	constexpr wchar_t CapsuleOwner[] = L"DesktopNook.NativeTaskbarShape.Owner";
 	constexpr wchar_t CapsulePosition[] = L"DesktopNook.NativeTaskbarShape.Position";
 	constexpr wchar_t CapsuleGeometryLock[] = L"DesktopNook.NativeTaskbarShape.GeometryLock";
+	constexpr wchar_t CapsuleInset[] = L"DesktopNook.NativeTaskbarShape.Inset";
+	constexpr wchar_t CapsuleDivider[] = L"DesktopNook.NativeTaskbarShape.Divider";
+	constexpr wchar_t CapsuleTrim[] = L"DesktopNook.NativeTaskbarShape.Trim";
+	constexpr wchar_t CapsuleTrimApplied[] = L"DesktopNook.NativeTaskbarShape.TrimApplied";
+	constexpr wchar_t CapsuleSmooth[] = L"DesktopNook.NativeTaskbarShape.Smooth";
+	constexpr wchar_t CapsuleDividerVisible[] = L"DesktopNook.NativeTaskbarShape.DividerVisible";
 	constexpr UINT_PTR CapsuleSubclassId = 1;
+	const UINT CapsuleVisualRefresh = RegisterWindowMessageW(L"DesktopNook.NativeTaskbarShape.VisualRefresh");
+
+	struct CapsuleVisual
+	{
+		wux::UIElement Content{ nullptr };
+		wuc::Visual Visual{ nullptr };
+		wuc::CompositionClip OriginalClip{ nullptr };
+		wuc::CompositionGeometricClip Clip{ nullptr };
+		wuc::CompositionRoundedRectangleGeometry Outline{ nullptr };
+		wuc::ContainerVisual DividerParent{ nullptr };
+		wuc::SpriteVisual Divider{ nullptr };
+		wux::UIElement Tray{ nullptr };
+		wux::Media::Transform OriginalTrayTransform{ nullptr };
+		wux::Media::Transform TrayTransform{ nullptr };
+		bool OwnsContainer = false;
+		int Width = 0, Height = 0, Inset = -1;
+		int Trim = 0;
+		UINT Dpi = 0;
+
+		static wux::UIElement FindTray(const wux::DependencyObject& parent, int depth)
+		{
+			if (!parent || depth < 0) return nullptr;
+			const auto type = winrt::get_class_name(parent);
+			if (type == L"SystemTray.SystemTrayFrame")
+				return parent.try_as<wux::UIElement>();
+			// Newer Explorer builds host the tray as the content of a repeater
+			// item. Move the item so its complete hit surface moves with the tray.
+			if (type == L"Taskbar.TaskbarExtensionElement")
+			{
+				if (const auto host = parent.try_as<wux::Controls::ContentControl>())
+					if (const auto tray = host.Content();
+						tray && winrt::get_class_name(tray) == L"SystemTray.SystemTrayFrame")
+						return host;
+			}
+			const int count = wux::Media::VisualTreeHelper::GetChildrenCount(parent);
+			for (int i = 0; i < count; ++i)
+				if (auto tray = FindTray(wux::Media::VisualTreeHelper::GetChild(parent, i), depth - 1))
+					return tray;
+			return nullptr;
+		}
+
+		void ResetTray()
+		{
+			if (Tray && TrayTransform && Tray.RenderTransform() == TrayTransform)
+				Tray.RenderTransform(OriginalTrayTransform);
+			Tray = nullptr;
+			OriginalTrayTransform = nullptr;
+			TrayTransform = nullptr;
+		}
+
+		int ApplyTrayTrim(int trim, float pixel, UINT dpi)
+		{
+			if (trim <= 0)
+			{
+				ResetTray();
+				return 0;
+			}
+			if (!Tray || !Tray.XamlRoot())
+			{
+				ResetTray();
+				if (const auto root = Content.XamlRoot())
+					Tray = FindTray(root.Content(), 6);
+				if (!Tray) return 0;
+			}
+			if (TrayTransform && Tray.RenderTransform() == TrayTransform && Trim == trim && Dpi == dpi)
+				return trim;
+			if (!TrayTransform || Tray.RenderTransform() != TrayTransform)
+				OriginalTrayTransform = Tray.RenderTransform();
+			wux::Media::TranslateTransform offset;
+			offset.X(-trim * pixel);
+			if (OriginalTrayTransform)
+			{
+				wux::Media::TransformGroup transforms;
+				transforms.Children().Append(OriginalTrayTransform);
+				transforms.Children().Append(offset);
+				TrayTransform = transforms;
+			}
+			else
+				TrayTransform = offset;
+			Tray.RenderTransform(TrayTransform);
+			return trim;
+		}
+
+		void Reset(HWND window)
+		{
+			RemovePropW(window, CapsuleSmooth);
+			RemovePropW(window, CapsuleDividerVisible);
+			RemovePropW(window, CapsuleTrimApplied);
+			ResetTray();
+			if (Visual && Clip && Visual.Clip() == Clip)
+				Visual.Clip(OriginalClip);
+			if (DividerParent && Divider)
+				DividerParent.Children().Remove(Divider);
+			if (OwnsContainer && Content && wuxh::ElementCompositionPreview::GetElementChildVisual(Content) == DividerParent)
+				wuxh::ElementCompositionPreview::SetElementChildVisual(Content, nullptr);
+			Visual = nullptr;
+			OriginalClip = nullptr;
+			Clip = nullptr;
+			Outline = nullptr;
+			DividerParent = nullptr;
+			Divider = nullptr;
+			OwnsContainer = false;
+			Inset = -1;
+			Trim = 0;
+		}
+
+		void Refresh(HWND window)
+		{
+			const auto packed = reinterpret_cast<std::uintptr_t>(GetPropW(window, CapsulePosition));
+			const auto insetValue = reinterpret_cast<std::uintptr_t>(GetPropW(window, CapsuleInset));
+			if (!Content || !packed || !insetValue || !GetPropW(window, CapsuleOwner))
+			{
+				Reset(window);
+				return;
+			}
+			const int inset = static_cast<int>(insetValue) - 1;
+			const int width = static_cast<int>((packed >> 32) & 0xffff);
+			const int height = static_cast<int>((packed >> 48) & 0xffff);
+			const int visible = height - inset * 2;
+			const UINT dpi = GetDpiForWindow(window);
+			if (width < 100 || visible < 20 || inset < 0 || dpi == 0) return;
+
+			if (!Outline)
+			{
+				Visual = wuxh::ElementCompositionPreview::GetElementVisual(Content);
+				OriginalClip = Visual.Clip();
+				const auto compositor = Visual.Compositor();
+				Outline = compositor.CreateRoundedRectangleGeometry();
+				Clip = compositor.CreateGeometricClip(Outline);
+				if (const auto current = wuxh::ElementCompositionPreview::GetElementChildVisual(Content))
+					DividerParent = current.try_as<wuc::ContainerVisual>();
+				else
+				{
+					DividerParent = compositor.CreateContainerVisual();
+					wuxh::ElementCompositionPreview::SetElementChildVisual(Content, DividerParent);
+					OwnsContainer = true;
+				}
+				if (DividerParent)
+				{
+					Divider = compositor.CreateSpriteVisual();
+					Divider.Brush(compositor.CreateColorBrush({ 120, 136, 145, 170 }));
+					DividerParent.Children().InsertAtTop(Divider);
+				}
+			}
+
+			const float pixel = 96.f / static_cast<float>(dpi);
+			const int requested = static_cast<int>(reinterpret_cast<std::uintptr_t>(GetPropW(window, CapsuleTrim)));
+			const int trim = ApplyTrayTrim(requested > 0 && requested <= width / 3 ? requested : 0, pixel, dpi);
+			const int faceWidth = width - trim;
+			const float radius = static_cast<float>(visible) / 2 * pixel;
+			if (Width != width || Height != height || Inset != inset || Trim != trim || Dpi != dpi || Visual.Clip() != Clip)
+			{
+				Outline.Offset({ 0, inset * pixel });
+				Outline.Size({ faceWidth * pixel, visible * pixel });
+				Outline.CornerRadius({ radius, radius });
+				Visual.Clip(Clip);
+				// A GDI rounded region clips off the antialiased pixels. Keep only a
+				// rectangular Win32 region for the vertical insets; Composition owns the curve.
+				if (const auto region = CreateRectRgn(0, inset, faceWidth, height - inset))
+				{
+					if (!SetWindowRgn(window, region, TRUE))
+						DeleteObject(region);
+					else
+						SetPropW(window, CapsuleSmooth, reinterpret_cast<HANDLE>(static_cast<UINT_PTR>(1)));
+				}
+				Width = width;
+				Height = height;
+				Inset = inset;
+				Trim = trim;
+				Dpi = dpi;
+			}
+			if (trim)
+				SetPropW(window, CapsuleTrimApplied, reinterpret_cast<HANDLE>(static_cast<UINT_PTR>(trim)));
+			else
+				RemovePropW(window, CapsuleTrimApplied);
+			if (Divider)
+			{
+				const auto x = reinterpret_cast<std::uintptr_t>(GetPropW(window, CapsuleDivider));
+				const bool draw = x > 2 && x < static_cast<std::uintptr_t>(faceWidth - 2);
+				Divider.Opacity(draw ? 1.f : 0.f);
+				Divider.Size({ pixel, visible * .5f * pixel });
+				Divider.Offset({ static_cast<float>(x) * pixel, (inset + visible * .25f) * pixel, 0 });
+				if (draw)
+					SetPropW(window, CapsuleDividerVisible, reinterpret_cast<HANDLE>(x));
+				else
+					RemovePropW(window, CapsuleDividerVisible);
+			}
+		}
+	};
 
 	LRESULT CALLBACK KeepCapsulePosition(HWND window, UINT message, WPARAM wParam, LPARAM lParam,
-		UINT_PTR subclassId, DWORD_PTR)
+		UINT_PTR subclassId, DWORD_PTR context)
 	{
+		auto* capsule = reinterpret_cast<CapsuleVisual*>(context);
+		if (message == CapsuleVisualRefresh && CapsuleVisualRefresh)
+		{
+			try { capsule->Refresh(window); }
+			catch (...) {} // Keep the rounded Win32 fallback if the compositor cannot create the clip.
+			return 0;
+		}
 		if (message == WM_WINDOWPOSCHANGING && lParam)
 		{
 			// Let Explorer perform its normal validation first, then retain the managed
@@ -57,14 +262,21 @@ namespace
 		{
 			RemovePropW(window, CapsuleGeometryLock);
 			RemoveWindowSubclass(window, KeepCapsulePosition, subclassId);
+			delete capsule;
 		}
 		return DefSubclassProc(window, message, wParam, lParam);
 	}
 
 	void DetachCapsulePositionLock(HWND window)
 	{
-		if (RemoveWindowSubclass(window, KeepCapsulePosition, CapsuleSubclassId))
+		DWORD_PTR context = 0;
+		if (GetWindowSubclass(window, KeepCapsulePosition, CapsuleSubclassId, &context) &&
+			RemoveWindowSubclass(window, KeepCapsulePosition, CapsuleSubclassId))
+		{
 			RemovePropW(window, CapsuleGeometryLock);
+			std::unique_ptr<CapsuleVisual> capsule(reinterpret_cast<CapsuleVisual*>(context));
+			try { capsule->Reset(window); } catch (...) {}
+		}
 	}
 }
 
@@ -283,12 +495,20 @@ catch (...)
 	return winrt::to_hresult();
 }
 
-void TaskbarAppearanceService::RegisterTaskbar(InstanceHandle frameHandle, HWND window)
+void TaskbarAppearanceService::RegisterTaskbar(InstanceHandle frameHandle, HWND window, const wux::UIElement& content)
 {
 	m_Taskbars.insert_or_assign(frameHandle, TaskbarInfo { { }, { }, window });
-	if (SetWindowSubclass(window, KeepCapsulePosition, CapsuleSubclassId, 0) &&
-		!SetPropW(window, CapsuleGeometryLock, reinterpret_cast<HANDLE>(static_cast<UINT_PTR>(1))))
+	DWORD_PTR existing = 0;
+	if (GetWindowSubclass(window, KeepCapsulePosition, CapsuleSubclassId, &existing))
+		return;
+	auto capsule = std::make_unique<CapsuleVisual>();
+	capsule->Content = content;
+	if (!SetWindowSubclass(window, KeepCapsulePosition, CapsuleSubclassId, reinterpret_cast<DWORD_PTR>(capsule.get())))
+		return;
+	if (!SetPropW(window, CapsuleGeometryLock, reinterpret_cast<HANDLE>(static_cast<UINT_PTR>(1))))
 		RemoveWindowSubclass(window, KeepCapsulePosition, CapsuleSubclassId);
+	else
+		static_cast<void>(capsule.release());
 }
 
 void TaskbarAppearanceService::RegisterTaskbarBackground(InstanceHandle frameHandle, wux::Shapes::Shape element)

@@ -1,0 +1,49 @@
+{
+  "passed": 24,
+  "failure": null,
+  "checks": [
+    "The Explorer taskbar and its native controls are visible.",
+    "Recorded the original geometry.",
+    "The same Explorer taskbar remains visible in capsule mode.",
+    "The original native composition child moves inward, with left, right and bottom gaps.",
+    "The capsule packs its contents and centers on the screen.",
+    "The visible silhouette of the native child has rounded corners.",
+    "The native icon row is centered vertically inside the visible capsule.",
+    "The application strip and tray both fit without overflowing.",
+    "Only a narrow separator gap remains after compacting the native tray.",
+    "Explorer activated the antialiased Composition clip.",
+    "Explorer drew the separator between the application strip and tray.",
+    "Clicked the chevron inside the original Explorer taskbar.",
+    "The hidden-icons flyout centers above the capsule tray arrow.",
+    "Queued an Explorer-style request to restore full width.",
+    "Queued an Explorer-style request to restore full width.",
+    "Queued an Explorer-style request to restore full width.",
+    "The geometry stays compact during native full-width requests.",
+    "Opening a separate application grows the centered capsule.",
+    "Both the application buttons and system tray fit inside the expanded capsule.",
+    "The expanded capsule stays still across successive layout scans.",
+    "Closing the application shrinks the capsule back.",
+    "Cancelling restores the original native taskbar geometry.",
+    "An isolated application process applied the native capsule.",
+    "The guard restores the original geometry after host termination."
+  ],
+  "original": {
+    "Left": 0,
+    "Top": 1392,
+    "Right": 2560,
+    "Bottom": 1440
+  },
+  "capsule": {
+    "Left": 917,
+    "Top": 1390,
+    "Right": 1643,
+    "Bottom": 1438
+  },
+  "expanded": {
+    "Left": 901,
+    "Top": 1390,
+    "Right": 1659,
+    "Bottom": 1438
+  },
+  "trayGap": 9
+}

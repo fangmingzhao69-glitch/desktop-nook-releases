@@ -98,7 +98,7 @@ HRESULT VisualTreeWatcher::OnVisualTreeChange(ParentChildRelation relation, Visu
 				HWND hwnd = nullptr;
 				winrt::check_hresult(nativeSource->get_WindowHandle(&hwnd));
 
-				m_AppearanceService->RegisterTaskbar(element.Handle, hwnd);
+				m_AppearanceService->RegisterTaskbar(element.Handle, hwnd, xamlSource.Content());
 				m_NonMatchingXamlSources.erase(matched);
 			}
 		}

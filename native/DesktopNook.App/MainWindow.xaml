@@ -13,7 +13,7 @@
    <Grid>
     <Border x:Name="Surface" Width="1080" Height="620" Background="{DynamicResource CanvasBrush}"
      BorderBrush="{DynamicResource FoldEdgeBrush}" BorderThickness="1" CornerRadius="14" SnapsToDevicePixels="True">
-     <Grid>
+     <Grid x:Name="SurfaceContent" SizeChanged="OnSurfaceContentSizeChanged">
       <Grid.RowDefinitions><RowDefinition Height="54"/><RowDefinition Height="*"/></Grid.RowDefinitions>
       <Border x:Name="TitleSurface" Background="{DynamicResource FoldTitleBrush}" BorderBrush="{DynamicResource LineBrush}"
        BorderThickness="0,0,0,1" CornerRadius="13,13,0,0">
@@ -84,7 +84,7 @@
         <Border x:Name="OrderMarker" Width="3" Background="{DynamicResource AccentInkBrush}" HorizontalAlignment="Left" VerticalAlignment="Top" IsHitTestVisible="False" Visibility="Collapsed"/>
         <Border x:Name="DropOutline" BorderBrush="{DynamicResource AccentInkBrush}" BorderThickness="2" Background="#183D63B0" CornerRadius="8" Visibility="Collapsed" IsHitTestVisible="False"/>
        </Grid>
-       <Border Grid.Row="3" Background="{DynamicResource SurfaceSubtleBrush}" BorderBrush="{DynamicResource LineBrush}" BorderThickness="0,1,0,0" CornerRadius="0,0,0,17">
+       <Border Grid.Row="3" Background="{DynamicResource SurfaceSubtleBrush}" BorderBrush="{DynamicResource LineBrush}" BorderThickness="0,1,0,0">
         <Grid Margin="20,0">
          <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
          <TextBlock x:Name="Summary" FontSize="11" Foreground="{DynamicResource TextSecondaryBrush}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>

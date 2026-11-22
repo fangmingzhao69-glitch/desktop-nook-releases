@@ -87,7 +87,7 @@ public partial class MainWindow
         var footer=new DockPanel { Margin=new Thickness(12,0,12,0) };
         var retry=NotesButton("重试",_=>FlushNotes());DockPanel.SetDock(retry,Dock.Right);footer.Children.Add(retry);
         var export=NotesButton("导出 Markdown",_=>ExportNotes());DockPanel.SetDock(export,Dock.Right);footer.Children.Add(export);
-        _notesStatus=NotesText("已保存到本地",11);_notesStatus.Foreground=Brush("TextSecondaryBrush");_notesStatus.TextTrimming=TextTrimming.CharacterEllipsis;footer.Children.Add(_notesStatus);var footerSurface=new Border{Background=Brush("SurfaceSubtleBrush"),BorderBrush=Brush("LineBrush"),BorderThickness=new Thickness(0,1,0,0),CornerRadius=new CornerRadius(0,0,17,0),Child=footer};Grid.SetRow(footerSurface,3);NotesHost.Children.Add(footerSurface);
+        _notesStatus=NotesText("已保存到本地",11);_notesStatus.Foreground=Brush("TextSecondaryBrush");_notesStatus.TextTrimming=TextTrimming.CharacterEllipsis;footer.Children.Add(_notesStatus);var footerSurface=new Border{Background=Brush("SurfaceSubtleBrush"),BorderBrush=Brush("LineBrush"),BorderThickness=new Thickness(0,1,0,0),Child=footer};Grid.SetRow(footerSurface,3);NotesHost.Children.Add(footerSurface);
         _notesSave.Tick+=(_,_)=>{_notesSave.Stop();FlushNotes(false);};
         _notesDeadline.Tick+=(_,_)=>{_notesDeadline.Stop();FlushNotes(false);};
         _notesSearch.Tick+=(_,_)=>{if(_notesComposing||_noteDragHandle is not null)return;_notesSearch.Stop();RenderNoteCards();};

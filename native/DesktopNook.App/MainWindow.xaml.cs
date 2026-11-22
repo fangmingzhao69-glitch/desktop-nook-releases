@@ -52,6 +52,16 @@ public partial class MainWindow : Window
         Render();
     }
     private bool _loadedOnce;
+    private void OnSurfaceContentSizeChanged(object sender, SizeChangedEventArgs e)
+    {
+        if (sender is not FrameworkElement content || e.NewSize.Width <= 0 || e.NewSize.Height <= 0) return;
+        // WPF's rounded Border does not clip its children. Use the same inner curve for
+        // dividers and both page footers so neither paint past it or introduce a second arc.
+        var clip = new RectangleGeometry(new Rect(new Point(), e.NewSize), 13, 13);
+        clip.Freeze();
+        content.Clip = clip;
+    }
+
     private void OnLoaded(object sender,RoutedEventArgs e)
     {
         if(_loadedOnce){if(WindowState==WindowState.Normal){Place();int revision=_hideRevision;Dispatcher.BeginInvoke(()=>{if(WindowState==WindowState.Normal&&revision==_hideRevision)OpenPanelMotion();},System.Windows.Threading.DispatcherPriority.Loaded);if(!App.IsSandbox&&DateTime.UtcNow-_lastUpdateCheck>TimeSpan.FromMinutes(15))_=CheckOnlineUpdateAsync(false);}return;}

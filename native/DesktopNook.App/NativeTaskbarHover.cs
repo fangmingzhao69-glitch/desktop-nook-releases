@@ -6,7 +6,7 @@ using System.Windows.Threading;
 
 namespace DesktopNook.App;
 
-// The shell still creates its own flyouts. Only app previews and app tooltips are reanchored.
+// Reanchor Explorer's app previews, app tooltips, and hidden-icons flyout.
 internal sealed class NativeTaskbarHover : IDisposable
 {
     private const uint ObjectDestroy = 0x8001;
@@ -15,7 +15,7 @@ internal sealed class NativeTaskbarHover : IDisposable
     private const uint ObjectLocationChange = 0x800B;
     private readonly Callback _callback;
     private readonly Dispatcher _dispatcher = Dispatcher.CurrentDispatcher;
-    private readonly Dictionary<nint, (Rect Shell, Rect Capsule, Rect[] Buttons, double Scale)> _bars = new();
+    private readonly Dictionary<nint, (Rect Shell, Rect Capsule, Rect[] Buttons, Rect TrayOverflow, double Scale)> _bars = new();
     private readonly Dictionary<nint, long> _pending = new();
     private readonly Dictionary<nint, HoverAnchor> _anchored = new();
     private HoverAnchor? _recent;
@@ -25,7 +25,7 @@ internal sealed class NativeTaskbarHover : IDisposable
 
     internal NativeTaskbarHover() => _callback = OnWindowEvent;
 
-    internal void Update(nint taskbar, Rect shell, Rect capsule, Rect[] icons, uint dpi)
+    internal void Update(nint taskbar, Rect shell, Rect capsule, Rect[] icons, Rect trayOverflow, uint dpi)
     {
         GetWindowThreadProcessId(taskbar, out uint pid);
         if (pid != _processId || _hook == 0)
@@ -35,7 +35,7 @@ internal sealed class NativeTaskbarHover : IDisposable
             _hook = SetWinEventHook(ObjectDestroy, ObjectLocationChange, 0, _callback, pid, 0, 0);
             _processId = pid;
         }
-        _bars[taskbar] = (shell, capsule, icons, dpi == 0 ? 1 : dpi / 96d);
+        _bars[taskbar] = (shell, capsule, icons, trayOverflow, dpi == 0 ? 1 : dpi / 96d);
         if (GetCursorPos(out var pointer))
             ObserveButton(new System.Windows.Point(pointer.X, pointer.Y));
     }
@@ -64,20 +64,33 @@ internal sealed class NativeTaskbarHover : IDisposable
         var className = new StringBuilder(128);
         if (GetClassName(window, className, className.Capacity) == 0) return;
         string name = className.ToString();
-        if (name is not ("TaskListThumbnailWnd" or "tooltips_class32" or "Xaml_WindowedPopupClass")) return;
+        bool overflow = name is "TopLevelWindowForOverflowXamlIsland" or "NotifyIconOverflowWindow";
+        if (!overflow && name is not ("TaskListThumbnailWnd" or "tooltips_class32" or "Xaml_WindowedPopupClass")) return;
         if (_pending.ContainsKey(window)) return;
-        var anchor = ObserveButton(point);
-        if (anchor is null && GetWindowRect(window, out var surface) && surface.Contains(point))
+        var anchor = overflow ? FindOverflowAnchor(window, point) : ObserveButton(point);
+        if (!overflow && anchor is null && GetWindowRect(window, out var surface) && surface.Contains(point))
         {
             if (_anchored.TryGetValue(window, out var current)) anchor = current;
             else if (_recent is { } recent && Environment.TickCount64 - recent.Observed <= 650) anchor = recent;
         }
         if (anchor is not { } target || !_bars.TryGetValue(target.Taskbar, out var bar) ||
-            (name != "TaskListThumbnailWnd" && GetAncestor(window, 3) != target.Taskbar)) return;
+            (name == "tooltips_class32" && GetAncestor(window, 3) != target.Taskbar)) return;
 
         long sequence = ++_sequence;
         _pending[window] = sequence;
         _dispatcher.BeginInvoke(() => _ = RepositionAsync(window, target, bar.Shell, bar.Scale, name, sequence));
+    }
+
+    private HoverAnchor? FindOverflowAnchor(nint window, Point pointer)
+    {
+        nint monitor = MonitorFromWindow(window, 2);
+        foreach (var (taskbar, bar) in _bars)
+            if (!bar.TrayOverflow.IsEmpty && bar.TrayOverflow.Contains(pointer))
+                return new(taskbar, bar.TrayOverflow, Environment.TickCount64, true);
+        foreach (var (taskbar, bar) in _bars)
+            if (!bar.TrayOverflow.IsEmpty && MonitorFromWindow(taskbar, 2) == monitor)
+                return new(taskbar, bar.TrayOverflow, Environment.TickCount64, true);
+        return null;
     }
 
     private HoverAnchor? ObserveButton(System.Windows.Point point)
@@ -107,7 +120,7 @@ internal sealed class NativeTaskbarHover : IDisposable
             GetWindowThreadProcessId(window, out uint pid);
             if (pid == 0 || pid != _processId || !GetCursorPos(out var pointer)) return;
             var point = new System.Windows.Point(pointer.X, pointer.Y);
-            if (!anchor.Button.Contains(point) && !bounds.Contains(point)) return;
+            if (!anchor.Tray && !anchor.Button.Contains(point) && !bounds.Contains(point)) return;
             nint monitor = MonitorFromWindow(taskbar, 2);
             var info = new MonitorInfo { Size = (uint)Marshal.SizeOf<MonitorInfo>() };
             if (monitor == 0 || !GetMonitorInfo(monitor, ref info)) return;
@@ -144,7 +157,8 @@ internal sealed class NativeTaskbarHover : IDisposable
             {
                 if (depth > 6 || remaining-- <= 0) return false;
                 var info = item.Current;
-                if (info.ControlType == ControlType.ToolTip || info.AutomationId == "TaskItemThumbnailListRepeater" ||
+                if (info.ControlType == ControlType.ToolTip || info.ClassName == "ToolTip" ||
+                    info.AutomationId == "TaskItemThumbnailListRepeater" ||
                     info.ClassName.StartsWith("Taskbar.TaskItemThumbnail", StringComparison.Ordinal))
                     return true;
                 for (var child = walker.GetFirstChild(item); child is not null && remaining > 0; child = walker.GetNextSibling(child))
@@ -156,7 +170,7 @@ internal sealed class NativeTaskbarHover : IDisposable
         { return false; }
     }
 
-    private readonly record struct HoverAnchor(nint Taskbar, Rect Button, long Observed);
+    private readonly record struct HoverAnchor(nint Taskbar, Rect Button, long Observed, bool Tray = false);
     [StructLayout(LayoutKind.Sequential)] private struct NativePoint { public int X, Y; }
     [StructLayout(LayoutKind.Sequential)] private struct NativeRect
     {
