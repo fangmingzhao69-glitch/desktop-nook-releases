@@ -59,6 +59,14 @@ internal static class TaskbarAppearanceVerification
             var session = new TaskbarAppearanceSession(store, probe);
             var clear = new TaskbarAppearanceSettings { Enabled = true, Style = "clear", Color = "#123456", Alpha = 110 };
             var opaque = clear with { Style = "opaque" };
+            var icon = new Rect(900, 1043, 44, 40);
+            var shell = new Rect(0, 1040, 1920, 40);
+            var work = new Rect(0, 0, 1920, 1040);
+            var panel = TaskbarPlacement.Calculate(new(icon, shell, work, 96, Centered: true), 1080, 620);
+            Check(Math.Abs(panel.Left + panel.Width / 2 - 922) <= 1, "居中任务栏的折页图标与面板中心对齐");
+            var flyout = NativeTaskbarHover.Place(icon, shell, work, new Size(260, 180), 1);
+            Check(Math.Abs(flyout.X + 130 - 922) <= 1 && flyout.Y + 180 <= icon.Top,
+                "悬停提示以原生应用图标为锚点");
             Check(!session.Saved.Enabled && !File.Exists(store.SettingsPath), "首次使用默认关闭且没有外观配置写入");
             await session.PreviewAsync(clear, true);
             Check(probe.LastAppearance == clear && !File.Exists(store.SettingsPath), "预览调用组件而不保存设置");
@@ -268,7 +276,10 @@ internal static class TaskbarAppearanceVerification
                     bool SliderFits(Slider slider) => slider.IsVisible && slider.ActualWidth > 100 &&
                         Bounds(slider).Bottom <= Bounds(scroll).Bottom + .5;
                     var enabled = Find<CheckBox>(dialog).Single(item => AutomationProperties.GetAutomationId(item) == "AppearanceSceneEnabled");
-                    Check(scenes.Items.Count == 7 && styles.Items.Count == 5, "设置窗口列出七种场景与五种外观");
+                    Check(scenes.Items.Count == 7 && styles.Items.Count == 7 &&
+                        styles.Items.OfType<ComboBoxItem>().Any(item => Equals(item.Content, "液态玻璃")) &&
+                        styles.Items.OfType<ComboBoxItem>().Any(item => Equals(item.Content, "柔雾玻璃")),
+                        "设置窗口包含两种玻璃样式");
                     Check(SliderFits(opacity) && !blur.IsVisible && Bounds(apply).Top >= Bounds(scroll).Bottom,
                         "默认桌面场景无需滚动即可看到不透明度，应用按钮固定在独立底栏");
                     SavePage(dialog, "taskbar-appearance-preview.png");

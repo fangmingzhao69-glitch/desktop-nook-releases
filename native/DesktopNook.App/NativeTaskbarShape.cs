@@ -13,8 +13,10 @@ internal sealed class NativeTaskbarShape
     private const string BridgeClass = "Windows.UI.Composition.DesktopWindowContentBridge";
     private const string OwnerProperty = "DesktopNook.NativeTaskbarShape.Owner";
     private const uint MoveFlags = 0x4214; // async, no activation, no z-order changes
-    private readonly DispatcherTimer _timer = new() { Interval = TimeSpan.FromMilliseconds(450) };
+    private readonly DispatcherTimer _timer = new() { Interval = TimeSpan.FromMilliseconds(350) };
     private readonly Dictionary<nint, Placement> _owned = new();
+    private readonly Dictionary<nint, int> _pendingWidths = new();
+    private readonly NativeTaskbarHover _hover = new();
     private Task<Dictionary<nint, NativeTaskbarContents.Measurement>>? _pendingMeasure;
     private int _revision;
     private bool _refreshing;
@@ -23,6 +25,12 @@ internal sealed class NativeTaskbarShape
     internal NativeTaskbarShape()
     {
         _timer.Tick += async (_, _) => await RefreshAsync();
+    }
+
+    internal static bool IsCapsule(nint taskbar)
+    {
+        nint bridge = FindWindowEx(taskbar, 0, BridgeClass, null);
+        return bridge != 0 && GetProp(bridge, OwnerProperty) != 0;
     }
 
     internal async Task StartAsync()
@@ -64,6 +72,8 @@ internal sealed class NativeTaskbarShape
     {
         _timer.Stop();
         _revision++;
+        _hover.Dispose();
+        _pendingWidths.Clear();
         RestoreOwned(Environment.ProcessId);
         if (_owned.Count != 0) TaskbarPlacement.Invalidate();
         _owned.Clear();
@@ -111,6 +121,8 @@ internal sealed class NativeTaskbarShape
             {
                 Restore(taskbar, bridge, owner);
                 _owned.Remove(bridge);
+                _pendingWidths.Remove(bridge);
+                _hover.Remove(taskbar);
                 continue;
             }
             if (!measurements.TryGetValue(bridge, out var contents)) continue;
@@ -119,14 +131,26 @@ internal sealed class NativeTaskbarShape
             int maximum = bounds.Right - 8;
             int measuredWidth = Math.Min(maximum, contents.PackedWidth);
             int minimum = Math.Abs(previous.PackedWidth - measuredWidth) <= 2 ? previous.MinimumWidth : 0;
-            if (GetWindowRect(bridge, out var position) && previous.Shape.Width > 0 &&
-                IsInPosition(bridge, taskbar, previous.Shape) &&
+            bool laidOut = previous.Shape.Width > 0 && IsInPosition(bridge, taskbar, previous.Shape);
+            if (laidOut && GetWindowRect(bridge, out var position) &&
                 (contents.HasOverflow || contents.Left < position.Left - 2 || contents.Right > position.Right + 2))
                 minimum = Math.Max(minimum, previous.Shape.Width + padding);
             else if (previous.Shape.Width == 0 && contents.HasOverflow)
                 minimum = maximum;
 
             int width = Math.Clamp(Math.Max(measuredWidth + padding, minimum), Math.Min(220, maximum), maximum);
+            if (previous.Shape.Width > 0 && Math.Abs(previous.Shape.Width - width) <= 3)
+                width = previous.Shape.Width;
+            if (previous.Shape.Width > 0 && previous.Shape.Width != width &&
+                (!_pendingWidths.TryGetValue(bridge, out int observed) || Math.Abs(observed - width) > 3))
+            {
+                // Explorer can report an intermediate set of button bounds during reflow.
+                // Commit a resize only when the next scan agrees with the proposed width.
+                _pendingWidths[bridge] = width;
+                if (laidOut) UpdateHover(taskbar, bridge, contents);
+                continue;
+            }
+            _pendingWidths.Remove(bridge);
             int gap = Math.Clamp((int)Math.Round(bounds.Bottom * .15), 4, 10);
             var desired = new Layout((bounds.Right - width) / 2, 2, width, bounds.Bottom - 2 - gap);
             if (GetProp(bridge, OwnerProperty) != owner)
@@ -141,21 +165,33 @@ internal sealed class NativeTaskbarShape
             {
                 Restore(taskbar, bridge, owner);
                 _owned.Remove(bridge);
+                _hover.Remove(taskbar);
                 continue;
             }
             _owned[bridge] = new(taskbar, desired, measuredWidth, minimum);
             if (!unchanged) TaskbarPlacement.Invalidate();
+            else UpdateHover(taskbar, bridge, contents);
         }
         foreach (nint bridge in _owned.Keys.Where(window => !found.Contains(window)).ToArray())
         {
-            Restore(_owned[bridge].Parent, bridge, owner);
+            nint taskbar = _owned[bridge].Parent;
+            Restore(taskbar, bridge, owner);
+            _hover.Remove(taskbar);
+            _pendingWidths.Remove(bridge);
             _owned.Remove(bridge);
         }
     }
 
+    private void UpdateHover(nint taskbar, nint bridge, NativeTaskbarContents.Measurement contents)
+    {
+        if (GetWindowRect(taskbar, out var shell) && GetWindowRect(bridge, out var shape))
+            _hover.Update(taskbar, shell.ToRect(), shape.ToRect(), contents.AppButtons, GetDpiForWindow(taskbar));
+    }
+
     private static bool Apply(nint bridge, Layout shape)
     {
-        nint region = CreateRoundRectRgn(0, 0, shape.Width, shape.Height, shape.Height, shape.Height);
+        // Keep the native composition surface's one-pixel outer seam outside the capsule.
+        nint region = CreateRoundRectRgn(1, 1, shape.Width - 1, shape.Height - 1, shape.Height - 2, shape.Height - 2);
         if (region == 0) return false;
         if (SetWindowPos(bridge, 0, shape.X, shape.Y, shape.Width, shape.Height, MoveFlags) && SetWindowRgn(bridge, region, true) != 0)
             return true; // Windows owns the region after SetWindowRgn succeeds.
@@ -237,7 +273,11 @@ internal sealed class NativeTaskbarShape
     private readonly record struct Layout(int X, int Y, int Width, int Height);
     private readonly record struct Placement(nint Parent, Layout Shape, int PackedWidth, int MinimumWidth);
 
-    [StructLayout(LayoutKind.Sequential)] private struct Rect { public int Left, Top, Right, Bottom; }
+    [StructLayout(LayoutKind.Sequential)] private struct Rect
+    {
+        public int Left, Top, Right, Bottom;
+        public readonly System.Windows.Rect ToRect() => new(Left, Top, Right - Left, Bottom - Top);
+    }
     [StructLayout(LayoutKind.Sequential)] private struct Point { public int X, Y; }
     [DllImport("user32.dll")] private static extern nint GetShellWindow();
     [DllImport("user32.dll")] private static extern uint GetWindowThreadProcessId(nint window, out uint pid);
@@ -245,6 +285,7 @@ internal sealed class NativeTaskbarShape
     [DllImport("user32.dll")] private static extern nint GetParent(nint window);
     [DllImport("user32.dll")] private static extern bool GetClientRect(nint window, out Rect rect);
     [DllImport("user32.dll")] private static extern bool GetWindowRect(nint window, out Rect rect);
+    [DllImport("user32.dll")] private static extern uint GetDpiForWindow(nint window);
     [DllImport("user32.dll")] private static extern bool ClientToScreen(nint window, ref Point point);
     [DllImport("user32.dll")] private static extern bool SetWindowPos(nint window, nint after, int x, int y, int width, int height, uint flags);
     [DllImport("user32.dll")] private static extern int GetWindowRgn(nint window, nint region);

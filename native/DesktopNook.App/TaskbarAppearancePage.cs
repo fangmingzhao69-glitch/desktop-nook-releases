@@ -50,6 +50,8 @@ internal sealed class TaskbarAppearancePage : UserControl
         _style.Items.Add(new ComboBoxItem { Content = "纯色", Tag = "opaque" });
         _style.Items.Add(new ComboBoxItem { Content = "模糊", Tag = "blur" });
         _style.Items.Add(new ComboBoxItem { Content = "亚克力", Tag = "acrylic" });
+        _style.Items.Add(new ComboBoxItem { Content = "液态玻璃", Tag = "liquid", ToolTip = "轻模糊，保留更多背景细节。" });
+        _style.Items.Add(new ComboBoxItem { Content = "柔雾玻璃", Tag = "frosted", ToolTip = "提高背景模糊强度，减轻背景干扰。" });
 
         var sceneCard = new StackPanel();
         var switches = new WrapPanel { Margin = new Thickness(0, -3, 0, 5) };
@@ -157,8 +159,12 @@ internal sealed class TaskbarAppearancePage : UserControl
         _radius.ValueChanged += (_, _) => UpdateOpacity();
         _style.SelectionChanged += (_, _) =>
         {
-            if (!_loading && _activeScene.Key != TaskbarAppearanceSettings.DesktopScene && _style.SelectedItem is ComboBoxItem)
-                _sceneEnabled.IsChecked = true;
+            if (!_loading && _style.SelectedItem is ComboBoxItem { Tag: string selected })
+            {
+                if (_activeScene.Key != TaskbarAppearanceSettings.DesktopScene) _sceneEnabled.IsChecked = true;
+                if (selected == "liquid") _opacity.Value = 38;
+                if (selected == "frosted") _opacity.Value = 104;
+            }
             UpdateOpacity();
         };
         _followScenes.Checked += (_, _) => UpdateSceneHint();
@@ -336,7 +342,7 @@ internal sealed class TaskbarAppearancePage : UserControl
         var mode = (_style.SelectedItem as ComboBoxItem)?.Tag as string;
         var custom = mode is not null and not "normal";
         _color.IsEnabled = custom;
-        _opacity.IsEnabled = mode is "clear" or "blur" or "acrylic";
+        _opacity.IsEnabled = mode is "clear" or "blur" or "acrylic" or "liquid" or "frosted";
         _radiusRow.Visibility = mode == "blur" ? Visibility.Visible : Visibility.Collapsed;
         _opacityLabel.Text = $"{_opacity.Value * 100 / 255:0}%";
         _radiusLabel.Text = $"{_radius.Value:0.#}";

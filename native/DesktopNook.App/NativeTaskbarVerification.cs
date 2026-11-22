@@ -101,6 +101,24 @@ internal static class NativeTaskbarVerification
             Check(IndependentProcesses().Length == 0, "The renderer starts without a TranslucentTB process.");
             colors.Add("purple", await WaitForColor("#D020E0"));
             Check(true, "The taskbar displays the first selected solid color.");
+
+            await session.PreviewAsync(opaque with { FloatingLayout = true }, allowDownload: false);
+            await Task.Delay(1250);
+            colors.Add("capsuleEdges", TakeCapsuleEdgeSamples());
+            Check(colors["capsuleEdges"][0] != "#D020E0" && colors["capsuleEdges"][1] != "#D020E0" &&
+                colors["capsuleEdges"].Skip(2).Contains("#D020E0"), "The solid fill stays inside the native capsule.");
+            await session.CancelPreviewAsync();
+            await WaitForColor("#D020E0");
+
+            await session.PreviewAsync(opaque with { Style = "liquid", Color = "#B0DBE6", Alpha = 38 }, allowDownload: false);
+            await Task.Delay(900);
+            colors.Add("liquid", TakeSamples());
+            await session.PreviewAsync(opaque with { Style = "frosted", Color = "#B0DBE6", Alpha = 104 }, allowDownload: false);
+            await Task.Delay(900);
+            colors.Add("frosted", TakeSamples());
+            Check(!colors["liquid"].SequenceEqual(colors["frosted"]) &&
+                !colors["liquid"].SequenceEqual(colors["purple"]), "The two glass presets change the actual native taskbar.");
+
             await session.PreviewAsync(opaque with { Color = "#1679D1" }, allowDownload: false);
             colors.Add("blue", await WaitForColor("#1679D1"));
             Check(true, "Changing the style preview updates the actual taskbar.");
@@ -173,11 +191,34 @@ internal static class NativeTaskbarVerification
         finally { ReleaseDC(IntPtr.Zero, dc); }
     }
 
+    private static string[] TakeCapsuleEdgeSamples()
+    {
+        nint shell = FindWindowW("Shell_TrayWnd", null);
+        nint bridge = FindWindowEx(shell, 0, "Windows.UI.Composition.DesktopWindowContentBridge", null);
+        if (bridge == 0 || !GetWindowRect(bridge, out var child))
+            throw new IOException("Could not locate the original Explorer composition child.");
+        nint dc = GetDC(0);
+        if (dc == 0) throw new IOException("Could not sample the capsule edge.");
+        try
+        {
+            int middle = (child.Top + child.Bottom) / 2;
+            return new[] { (child.Left, middle), (child.Right - 1, middle), (child.Left + 5, middle), (child.Right - 6, middle),
+                ((child.Left + child.Right) / 2, middle) }
+                .Select(point =>
+                {
+                    uint bgr = GetPixel(dc, point.Item1, point.Item2);
+                    return $"#{bgr & 255:X2}{(bgr >> 8) & 255:X2}{(bgr >> 16) & 255:X2}";
+                }).ToArray();
+        }
+        finally { ReleaseDC(0, dc); }
+    }
+
     [StructLayout(LayoutKind.Sequential)]
     private struct Rect { public int Left, Top, Right, Bottom; }
 
     [DllImport("user32.dll", ExactSpelling = true, CharSet = CharSet.Unicode)]
     private static extern IntPtr FindWindowW(string className, string? title);
+    [DllImport("user32.dll", CharSet = CharSet.Unicode)] private static extern nint FindWindowEx(nint parent, nint after, string cls, string? title);
     [DllImport("user32.dll")]
     [return: MarshalAs(UnmanagedType.Bool)]
     private static extern bool GetWindowRect(IntPtr window, out Rect bounds);

@@ -28,17 +28,25 @@ public record TaskbarAppearanceProfile
         return this with { Color = Color.ToUpperInvariant() };
     }
 
-    internal static bool IsSupportedStyle(string? style) => style is "normal" or "clear" or "opaque" or "blur" or "acrylic";
+    internal static bool IsSupportedStyle(string? style) => style is "normal" or "clear" or "opaque" or "blur" or "acrylic" or "liquid" or "frosted";
+
+    internal static double? PresetBlurRadius(string style) => style switch
+    {
+        "liquid" => 6,
+        "frosted" => 66,
+        _ => null
+    };
 
     internal Dictionary<string, object> ToEngine(bool dynamic)
     {
+        double? preset = PresetBlurRadius(Style);
         var result = new Dictionary<string, object>
         {
-            ["accent"] = Style,
+            ["accent"] = preset.HasValue ? "blur" : Style,
             ["color"] = $"{Color}{Alpha:X2}"
         };
         if (dynamic) result["enabled"] = Enabled;
-        if (BlurRadius is double radius) result["blur_radius"] = radius;
+        if ((preset ?? BlurRadius) is double radius) result["blur_radius"] = radius;
         if (ShowLine is bool line) result["show_line"] = line;
         if (ShowPeek is bool peek) result["show_peek"] = peek;
         if (Rules is { } rules) result["rules"] = rules;

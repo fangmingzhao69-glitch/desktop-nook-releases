@@ -6,7 +6,7 @@ namespace DesktopNook.App;
 
 internal static class NativeTaskbarContents
 {
-    internal readonly record struct Measurement(int PackedWidth, double Left, double Right, bool HasOverflow);
+    internal readonly record struct Measurement(int PackedWidth, double Left, double Right, bool HasOverflow, Rect[] AppButtons);
 
     // This runs on a background thread: an Explorer automation call can wait on its UI thread.
     internal static Measurement? Measure(nint taskbar)
@@ -26,6 +26,7 @@ internal static class NativeTaskbarContents
 
             var items = new List<Rect>();
             var tray = new List<Rect>();
+            var appButtons = new List<Rect>();
             bool overflow = false;
             int visited = 0;
             for (var item = walker.GetFirstChild(repeater, cache); item is not null && visited++ < 128;
@@ -42,12 +43,19 @@ internal static class NativeTaskbarContents
                 if (info.ControlType != ControlType.Button && info.ControlType != ControlType.ListItem) continue;
                 overflow |= info.ClassName.Contains("Overflow", StringComparison.OrdinalIgnoreCase) ||
                     info.AutomationId.Contains("Overflow", StringComparison.OrdinalIgnoreCase);
-                items.Add(rect);
+                if (info.ClassName.Contains("TaskListButton", StringComparison.Ordinal))
+                    appButtons.Add(rect);
+                else items.Add(rect);
             }
-            if (items.Count == 0 || (tray.Count == 0 && root.Current.ClassName == "Shell_TrayWnd")) return null;
-            int width = (int)Math.Ceiling(PackedWidth(items) + PackedWidth(tray));
-            var all = items.Concat(tray).ToArray();
-            return new(width, all.Min(rect => rect.Left), all.Max(rect => rect.Right), overflow);
+            if (items.Count + appButtons.Count == 0 || (tray.Count == 0 && root.Current.ClassName == "Shell_TrayWnd")) return null;
+            // Under pressure Explorer can report a clipped last app button. Reserve a normal slot
+            // immediately so opening one app does not first produce a partially grown capsule.
+            var widths = appButtons.Select(rect => rect.Width).Order().ToArray();
+            double slot = widths.Length > 2 ? widths[widths.Length / 2] : 0;
+            double apps = widths.Sum(width => width < slot * .88 ? slot : width);
+            int width = (int)Math.Ceiling(PackedWidth(items) + apps + PackedWidth(tray));
+            var all = items.Concat(appButtons).Concat(tray).ToArray();
+            return new(width, all.Min(rect => rect.Left), all.Max(rect => rect.Right), overflow, appButtons.ToArray());
         }
         catch (Exception error) when (error is ElementNotAvailableException or COMException or InvalidOperationException or ArgumentException)
         {

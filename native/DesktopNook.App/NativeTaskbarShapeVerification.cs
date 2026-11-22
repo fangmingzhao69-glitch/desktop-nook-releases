@@ -65,6 +65,14 @@ internal static class NativeTaskbarShapeVerification
                     var groups = await Task.Run(() => NativeTaskbarContents.Measure(taskbar));
                     Check(groups is { } content && content.Left >= expanded.Left - 2 && content.Right <= expanded.Right + 2,
                         "Both the application buttons and system tray fit inside the expanded capsule.");
+                    for (int sample = 0; sample < 6; sample++)
+                    {
+                        await Task.Delay(160);
+                        if (!GetWindowRect(bridge, out var stable) || Math.Abs(stable.Left - expanded.Left) > 3 ||
+                            Math.Abs(stable.Right - expanded.Right) > 3)
+                            throw new IOException("The expanded capsule moved again without another taskbar change.");
+                    }
+                    checks.Add("The expanded capsule stays still across successive layout scans.");
                 }
                 finally { if (!icon.HasExited) { icon.Kill(); await icon.WaitForExitAsync(); } }
             }

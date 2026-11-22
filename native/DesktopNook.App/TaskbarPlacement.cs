@@ -2,10 +2,11 @@ using System.Runtime.InteropServices;
 using System.Windows;
 using System.Windows.Automation;
 using System.Windows.Interop;
+using Microsoft.Win32;
 
 namespace DesktopNook.App;
 
-internal sealed record TaskbarAnchor(Rect Button,Rect Tray,Rect Work,double Dpi,string? AppCaption = null);
+internal sealed record TaskbarAnchor(Rect Button,Rect Tray,Rect Work,double Dpi,string? AppCaption = null,bool Centered = false);
 internal static class TaskbarPlacement
 {
     [StructLayout(LayoutKind.Sequential)] private struct NativeRect { public int Left,Top,Right,Bottom; public readonly Rect ToRect()=>new(Left,Top,Right-Left,Bottom-Top); }
@@ -37,7 +38,15 @@ internal static class TaskbarPlacement
     {
         GetWindowRect(tray,out var trayRect);var reference=new NativeRect{Left=(int)button.Left,Top=(int)button.Top,Right=(int)button.Right,Bottom=(int)button.Bottom};
         var info=new MonitorInfo{Size=(uint)Marshal.SizeOf<MonitorInfo>()};if(!GetMonitorInfo(MonitorFromRect(ref reference,2),ref info))throw new InvalidOperationException("无法读取任务栏所在屏幕。");
-        var dpi=GetDpiForWindow(tray);return new(button,trayRect.ToRect(),info.Work.ToRect(),dpi==0?96:dpi);
+        var dpi=GetDpiForWindow(tray);
+        bool centered = NativeTaskbarShape.IsCapsule(tray) || UsesCenteredButtons();
+        return new(button,trayRect.ToRect(),info.Work.ToRect(),dpi==0?96:dpi,Centered:centered);
+    }
+
+    private static bool UsesCenteredButtons()
+    {
+        using var key = Registry.CurrentUser.OpenSubKey(@"Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced");
+        return key?.GetValue("TaskbarAl") is not 0;
     }
     public static TaskbarAnchor Fallback()
     {
@@ -93,7 +102,8 @@ internal static class TaskbarPlacement
     {
         var scale=anchor.Dpi/96;var width=logicalWidth*scale;var height=logicalHeight*scale;
         var fit=Math.Min(1,Math.Min(anchor.Work.Width*.92/width,anchor.Work.Height*.92/height));width*=fit;height*=fit;
-        var x=anchor.Button.Left;var y=anchor.Tray.Top-height-8*scale;
+        var x=anchor.Centered ? anchor.Button.Left+(anchor.Button.Width-width)/2 : anchor.Button.Left;
+        var y=anchor.Tray.Top-height-8*scale;
         if(anchor.Tray.Bottom<=anchor.Work.Top+1)y=anchor.Tray.Bottom+8*scale;
         else if(anchor.Tray.Right<=anchor.Work.Left+1){x=anchor.Tray.Right+8*scale;y=anchor.Button.Top;}
         else if(anchor.Tray.Left>=anchor.Work.Right-1){x=anchor.Tray.Left-width-8*scale;y=anchor.Button.Top;}

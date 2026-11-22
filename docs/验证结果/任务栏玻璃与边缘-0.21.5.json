@@ -1,0 +1,135 @@
+{
+  "hostPid": 12392,
+  "passed": 11,
+  "failure": null,
+  "checks": [
+    "The actual renderer is loaded in the DesktopNook host.",
+    "The renderer starts without a TranslucentTB process.",
+    "The taskbar displays the first selected solid color.",
+    "The solid fill stays inside the native capsule.",
+    "The two glass presets change the actual native taskbar.",
+    "Changing the style preview updates the actual taskbar.",
+    "Clear removes the solid taskbar fill.",
+    "Cancelling the preview reapplies the saved style.",
+    "The taskbar worker shut down.",
+    "Disabling restores the system appearance.",
+    "The in-process worker restarts and shuts down again."
+  ],
+  "colors": {
+    "system": [
+      "#747474",
+      "#EEEEEE",
+      "#EEEEEE",
+      "#C9E2FF",
+      "#EEEEEE",
+      "#133C9A",
+      "#EEEEEE",
+      "#EEEEEE",
+      "#EEEEEE",
+      "#EEEEEE"
+    ],
+    "purple": [
+      "#6D4471",
+      "#D020E0",
+      "#D020E0",
+      "#C8DDFE",
+      "#D020E0",
+      "#133C9A",
+      "#D020E0",
+      "#D020E0",
+      "#D020E0",
+      "#D020E0"
+    ],
+    "capsuleEdges": [
+      "#466D6A",
+      "#738A93",
+      "#D020E0",
+      "#D020E0",
+      "#D020E0"
+    ],
+    "liquid": [
+      "#434B4C",
+      "#1F3E43",
+      "#8BA7AF",
+      "#C6E0FD",
+      "#809DA5",
+      "#133C9A",
+      "#678789",
+      "#749C99",
+      "#759E9C",
+      "#354F54"
+    ],
+    "frosted": [
+      "#4E5658",
+      "#52767D",
+      "#8FB1BB",
+      "#C6E0FE",
+      "#8CB0BB",
+      "#133C9A",
+      "#88B1B3",
+      "#87B0B0",
+      "#7DA6AA",
+      "#84A5B1"
+    ],
+    "blue": [
+      "#4E5658",
+      "#52767E",
+      "#8FB1BA",
+      "#C6E0FE",
+      "#8CB0BC",
+      "#133C9A",
+      "#1679D1",
+      "#1679D1",
+      "#1679D1",
+      "#1679D1"
+    ],
+    "clear": [
+      "#3D4445",
+      "#062428",
+      "#859FA6",
+      "#C6E0FD",
+      "#7697A4",
+      "#133C9A",
+      "#749D96",
+      "#658E8D",
+      "#456D6C",
+      "#688394"
+    ],
+    "afterCancel": [
+      "#3D4445",
+      "#062428",
+      "#D020E0",
+      "#C8DDFE",
+      "#D020E0",
+      "#133C9A",
+      "#D020E0",
+      "#D020E0",
+      "#D020E0",
+      "#D020E0"
+    ],
+    "afterStop": [
+      "#747474",
+      "#EEEEEE",
+      "#EEEEEE",
+      "#C9E2FF",
+      "#EEEEEE",
+      "#133C9A",
+      "#EEEEEE",
+      "#EEEEEE",
+      "#EEEEEE",
+      "#EEEEEE"
+    ],
+    "afterRestart": [
+      "#6D4471",
+      "#D020E0",
+      "#D020E0",
+      "#C8DDFE",
+      "#D020E0",
+      "#133C9A",
+      "#D020E0",
+      "#D020E0",
+      "#D020E0",
+      "#D020E0"
+    ]
+  }
+}

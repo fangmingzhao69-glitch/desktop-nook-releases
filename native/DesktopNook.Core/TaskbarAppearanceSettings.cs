@@ -133,7 +133,7 @@ public sealed class TaskbarAppearanceStore(string dataRoot)
             var defaults = TaskbarAppearanceSettings.SceneDefaultsFor(scene.Key);
             var appearance = settings.ResolvedProfileFor(scene.Key) with
             {
-                ShowLine = !settings.FloatingLayout && defaults.ShowLine,
+                ShowLine = !settings.FloatingLayout && settings.ProfileFor(scene.Key).Style != "opaque" && defaults.ShowLine,
                 ShowPeek = defaults.ShowPeek,
                 Rules = null
             };
