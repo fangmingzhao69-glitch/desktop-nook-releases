@@ -39,19 +39,19 @@ internal static class NativeTaskbarShapeVerification
             Check(FindWindowEx(0, 0, "Shell_TrayWnd", null) == taskbar && IsWindowVisible(taskbar),
                 "The same Explorer taskbar remains visible in capsule mode.");
             var centered = await WaitForBounds(rect => rect.Left > before.Left && rect.Right < before.Right &&
-                rect.Bottom < before.Bottom && IsCentered(rect, before));
+                rect.Top == before.Top && rect.Bottom == before.Bottom && IsCentered(rect, before));
             Check(centered.HasValue && GetWindowRect(bridge, out floating),
-                "The original native composition child moves inward, with left, right and bottom gaps.");
+                "The native capsule is inset horizontally and spans the full taskbar height.");
             Check(centered!.Value.Right - centered.Value.Left < (before.Right - before.Left) - 100,
                 "The capsule packs its contents and centers on the screen.");
             nint region = CreateRectRgn(0, 0, 0, 0);
             Rect clip = default;
             try
             {
-                Check(region != 0 && GetWindowRgn(bridge, region) != 0 && !PtInRegion(region, 0, 0) &&
+                Check(region != 0 && GetWindowRgn(bridge, region) != 0 &&
                     PtInRegion(region, (floating.Right - floating.Left) / 2, (floating.Bottom - floating.Top) / 2) &&
-                    GetRgnBox(region, out clip) != 0,
-                    "The visible silhouette of the native child has rounded corners.");
+                    GetRgnBox(region, out clip) != 0 && clip.Top == 0 && clip.Bottom == before.Bottom - before.Top,
+                    "The capsule window region reaches both original vertical edges.");
             }
             finally { if (region != 0) DeleteObject(region); }
             await Task.Delay(350);

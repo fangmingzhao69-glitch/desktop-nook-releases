@@ -20,7 +20,7 @@ internal static class SharpIcons
     internal static string ResolveIconPath(string path)
     {
         if(!path.EndsWith(".lnk",StringComparison.OrdinalIgnoreCase))return path;
-        object? shell=null,folder=null,item=null;
+        object? shell=null,folder=null,item=null,link=null;
         try
         {
             shell=Activator.CreateInstance(Type.GetTypeFromProgID("Shell.Application")!);
@@ -31,9 +31,19 @@ internal static class SharpIcons
             string target=Convert.ToString(((dynamic)item).ExtendedProperty("System.Link.TargetParsingPath"))??"";
             if(target.StartsWith("shell:AppsFolder\\",StringComparison.OrdinalIgnoreCase))return target;
             if(target.Contains('!')&&!target.Contains(':')&&!target.Contains('\\'))return "shell:AppsFolder\\"+target;
+            if (Path.IsPathFullyQualified(target) && Path.GetExtension(target).Equals(".exe", StringComparison.OrdinalIgnoreCase))
+            {
+                link = ((dynamic)item).GetLink;
+                string location = "";
+                ((dynamic)link).GetIconLocation(out location);
+                location = Environment.ExpandEnvironmentVariables(location ?? "").Trim('"');
+                // A versioned icon can disappear after an application upgrades.
+                if (Path.IsPathFullyQualified(location) && !File.Exists(location) && File.Exists(target))
+                    return target;
+            }
         }
         catch { }
-        finally { foreach(var com in new[]{item,folder,shell})if(com is not null&&Marshal.IsComObject(com))Marshal.FinalReleaseComObject(com); }
+        finally { foreach(var com in new[]{link,item,folder,shell})if(com is not null&&Marshal.IsComObject(com))Marshal.FinalReleaseComObject(com); }
         return path;
     }
     public static ImageSource? Load(string path,int pixels=96)

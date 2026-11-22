@@ -65,7 +65,8 @@ internal sealed class NativeTaskbarShape
             // Explorer may switch from regular to small buttons after the first narrow
             // layout. Learn its resulting sizes before showing a successful preview.
             _settling = true;
-            for (int sample = 0; sample < 8; sample++)
+            int stableSamples = 0;
+            for (int sample = 0; sample < 16; sample++)
             {
                 if (sample != 0) await Task.Delay(205);
                 await RefreshAsync();
@@ -75,7 +76,10 @@ internal sealed class NativeTaskbarShape
                         GetClientRect(entry.Value.Parent, out var parent) &&
                         entry.Value.Shape.X == CenteredX(parent.Right, entry.Value.Shape.Width,
                             (int)GetProp(entry.Key, TrimAppliedProperty))))
-                    break;
+                {
+                    if (++stableSamples >= 3) break;
+                }
+                else stableSamples = 0;
             }
             if (!_owned.Any(entry => IsInPosition(entry.Key, entry.Value.Parent, entry.Value.Shape)))
                 throw new IOException("未能调整当前 Windows 原生任务栏。请确认任务栏处于水平方向，且没有其他工具正在修改它。");
@@ -194,13 +198,9 @@ internal sealed class NativeTaskbarShape
                 continue;
             }
             _pendingWidths.Remove(bridge);
-            // Clip around the middle of the original icon row. Shrinking the native control's
-            // height can leave its normal-height contents sitting too low in the capsule.
-            int inset = Math.Clamp((int)Math.Round(bounds.Bottom * .065), 2, 8);
-            int gap = Math.Clamp((int)Math.Round(bounds.Bottom * .10), inset, 8);
             int trim = (int)GetProp(bridge, TrimAppliedProperty);
             var desired = new Layout(CenteredX(bounds.Right, width, trim),
-                inset - gap, width, bounds.Bottom, inset);
+                0, width, bounds.Bottom, 0);
             if (GetProp(bridge, OwnerProperty) != owner)
             {
                 // A non-default geometry or region may belong to another customizer.

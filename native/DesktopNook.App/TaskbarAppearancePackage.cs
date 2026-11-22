@@ -7,7 +7,7 @@ namespace DesktopNook.App;
 
 internal sealed class TaskbarAppearancePackage(string storePath)
 {
-    internal const string ReleaseTag = "v0.21.7";
+    internal const string ReleaseTag = "v0.21.8";
     internal const string PackageFile = "Qingxia-TaskbarCore-win-x64.zip";
     private const int Size = 818741;
     private const string ResourceName = "DesktopNook.NativeTaskbarPackage";

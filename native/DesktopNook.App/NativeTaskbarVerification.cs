@@ -106,7 +106,9 @@ internal static class NativeTaskbarVerification
             await Task.Delay(1250);
             colors.Add("capsuleEdges", TakeCapsuleEdgeSamples());
             Check(colors["capsuleEdges"].Take(4).All(color => color != "#D020E0") &&
-                colors["capsuleEdges"].Skip(4).Contains("#D020E0"), "The solid fill stays inside the native capsule.");
+                colors["capsuleEdges"].Skip(4).Take(3).Contains("#D020E0"), "The solid fill stays inside the native capsule.");
+            Check(colors["capsuleEdges"][7] == "#D020E0" && colors["capsuleEdges"][8] == "#D020E0",
+                "Solid pixels reach the first and last taskbar rows.");
             await session.CancelPreviewAsync();
             await WaitForColor("#D020E0");
 
@@ -204,7 +206,8 @@ internal static class NativeTaskbarVerification
         {
             int middle = (child.Top + child.Bottom) / 2;
             return new[] { (child.Left - 1, middle), (right, middle), (child.Left + 2, child.Top + 5),
-                (right - 3, child.Bottom - 6), (child.Left + 5, middle), (right - 6, middle), ((child.Left + right) / 2, middle) }
+                (right - 3, child.Bottom - 6), (child.Left + 5, middle), (right - 6, middle), ((child.Left + right) / 2, middle),
+                ((child.Left + right) / 2, child.Top), ((child.Left + right) / 2, child.Bottom - 1) }
                 .Select(point =>
                 {
                     uint bgr = GetPixel(dc, point.Item1, point.Item2);
