@@ -2,7 +2,7 @@
 
 常用与灵感，折页之间。折页是 Windows 桌面收纳工具。用一个任务栏入口打开收纳面板，左侧整理软件、文件和文件夹，右侧记录便签和待办。
 
-[下载 0.21.4 安装包（GitHub）](https://github.com/fangmingzhao69-glitch/desktop-nook-releases/releases/download/v0.21.4/DesktopNook-Setup.exe) · [Gitee 发行页](https://gitee.com/zfmdx/desktop-nook-releases/releases/latest) · [使用说明](docs/使用说明.md) · [折页宣传页](https://zheye-desktop.cleverhornbill8.chatgpt.site)
+[下载最新版安装包（GitHub）](https://github.com/fangmingzhao69-glitch/desktop-nook-releases/releases/latest/download/DesktopNook-Setup.exe) · [Gitee 发行页](https://gitee.com/zfmdx/desktop-nook-releases/releases/latest) · [使用说明](docs/使用说明.md) · [折页宣传页](https://zheye-desktop.cleverhornbill8.chatgpt.site)
 
 折页内置更新默认优先访问 GitHub。可在「设置 → 关于与更新」手动指定更新来源，或下载上方安装包覆盖升级。
 
