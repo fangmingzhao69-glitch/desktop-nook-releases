@@ -2,6 +2,7 @@ using System.Diagnostics;
 using System.IO;
 using System.Runtime.InteropServices;
 using System.Text.Json;
+using System.Windows;
 using DesktopNook.Core;
 
 namespace DesktopNook.App;
@@ -21,7 +22,7 @@ internal static class NativeTaskbarShapeVerification
         }
         var checks = new List<string>();
         string? failure = null;
-        Rect before = default, floating = default;
+        Rect before = default, floating = default, expanded = default;
         var store = new TaskbarAppearanceStore(root);
         var session = new TaskbarAppearanceSession(store, new NativeTaskbarBackend(store.DirectoryPath, sandbox: false));
         try
@@ -37,6 +38,8 @@ internal static class NativeTaskbarShapeVerification
                 "The same Explorer taskbar remains visible in capsule mode.");
             Check(GetWindowRect(bridge, out floating) && floating.Left > before.Left && floating.Right < before.Right && floating.Bottom < before.Bottom,
                 "The original native composition child moves inward, with left, right and bottom gaps.");
+            Check(IsCentered(floating, before) && floating.Right - floating.Left < (before.Right - before.Left) - 100,
+                "The capsule packs its contents and centers on the screen.");
             nint region = CreateRectRgn(0, 0, 0, 0);
             try
             {
@@ -45,6 +48,29 @@ internal static class NativeTaskbarShapeVerification
                     "The visible silhouette of the native child has rounded corners.");
             }
             finally { if (region != 0) DeleteObject(region); }
+
+            var iconRoot = Path.Combine(root, "icon-probe");
+            var launchIcon = new ProcessStartInfo(Environment.ProcessPath!) { UseShellExecute = false };
+            foreach (var arg in new[] { "--sandbox", iconRoot, "--native-taskbar-capsule-icon-probe" })
+                launchIcon.ArgumentList.Add(arg);
+            using (var icon = Process.Start(launchIcon) ?? throw new IOException("Could not add the isolated application button."))
+            {
+                try
+                {
+                    var grown = await WaitForBounds(rect => rect.Right - rect.Left >= floating.Right - floating.Left + 20 &&
+                        rect.Top == floating.Top && rect.Bottom == floating.Bottom &&
+                        rect.Right - rect.Left < before.Right - before.Left - 100 && IsCentered(rect, before));
+                    Check(grown.HasValue && !icon.HasExited, "Opening a separate application grows the centered capsule.");
+                    expanded = grown!.Value;
+                    var groups = await Task.Run(() => NativeTaskbarContents.Measure(taskbar));
+                    Check(groups is { } content && content.Left >= expanded.Left - 2 && content.Right <= expanded.Right + 2,
+                        "Both the application buttons and system tray fit inside the expanded capsule.");
+                }
+                finally { if (!icon.HasExited) { icon.Kill(); await icon.WaitForExitAsync(); } }
+            }
+            Check((await WaitForBounds(rect => Math.Abs((rect.Right - rect.Left) - (floating.Right - floating.Left)) <= 4 &&
+                IsCentered(rect, before))).HasValue, "Closing the application shrinks the capsule back.");
+
             await session.CancelPreviewAsync();
             Check(await WaitUntilRestored(), "Cancelling restores the original native taskbar geometry.");
 
@@ -75,11 +101,22 @@ internal static class NativeTaskbarShapeVerification
                 }
                 return false;
             }
+
+            async Task<Rect?> WaitForBounds(Func<Rect, bool> predicate)
+            {
+                var watch = Stopwatch.StartNew();
+                while (watch.Elapsed < TimeSpan.FromSeconds(9))
+                {
+                    if (GetWindowRect(bridge, out var rect) && predicate(rect)) return rect;
+                    await Task.Delay(150);
+                }
+                return null;
+            }
         }
         catch (Exception error) { failure = error.ToString(); }
         finally { session.Stop(); }
         File.WriteAllText(Path.Combine(root, "native-taskbar-shape.json"), JsonSerializer.Serialize(
-            new { passed = checks.Count, failure, checks, original = before, capsule = floating },
+            new { passed = checks.Count, failure, checks, original = before, capsule = floating, expanded },
             new JsonSerializerOptions { WriteIndented = true, IncludeFields = true }));
         return failure is null ? 0 : 1;
 
@@ -88,6 +125,24 @@ internal static class NativeTaskbarShapeVerification
             if (!condition) throw new IOException(description);
             checks.Add(description);
         }
+    }
+
+    private static bool IsCentered(Rect rect, Rect before) => Math.Abs(rect.Left + rect.Right - before.Left - before.Right) <= 2;
+
+    internal static void ShowIconProbe(string root)
+    {
+        Directory.CreateDirectory(root);
+        ShellIntegration.SetAppId($"DesktopNook.CapsuleVerification.{Environment.ProcessId}");
+        var window = new Window
+        {
+            Title = "折页任务栏验收",
+            Width = 180,
+            Height = 72,
+            ShowActivated = false,
+            WindowStartupLocation = WindowStartupLocation.CenterScreen
+        };
+        Application.Current.MainWindow = window;
+        window.Show();
     }
     [StructLayout(LayoutKind.Sequential)] private struct Rect { public int Left, Top, Right, Bottom; }
     [DllImport("user32.dll", CharSet = CharSet.Unicode)] private static extern nint FindWindowEx(nint parent, nint after, string name, string? title);

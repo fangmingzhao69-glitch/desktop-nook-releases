@@ -202,7 +202,7 @@ internal sealed class NativeTaskbarModule
     private const string Filename = "QingxiaTaskbarCore.dll";
     private const string ExplorerModule = "ExplorerTAP.dll";
     internal const string ExplorerRestartNeeded =
-        "Windows 资源管理器仍载有另一版本的任务栏材质组件。请在任务管理器中重启「Windows 资源管理器」后再试。原生悬浮胶囊可使用「系统默认」材质。";
+        "Windows 资源管理器仍载有另一版本的任务栏材质组件。请在任务管理器中重启「Windows 资源管理器」后再试。胶囊形态可使用「系统默认」材质。";
     private static readonly Dictionary<string, string> Hashes = new(StringComparer.OrdinalIgnoreCase)
     {
         [Filename] = "91F2D6CBECE6F120415F004D974300708859FA2E9D88D865E4CD630B8A26336B",

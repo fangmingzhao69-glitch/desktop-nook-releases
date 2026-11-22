@@ -29,7 +29,7 @@ public sealed record TaskbarAppearanceSettings : TaskbarAppearanceProfile
     public bool UsesComponent => Enabled && (FloatingLayout || UsesMaterialComponent);
 
     [JsonIgnore]
-    public bool UsesMaterialComponent => Enabled && (Style != "normal" || ShowLine.HasValue || ShowPeek.HasValue ||
+    public bool UsesMaterialComponent => Enabled && (Style != "normal" ||
         FollowScenes && Profiles?.Values.Any(profile => profile.Enabled) == true);
 
     public TaskbarAppearanceSettings Validate()
@@ -130,11 +130,16 @@ public sealed class TaskbarAppearanceStore(string dataRoot)
         foreach (var scene in TaskbarAppearanceSettings.Scenes)
         {
             bool dynamic = scene.Key != TaskbarAppearanceSettings.DesktopScene;
-            var appearance = settings.ResolvedProfileFor(scene.Key);
+            var defaults = TaskbarAppearanceSettings.SceneDefaultsFor(scene.Key);
+            var appearance = settings.ResolvedProfileFor(scene.Key) with
+            {
+                ShowLine = !settings.FloatingLayout && defaults.ShowLine,
+                ShowPeek = defaults.ShowPeek,
+                Rules = null
+            };
             if (dynamic && !settings.FollowScenes) appearance = appearance with { Enabled = false };
             output[scene.Key] = appearance.ToEngine(dynamic);
         }
-        if (settings.IgnoredWindows is { } ignored) output["ignored_windows"] = ignored;
         Write(path, output);
     }
 

@@ -14,12 +14,15 @@ internal sealed class NativeTaskbarShape
     private const string OwnerProperty = "DesktopNook.NativeTaskbarShape.Owner";
     private const uint MoveFlags = 0x4214; // async, no activation, no z-order changes
     private readonly DispatcherTimer _timer = new() { Interval = TimeSpan.FromMilliseconds(450) };
-    private readonly Dictionary<nint, (nint Parent, Layout Shape)> _owned = new();
+    private readonly Dictionary<nint, Placement> _owned = new();
+    private Task<Dictionary<nint, NativeTaskbarContents.Measurement>>? _pendingMeasure;
+    private int _revision;
+    private bool _refreshing;
     private EventWaitHandle? _guardStop;
 
     internal NativeTaskbarShape()
     {
-        _timer.Tick += (_, _) => Refresh();
+        _timer.Tick += async (_, _) => await RefreshAsync();
     }
 
     internal async Task StartAsync()
@@ -41,7 +44,7 @@ internal sealed class NativeTaskbarShape
             using var guard = Process.Start(launch) ?? throw new IOException("无法启动原生任务栏恢复组件。");
             if (!await Task.Run(() => ready.WaitOne(TimeSpan.FromSeconds(8))) || guard.HasExited)
                 throw new IOException("原生任务栏恢复组件未就绪。");
-            Refresh();
+            await RefreshAsync();
             var deadline = Stopwatch.StartNew();
             while (!_owned.Any(entry => IsInPosition(entry.Key, entry.Value.Parent, entry.Value.Shape)) &&
                 deadline.Elapsed < TimeSpan.FromSeconds(2))
@@ -60,26 +63,72 @@ internal sealed class NativeTaskbarShape
     internal void Stop()
     {
         _timer.Stop();
+        _revision++;
         RestoreOwned(Environment.ProcessId);
+        if (_owned.Count != 0) TaskbarPlacement.Invalidate();
         _owned.Clear();
         _guardStop?.Set();
         _guardStop?.Dispose();
         _guardStop = null;
     }
 
-    private void Refresh()
+    private async Task RefreshAsync()
+    {
+        if (_refreshing) return;
+        _refreshing = true;
+        int revision = _revision;
+        try
+        {
+            var bridges = Bridges().ToArray();
+            if (_pendingMeasure is { IsCompleted: false }) return;
+            _pendingMeasure = Task.Run(() =>
+            {
+                var measured = new Dictionary<nint, NativeTaskbarContents.Measurement>();
+                foreach (var (taskbar, bridge) in bridges)
+                    if (NativeTaskbarContents.Measure(taskbar) is { } contents)
+                        measured[bridge] = contents;
+                return measured;
+            });
+            var results = await _pendingMeasure.WaitAsync(TimeSpan.FromSeconds(2));
+            if (revision != _revision) return;
+            ApplyMeasurements(bridges, results);
+        }
+        catch (TimeoutException) { }
+        finally { _refreshing = false; }
+    }
+
+    private void ApplyMeasurements(
+        (nint Taskbar, nint Bridge)[] bridges,
+        Dictionary<nint, NativeTaskbarContents.Measurement> measurements)
     {
         var owner = (nint)Environment.ProcessId;
         var found = new HashSet<nint>();
-        foreach (var (taskbar, bridge) in Bridges())
+        foreach (var (taskbar, bridge) in bridges)
         {
             found.Add(bridge);
-            if (!GetClientRect(taskbar, out var bounds) || !Layout.TryCreate(bounds, out var desired))
+            if (!GetClientRect(taskbar, out var bounds) || bounds.Right < 500 ||
+                bounds.Bottom < 32 || bounds.Right < bounds.Bottom * 3)
             {
                 Restore(taskbar, bridge, owner);
                 _owned.Remove(bridge);
                 continue;
             }
+            if (!measurements.TryGetValue(bridge, out var contents)) continue;
+            _owned.TryGetValue(bridge, out var previous);
+            int padding = Math.Max(40, bounds.Bottom);
+            int maximum = bounds.Right - 8;
+            int measuredWidth = Math.Min(maximum, contents.PackedWidth);
+            int minimum = Math.Abs(previous.PackedWidth - measuredWidth) <= 2 ? previous.MinimumWidth : 0;
+            if (GetWindowRect(bridge, out var position) && previous.Shape.Width > 0 &&
+                IsInPosition(bridge, taskbar, previous.Shape) &&
+                (contents.HasOverflow || contents.Left < position.Left - 2 || contents.Right > position.Right + 2))
+                minimum = Math.Max(minimum, previous.Shape.Width + padding);
+            else if (previous.Shape.Width == 0 && contents.HasOverflow)
+                minimum = maximum;
+
+            int width = Math.Clamp(Math.Max(measuredWidth + padding, minimum), Math.Min(220, maximum), maximum);
+            int gap = Math.Clamp((int)Math.Round(bounds.Bottom * .15), 4, 10);
+            var desired = new Layout((bounds.Right - width) / 2, 2, width, bounds.Bottom - 2 - gap);
             if (GetProp(bridge, OwnerProperty) != owner)
             {
                 // A non-default geometry or region may belong to another customizer.
@@ -87,10 +136,15 @@ internal sealed class NativeTaskbarShape
                     HasRegion(bridge) || !SetProp(bridge, OwnerProperty, owner))
                     continue;
             }
-            if (_owned.TryGetValue(bridge, out var current) && current.Shape == desired && IsInPosition(bridge, taskbar, desired))
+            bool unchanged = previous.Shape == desired && IsInPosition(bridge, taskbar, desired);
+            if (!unchanged && !Apply(bridge, desired))
+            {
+                Restore(taskbar, bridge, owner);
+                _owned.Remove(bridge);
                 continue;
-            if (Apply(bridge, desired)) _owned[bridge] = (taskbar, desired);
-            else Restore(taskbar, bridge, owner);
+            }
+            _owned[bridge] = new(taskbar, desired, measuredWidth, minimum);
+            if (!unchanged) TaskbarPlacement.Invalidate();
         }
         foreach (nint bridge in _owned.Keys.Where(window => !found.Contains(window)).ToArray())
         {
@@ -180,17 +234,8 @@ internal sealed class NativeTaskbarShape
         catch (WaitHandleCannotBeOpenedException) { return 64; }
     }
 
-    private readonly record struct Layout(int X, int Y, int Width, int Height)
-    {
-        internal static bool TryCreate(Rect bounds, out Layout result)
-        {
-            int width = bounds.Right, height = bounds.Bottom;
-            int side = Math.Clamp((int)Math.Round(width * .047), 24, 128);
-            int gap = Math.Clamp((int)Math.Round(height * .15), 4, 10);
-            result = new(side, 2, width - 2 * side, height - 2 - gap);
-            return width >= 500 && height >= 32 && width >= height * 3;
-        }
-    }
+    private readonly record struct Layout(int X, int Y, int Width, int Height);
+    private readonly record struct Placement(nint Parent, Layout Shape, int PackedWidth, int MinimumWidth);
 
     [StructLayout(LayoutKind.Sequential)] private struct Rect { public int Left, Top, Right, Bottom; }
     [StructLayout(LayoutKind.Sequential)] private struct Point { public int X, Y; }

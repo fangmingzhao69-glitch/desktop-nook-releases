@@ -40,9 +40,14 @@ public partial class App : Application
             }
             bool interactiveVerification = e.Args.Any(arg =>
                 (arg.EndsWith("-self-test", StringComparison.Ordinal) && arg != "--storage-self-test")
-                || arg is "--billiards-parent-probe" or "--billiards-perf-test" or "--verification-marker" or "--native-taskbar-shape-parent-probe");
+                || arg is "--billiards-parent-probe" or "--billiards-perf-test" or "--verification-marker" or "--native-taskbar-shape-parent-probe" or "--native-taskbar-capsule-icon-probe");
 #if NOOK_UI_VERIFICATION
             if (interactiveVerification && !e.Args.Contains("--sandbox")) throw new IOException("界面自检必须使用沙箱。");
+            if (e.Args is ["--sandbox", string capsuleProbeRoot, "--native-taskbar-capsule-icon-probe"])
+            {
+                NativeTaskbarShapeVerification.ShowIconProbe(Path.GetFullPath(capsuleProbeRoot));
+                return;
+            }
             if (e.Args.Contains("--native-taskbar-shape-self-test") || e.Args.Contains("--native-taskbar-shape-parent-probe"))
             {
                 int sandbox = Array.IndexOf(e.Args, "--sandbox");

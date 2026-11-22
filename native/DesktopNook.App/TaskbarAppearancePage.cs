@@ -1,6 +1,5 @@
 using System.Globalization;
 using System.IO;
-using System.Text.Json;
 using System.Windows;
 using System.Windows.Automation;
 using System.Windows.Controls;
@@ -29,12 +28,9 @@ internal sealed class TaskbarAppearancePage : UserControl
     private readonly Slider _radius = new() { Minimum = 0, Maximum = 750, SmallChange = 1, LargeChange = 10 };
     private readonly Grid _radiusRow;
     private readonly TextBlock _radiusLabel = new();
-    private readonly ComboBox _line = MakeVisibilityList();
-    private readonly ComboBox _peek = MakeVisibilityList();
     private readonly TextBlock _message = new() { FontSize = 12, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 0, 0, 7) };
     private readonly StackPanel _body = new() { Margin = new Thickness(22, 2, 22, 10) };
     private readonly StackPanel _footer = new();
-    private readonly Button _rules;
     private TaskbarAppearanceSettings _draft;
     private TaskbarAppearanceScene _activeScene = TaskbarAppearanceSettings.Scenes[0];
     private bool _loading;
@@ -47,7 +43,7 @@ internal sealed class TaskbarAppearancePage : UserControl
         _session = session;
         _draft = session.Saved;
         _layout.Items.Add("系统布局");
-        _layout.Items.Add("原生悬浮胶囊");
+        _layout.Items.Add("胶囊形态");
         AutomationProperties.SetAutomationId(_layout, "NativeTaskbarLayout");
         _style.Items.Add(new ComboBoxItem { Content = "系统默认", Tag = "normal" });
         _style.Items.Add(new ComboBoxItem { Content = "透明", Tag = "clear" });
@@ -71,7 +67,7 @@ internal sealed class TaskbarAppearancePage : UserControl
         _body.Children.Add(Card(sceneCard));
 
         var appearanceCard = new StackPanel();
-        _layout.ToolTip = "悬浮胶囊保留 Windows 的开始菜单、固定图标和托盘。可搭配亚克力或模糊材质。";
+        _layout.ToolTip = "开始按钮、应用和托盘合在一起，宽度随图标数量自动调整。";
         appearanceCard.Children.Add(FieldRow("任务栏形态", _layout));
         appearanceCard.Children.Add(FieldRow("样式", _style));
         var colorControls = new StackPanel { Orientation = Orientation.Horizontal };
@@ -96,17 +92,6 @@ internal sealed class TaskbarAppearancePage : UserControl
         appearanceCard.Children.Add(_radiusRow);
         _body.Children.Add(Card(appearanceCard));
 
-        var options = new StackPanel { Margin = new Thickness(0, 8, 0, 0) };
-        options.Children.Add(FieldRow("任务栏细线", _line));
-        options.Children.Add(FieldRow("Aero Peek", _peek));
-        _peek.ToolTip = "适用于旧式任务栏";
-        var filters = new WrapPanel();
-        _rules = MakeButton("窗口规则…", () => EditWindowConditions(isRules: true));
-        filters.Children.Add(_rules);
-        filters.Children.Add(MakeButton("忽略窗口…", () => EditWindowConditions(isRules: false)));
-        options.Children.Add(filters);
-        _body.Children.Add(Card(new Expander { Header = "细线与窗口规则", Content = options,
-            Foreground = ThemePalette.Brush("TextPrimaryBrush") }));
         _message.Foreground = ThemePalette.Brush("TextSecondaryBrush");
         _footer.Children.Add(_message);
         var actionBar = new DockPanel();
@@ -166,7 +151,6 @@ internal sealed class TaskbarAppearancePage : UserControl
         AutomationProperties.SetAutomationId(_radius, "AppearanceBlurRadius");
         AutomationProperties.SetAutomationId(_opacity, "AppearanceOpacity");
         AutomationProperties.SetAutomationId(apply, "AppearanceApply");
-        AutomationProperties.SetAutomationId(_line, "AppearanceTopLine");
         _scene.SelectionChanged += (_, _) => SwitchScene();
         _color.TextChanged += (_, _) => UpdateColorSample();
         _opacity.ValueChanged += (_, _) => UpdateOpacity();
@@ -203,15 +187,6 @@ internal sealed class TaskbarAppearancePage : UserControl
         if (primary) button.Style = (Style)FindResource("PrimaryButton");
         button.Click += (_, _) => click();
         return button;
-    }
-
-    private static ComboBox MakeVisibilityList()
-    {
-        var list = new ComboBox { MinWidth = 115 };
-        list.Items.Add(new ComboBoxItem { Content = "沿用默认" });
-        list.Items.Add(new ComboBoxItem { Content = "显示", Tag = true });
-        list.Items.Add(new ComboBoxItem { Content = "隐藏", Tag = false });
-        return list;
     }
 
     private static Border Card(UIElement content) => new()
@@ -296,11 +271,6 @@ internal sealed class TaskbarAppearancePage : UserControl
         _color.Text = profile.Color;
         _opacity.Value = profile.Alpha;
         _radius.Value = profile.BlurRadius ?? defaults.BlurRadius;
-        ((ComboBoxItem)_line.Items[0]).Content = defaults.ShowLine == true ? "场景默认（显示）" : "场景默认（隐藏）";
-        ((ComboBoxItem)_peek.Items[0]).Content = defaults.ShowPeek == true ? "场景默认（显示）" : "场景默认（隐藏）";
-        _line.SelectedItem = _line.Items.OfType<ComboBoxItem>().Single(item => Equals(item.Tag, profile.ShowLine));
-        _peek.SelectedItem = _peek.Items.OfType<ComboBoxItem>().Single(item => Equals(item.Tag, profile.ShowPeek));
-        _rules.IsEnabled = scene.AllowsRules;
         _loading = false;
         UpdateOpacity();
         UpdateSceneHint();
@@ -382,10 +352,7 @@ internal sealed class TaskbarAppearancePage : UserControl
             Style = style,
             Color = _color.Text.Trim(),
             Alpha = (byte)Math.Round(_opacity.Value),
-            BlurRadius = style == "blur" ? _radius.Value : selected.BlurRadius,
-            ShowLine = (_line.SelectedItem as ComboBoxItem)?.Tag as bool?,
-            ShowPeek = (_peek.SelectedItem as ComboBoxItem)?.Tag as bool?,
-            Rules = selected.Rules
+            BlurRadius = style == "blur" ? _radius.Value : selected.BlurRadius
         };
         return (_draft.WithProfile(_activeScene.Key, profile) with
         {
@@ -393,59 +360,6 @@ internal sealed class TaskbarAppearancePage : UserControl
             FloatingLayout = _layout.SelectedIndex == 1,
             FollowScenes = _followScenes.IsChecked == true
         }).Validate();
-    }
-
-    private void EditWindowConditions(bool isRules)
-    {
-        if (isRules && !_activeScene.AllowsRules) return;
-        try { _draft = Fields(); }
-        catch (IOException ex) { _message.Text = ex.Message; return; }
-        var activeProfile = _draft.ProfileFor(_activeScene.Key);
-        var current = isRules ? activeProfile.Rules : _draft.IgnoredWindows;
-        var window = new Window
-        {
-            Owner = _owner, Title = isRules ? "窗口规则" : "忽略窗口", Width = 480, SizeToContent = SizeToContent.Height,
-            WindowStartupLocation = WindowStartupLocation.CenterOwner, ShowInTaskbar = false, ResizeMode = ResizeMode.NoResize
-        };
-        var editor = new TextBox
-        {
-            Text = current is { } value ? JsonSerializer.Serialize(value, new JsonSerializerOptions { WriteIndented = true }) : "{}",
-            AcceptsReturn = true, TextWrapping = TextWrapping.Wrap, VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
-            Height = 190, MaxLength = 24000, Margin = new Thickness(0, 8, 0, 8)
-        };
-        var hint = isRules
-            ? "可按进程名、窗口标题或窗口类设置特殊外观。示例：{\"process_name\":{\"notepad.exe\":{\"accent\":\"acrylic\"}}}"
-            : "匹配的窗口不参与外观状态判断。示例：{\"process_name\":[\"notepad.exe\"]}。";
-        var body = new StackPanel { Margin = new Thickness(18, 12, 18, 15) };
-        body.Children.Add(new TextBlock { Text = hint, TextWrapping = TextWrapping.Wrap });
-        body.Children.Add(editor);
-        var error = new TextBlock { TextWrapping = TextWrapping.Wrap, MinHeight = 18 };
-        body.Children.Add(error);
-        var actions = new WrapPanel { HorizontalAlignment = HorizontalAlignment.Right };
-        var cancel = MakeButton("取消", window.Close);
-        cancel.IsCancel = true;
-        actions.Children.Add(cancel);
-        JsonElement? selected = null;
-        actions.Children.Add(MakeButton("确定", () =>
-        {
-            try
-            {
-                using var parsed = JsonDocument.Parse(string.IsNullOrWhiteSpace(editor.Text) ? "{}" : editor.Text,
-                    new JsonDocumentOptions { CommentHandling = JsonCommentHandling.Skip, AllowTrailingCommas = true, MaxDepth = 14 });
-                if (isRules) TaskbarAppearanceFilters.ValidateRules(parsed.RootElement);
-                else TaskbarAppearanceFilters.ValidateIgnoredWindows(parsed.RootElement);
-                selected = parsed.RootElement.EnumerateObject().Any() ? parsed.RootElement.Clone() : null;
-                window.DialogResult = true;
-            }
-            catch (Exception ex) when (ex is IOException or JsonException) { error.Text = ex.Message; }
-        }, primary: true));
-        body.Children.Add(actions);
-        window.Content = body;
-        UiDialogs.Chrome(window);
-        if (window.ShowDialog() != true) return;
-        _draft = isRules ? _draft.WithProfile(_activeScene.Key, activeProfile with { Rules = selected })
-            : _draft with { IgnoredWindows = selected };
-        _message.Text = "窗口条件已编辑，选择「应用」保存。";
     }
 
     private bool CanApply(TaskbarAppearanceSettings settings)

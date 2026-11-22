@@ -94,7 +94,7 @@ internal static class TaskbarAppearanceVerification
             var full = new TaskbarAppearanceSettings { Enabled = true, Style = "normal", ShowLine = true, IgnoredWindows = ignored.RootElement.Clone() }
                 .WithProfile("visible_window_appearance", new TaskbarAppearanceProfile
                 {
-                    Enabled = true, Style = "acrylic", Color = "#884433", Alpha = 0xAA, ShowLine = false, Rules = rules.RootElement.Clone()
+                    Enabled = true, Style = "acrylic", Color = "#884433", Alpha = 0xAA, ShowLine = true, Rules = rules.RootElement.Clone()
                 })
                 .WithProfile("maximized_window_appearance", new TaskbarAppearanceProfile
                 {
@@ -119,11 +119,9 @@ internal static class TaskbarAppearanceVerification
                 var profile = emitted.GetProperty("visible_window_appearance");
                 Check(profile.GetProperty("accent").GetString() == "acrylic" &&
                     !profile.GetProperty("show_line").GetBoolean() &&
-                    profile.GetProperty("rules").GetProperty("process_name").GetProperty("notepad.exe")
-                        .GetProperty("inactive").GetProperty("accent").GetString() == "clear" &&
-                    emitted.GetProperty("ignored_windows").GetProperty("window_class")[0].GetString() == "ExampleWindow" &&
+                    !profile.TryGetProperty("rules", out _) && !emitted.TryGetProperty("ignored_windows", out _) &&
                     emitted.GetProperty("maximized_window_appearance").GetProperty("blur_radius").GetDouble() == 22.5,
-                    "手动编辑的规则、非活动外观和忽略列表可重读并传给渲染组件");
+                    "沿用场景材质，旧版窗口规则、细线覆盖和忽略列表不再下发");
             }
             Check((full with { Style = "normal", ShowLine = null }).UsesComponent &&
                 !(full with { Enabled = false }).UsesComponent, "桌面为系统默认时可仅启用动态外观，全局关闭保留设置");
@@ -257,7 +255,8 @@ internal static class TaskbarAppearanceVerification
                     var scenes = Find<ComboBox>(dialog).Single(item => AutomationProperties.GetAutomationId(item) == "AppearanceScene");
                     var styles = Find<ComboBox>(dialog).Single(item => AutomationProperties.GetAutomationId(item) == "AppearanceStyle");
                     var layout = Find<ComboBox>(dialog).Single(item => AutomationProperties.GetAutomationId(item) == "NativeTaskbarLayout");
-                    Check(layout.Items.Cast<string>().SequenceEqual(new[] { "系统布局", "原生悬浮胶囊" }),
+                    Check(layout.Items.Cast<string>().SequenceEqual(new[] { "系统布局", "胶囊形态" }) &&
+                        !Find<Expander>(dialog).Any(item => Equals(item.Header, "细线与窗口规则")),
                         "任务栏形态使用原生布局设置");
                     var blur = Find<Slider>(dialog).Single(item => AutomationProperties.GetAutomationId(item) == "AppearanceBlurRadius");
                     var opacity = Find<Slider>(dialog).Single(item => AutomationProperties.GetAutomationId(item) == "AppearanceOpacity");

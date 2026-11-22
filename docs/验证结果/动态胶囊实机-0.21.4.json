@@ -1,0 +1,36 @@
+{
+  "passed": 12,
+  "failure": null,
+  "checks": [
+    "The Explorer taskbar and its native controls are visible.",
+    "Recorded the original geometry.",
+    "The same Explorer taskbar remains visible in capsule mode.",
+    "The original native composition child moves inward, with left, right and bottom gaps.",
+    "The capsule packs its contents and centers on the screen.",
+    "The visible silhouette of the native child has rounded corners.",
+    "Opening a separate application grows the centered capsule.",
+    "Both the application buttons and system tray fit inside the expanded capsule.",
+    "Closing the application shrinks the capsule back.",
+    "Cancelling restores the original native taskbar geometry.",
+    "An isolated application process applied the native capsule.",
+    "The guard restores the original geometry after host termination."
+  ],
+  "original": {
+    "Left": 0,
+    "Top": 1392,
+    "Right": 2560,
+    "Bottom": 1440
+  },
+  "capsule": {
+    "Left": 759,
+    "Top": 1394,
+    "Right": 1800,
+    "Bottom": 1433
+  },
+  "expanded": {
+    "Left": 737,
+    "Top": 1394,
+    "Right": 1822,
+    "Bottom": 1433
+  }
+}
