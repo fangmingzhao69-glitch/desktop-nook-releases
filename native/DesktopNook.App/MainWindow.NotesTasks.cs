@@ -82,7 +82,7 @@ public partial class MainWindow
                     Style = (Style)FindResource("FoldTaskCheckBox"),
                     VerticalAlignment = VerticalAlignment.Top,
                     Margin = new Thickness(2, 0, 6, 0),
-                    Padding = new Thickness(6, 8, 6, 8),
+                    Padding = new Thickness(6, 6, 6, 10),
                     MinHeight = 32,
                     IsEnabled = !readOnly
                 };
@@ -100,7 +100,7 @@ public partial class MainWindow
                     TextAlignment = TextAlignment.Right,
                     Foreground = Brush("TextSecondaryBrush"),
                     FontSize = 12,
-                    Margin = new Thickness(0, 8, 4, 0),
+                    Margin = new Thickness(0, 3, 4, 0),
                     VerticalAlignment = VerticalAlignment.Top
                 };
                 AutomationProperties.SetAutomationId(sequence, $"NoteTaskNumber-{note.Id}-{index}");

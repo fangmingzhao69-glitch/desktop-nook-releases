@@ -234,10 +234,10 @@ internal static class NotesVerification
             var firstRow = (DockPanel)reordered[0].Parent;
             var checkbox = firstRow.Children.OfType<CheckBox>().Single();
             checkbox.ApplyTemplate();
-            var boxBorder = (Border)checkbox.Template.FindName("Box", checkbox);
+            var boxBorder = (Border)checkbox.Template.FindName("Mark", checkbox);
             double boxTop = boxBorder.TranslatePoint(new Point(), firstRow).Y;
-            // The 12-DIP editor font leaves four DIPs above the visible glyphs in its first line box.
-            double textTop = reordered[0].TranslatePoint(new Point(0, reordered[0].Padding.Top + 4), firstRow).Y;
+            // The first visible glyphs start two DIPs below the editor's top padding.
+            double textTop = reordered[0].TranslatePoint(new Point(0, reordered[0].Padding.Top + 2), firstRow).Y;
             Check(Math.Abs(boxTop - textTop) <= 1 && checkbox.VerticalAlignment == VerticalAlignment.Top,
                 "待办首行文字与勾选框上缘对齐");
             Snapshot("notes-checklist-complete-order");
