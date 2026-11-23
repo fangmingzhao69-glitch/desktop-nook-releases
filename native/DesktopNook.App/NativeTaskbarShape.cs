@@ -23,7 +23,8 @@ internal sealed class NativeTaskbarShape
     private const uint MoveFlags = 0x4214; // async, no activation, no z-order changes
     private readonly DispatcherTimer _timer = new() { Interval = TimeSpan.FromMilliseconds(350) };
     private readonly Dictionary<nint, Placement> _owned = new();
-    private readonly Dictionary<nint, int> _pendingWidths = new();
+    private readonly Dictionary<nint, PendingResize> _pendingWidths = new();
+    private readonly Dictionary<nint, int> _calibrating = new();
     private readonly NativeTaskbarHover _hover = new();
     private readonly NativeTaskbarInfoBall _infoBall = new();
     private Task<Dictionary<nint, NativeTaskbarContents.Measurement>>? _pendingMeasure;
@@ -101,6 +102,7 @@ internal sealed class NativeTaskbarShape
         _hover.Dispose();
         _infoBall.Stop();
         _pendingWidths.Clear();
+        _calibrating.Clear();
         RestoreOwned(Environment.ProcessId);
         if (_owned.Count != 0) TaskbarPlacement.Invalidate();
         _owned.Clear();
@@ -122,8 +124,16 @@ internal sealed class NativeTaskbarShape
             {
                 var measured = new Dictionary<nint, NativeTaskbarContents.Measurement>();
                 foreach (var (taskbar, bridge) in bridges)
-                    if (NativeTaskbarContents.Measure(taskbar) is { } contents)
+                {
+                    // UI Automation reads multiple shell elements. Discard a scan
+                    // spanning a capsule move rather than combine two coordinate frames.
+                    if (!GetWindowRect(bridge, out var before)) continue;
+                    nint trim = GetProp(bridge, TrimAppliedProperty);
+                    if (NativeTaskbarContents.Measure(taskbar) is { } contents &&
+                        GetWindowRect(bridge, out var after) && before.Equals(after) &&
+                        GetProp(bridge, TrimAppliedProperty) == trim)
                         measured[bridge] = contents;
+                }
                 return measured;
             });
             var results = await _pendingMeasure.WaitAsync(TimeSpan.FromSeconds(2));
@@ -150,18 +160,21 @@ internal sealed class NativeTaskbarShape
                 Restore(taskbar, bridge, owner);
                 _owned.Remove(bridge);
                 _pendingWidths.Remove(bridge);
+                _calibrating.Remove(bridge);
                 _hover.Remove(taskbar);
                 continue;
             }
             if (!measurements.TryGetValue(bridge, out var contents)) continue;
             _owned.TryGetValue(bridge, out var previous);
+            if (previous.Shape.Height != bounds.Bottom) _calibrating[bridge] = 0;
+            bool calibrating = _settling || _calibrating.ContainsKey(bridge);
             int ballWidth = _infoBall.WidthFor(taskbar);
             int padding = Math.Max(8, (int)Math.Round(bounds.Bottom * .22)) + (ballWidth > 0 ? ballWidth + 2 : 0);
             int maximum = bounds.Right - 8;
             // When the new button cannot fit Windows may compress every app button at once.
             // Remember the regular slot from the unconstrained/native layout for this DPI.
-            double normalSlot = !_settling && previous.Shape.Height == bounds.Bottom
-                ? Math.Max(previous.NormalAppSlot, contents.AppSlot)
+            double normalSlot = !calibrating && previous.Shape.Height == bounds.Bottom && previous.NormalAppSlot > 0
+                ? previous.NormalAppSlot
                 : contents.AppSlot;
             bool squeezed = contents.AppSlot > 0 && contents.AppSlot < normalSlot * .9;
             double normalChrome = squeezed && previous.ChromeCount == contents.ChromeCount
@@ -188,14 +201,23 @@ internal sealed class NativeTaskbarShape
             int width = Math.Clamp(Math.Max(measuredWidth + padding, minimum), Math.Min(220, maximum), maximum);
             if (previous.Shape.Width > 0 && Math.Abs(previous.Shape.Width - width) <= 3)
                 width = previous.Shape.Width;
-            if (previous.Shape.Width > 0 && previous.Shape.Width != width &&
-                (!_pendingWidths.TryGetValue(bridge, out int observed) || Math.Abs(observed - width) > 3))
+            if (previous.Shape.Width > 0 && previous.Shape.Width != width)
             {
-                // Explorer can report an intermediate set of button bounds during reflow.
-                // Commit a resize only when the next scan agrees with the proposed width.
-                _pendingWidths[bridge] = width;
-                if (laidOut) UpdateHover(taskbar, bridge, contents, ballWidth);
-                continue;
+                string apps = string.Join("\n", contents.AppIds);
+                if (!_pendingWidths.TryGetValue(bridge, out var pending) || Math.Abs(pending.Width - width) > 3 ||
+                    pending.Apps != apps || pending.Overflow != contents.HasOverflow)
+                {
+                    pending = new(width, apps, contents.HasOverflow, Environment.TickCount64);
+                    _pendingWidths[bridge] = pending;
+                }
+                // Newly shown buttons may animate, briefly disappear, or compress.
+                // Growth waits for a consistent proposal; shrinking waits longer.
+                int delay = calibrating ? 180 : width > previous.Shape.Width ? 420 : 1100;
+                if (Environment.TickCount64 - pending.Since < delay)
+                {
+                    if (laidOut) UpdateHover(taskbar, bridge, contents, ballWidth);
+                    continue;
+                }
             }
             _pendingWidths.Remove(bridge);
             int trim = (int)GetProp(bridge, TrimAppliedProperty);
@@ -217,12 +239,25 @@ internal sealed class NativeTaskbarShape
                 continue;
             }
             _owned[bridge] = new(taskbar, desired, minimum, normalSlot, contents.ChromeCount, normalChrome, count, contents.HasOverflow);
-            if (!unchanged) TaskbarPlacement.Invalidate();
+            if (!unchanged)
+            {
+                TaskbarPlacement.Invalidate();
+            }
             else
             {
                 UpdateHover(taskbar, bridge, contents, ballWidth);
-                if (!contents.HasOverflow)
+                // The tray offset is calibrated on entry. Recalibrating it from
+                // app launch/close animations clips the face before the next scan
+                // can recenter the bridge, causing a visible sideways hop.
+                if (!contents.HasOverflow && calibrating)
                     UpdateTrim(bridge, contents.TrayGap, trim, bounds.Right - width, ballWidth, bounds.Bottom);
+            }
+            if (_calibrating.TryGetValue(bridge, out int stable))
+            {
+                stable = unchanged && !contents.HasOverflow &&
+                    GetProp(bridge, TrimProperty) == GetProp(bridge, TrimAppliedProperty) ? stable + 1 : 0;
+                if (stable >= 3) _calibrating.Remove(bridge);
+                else _calibrating[bridge] = stable;
             }
         }
         foreach (nint bridge in _owned.Keys.Where(window => !found.Contains(window)).ToArray())
@@ -231,6 +266,7 @@ internal sealed class NativeTaskbarShape
             Restore(taskbar, bridge, owner);
             _hover.Remove(taskbar);
             _pendingWidths.Remove(bridge);
+            _calibrating.Remove(bridge);
             _owned.Remove(bridge);
         }
     }
@@ -381,6 +417,7 @@ internal sealed class NativeTaskbarShape
     }
 
     private readonly record struct Layout(int X, int Y, int Width, int Height, int Inset);
+    private readonly record struct PendingResize(int Width, string Apps, bool Overflow, long Since);
     private readonly record struct Placement(nint Parent, Layout Shape, int MinimumWidth,
         double NormalAppSlot, int ChromeCount, double NormalChromeWidth, int AppCount, bool Overflow);
 

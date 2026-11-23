@@ -118,15 +118,25 @@ internal static class NativeTaskbarShapeVerification
             {
                 try
                 {
-                    var grown = await WaitForBounds(rect => rect.Right - rect.Left >= floating.Right - floating.Left + 20 &&
-                        rect.Top == floating.Top && rect.Bottom == floating.Bottom &&
-                        rect.Right - rect.Left < before.Right - before.Left - 100 && IsCentered(rect, before));
+                    int previousWidth = floating.Right - floating.Left;
+                    var grown = await WaitForBounds(rect =>
+                    {
+                        int width = rect.Right - rect.Left;
+                        if (width < previousWidth - 3)
+                            throw new IOException("The capsule contracted while an application was opening.");
+                        if (!IsCentered(rect, before))
+                            throw new IOException("The capsule left the screen center during app startup.");
+                        previousWidth = Math.Max(previousWidth, width);
+                        return width >= floating.Right - floating.Left + 20 &&
+                            rect.Top == floating.Top && rect.Bottom == floating.Bottom &&
+                            width < before.Right - before.Left - 100;
+                    });
                     Check(grown.HasValue && !icon.HasExited, "Opening a separate application grows the centered capsule.");
                     expanded = grown!.Value;
                     var groups = await Task.Run(() => NativeTaskbarContents.Measure(taskbar));
                     Check(groups is { } content && content.Left >= expanded.Left - 2 && content.Right <= expanded.Right + 2,
                         "Both the application buttons and system tray fit inside the expanded capsule.");
-                    for (int sample = 0; sample < 6; sample++)
+                    for (int sample = 0; sample < 12; sample++)
                     {
                         await Task.Delay(160);
                         if (!TryGetFace(bridge, out var stable) || Math.Abs(stable.Left - expanded.Left) > 3 ||
