@@ -179,6 +179,9 @@ internal static class ShortcutInstaller
 
         void Set(uint id, string text)
         {
+            // Reassigning an unchanged AppUserModelID asks Explorer to rebuild
+            // the taskbar association even when only the icon has changed.
+            if (Matches(id, text)) return;
             var key = new PropertyKey { Format = AppUserModelFormat, Id = id };
             var value = new Variant { Type = 31, Text = Marshal.StringToCoTaskMemUni(text) };
             try { store.SetValue(ref key, ref value); }

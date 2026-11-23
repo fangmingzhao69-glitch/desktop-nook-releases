@@ -25,6 +25,7 @@ internal static class NativeTaskbarShapeVerification
         string? failure = null;
         Rect before = default, floating = default, expanded = default;
         double? trayGap = null;
+        double? originalSlot = null, capsuleSlot = null;
         var store = new TaskbarAppearanceStore(root);
         var session = new TaskbarAppearanceSession(store, new NativeTaskbarBackend(store.DirectoryPath, sandbox: false));
         try
@@ -34,6 +35,9 @@ internal static class NativeTaskbarShapeVerification
             Check(taskbar != 0 && bridge != 0 && IsWindowVisible(taskbar) && IsWindowVisible(bridge),
                 "The Explorer taskbar and its native controls are visible.");
             Check(GetWindowRect(bridge, out before), "Recorded the original geometry.");
+            var nativeContents = await Task.Run(() => NativeTaskbarContents.Measure(taskbar));
+            originalSlot = nativeContents?.AppSlot;
+            Check(nativeContents is { AppSlot: > 0 }, "Recorded the native application-button size before capsule mode.");
 
             await session.PreviewAsync(new TaskbarAppearanceSettings { Enabled = true, Style = "normal", FloatingLayout = true }, allowDownload: false);
             Check(FindWindowEx(0, 0, "Shell_TrayWnd", null) == taskbar && IsWindowVisible(taskbar),
@@ -56,6 +60,11 @@ internal static class NativeTaskbarShapeVerification
             finally { if (region != 0) DeleteObject(region); }
             await Task.Delay(350);
             var packed = await Task.Run(() => NativeTaskbarContents.Measure(taskbar));
+            capsuleSlot = packed?.AppSlot;
+            Check(packed is { } nativeSize && Math.Abs(nativeSize.AppSlot - nativeContents!.Value.AppSlot) <= 1,
+                "The capsule retains the original native application-button size.");
+            Check(packed!.Value.AppIds.SequenceEqual(nativeContents!.Value.AppIds),
+                "Capsule mode preserves the native application order.");
             trayGap = packed?.TrayGap;
             double visibleMiddle = floating.Top + (clip.Top + clip.Bottom) / 2d;
             Check(packed is { } layout && layout.AppButtons.Length > 0 &&
@@ -177,6 +186,9 @@ internal static class NativeTaskbarShapeVerification
 
             await session.CancelPreviewAsync();
             Check(await WaitUntilRestored(), "Cancelling restores the original native taskbar geometry.");
+            var restoredContents = await Task.Run(() => NativeTaskbarContents.Measure(taskbar));
+            Check(restoredContents is { } restoredOrder && restoredOrder.AppIds.SequenceEqual(nativeContents!.Value.AppIds),
+                "Returning to system layout preserves the native application order.");
 
             var probe = new ProcessStartInfo(Environment.ProcessPath!) { UseShellExecute = false, CreateNoWindow = true };
             foreach (var arg in new[] { "--sandbox", Path.Combine(root, "guard-probe"), "--native-taskbar-shape-parent-probe" })
@@ -187,8 +199,13 @@ internal static class NativeTaskbarShapeVerification
                 var timeout = Stopwatch.StartNew();
                 while (!File.Exists(Path.Combine(root, "guard-probe", "ready")) && !process.HasExited && timeout.Elapsed < TimeSpan.FromSeconds(12))
                     await Task.Delay(100);
-                Check(!process.HasExited && (await WaitForBounds(rect => rect.Equals(floating))).HasValue,
+                Check(!process.HasExited && (await WaitForBounds(rect => rect.Left > before.Left &&
+                    rect.Right < before.Right && IsCentered(rect, before))).HasValue,
                     "An isolated application process applied the native capsule.");
+                var restarted = await Task.Run(() => NativeTaskbarContents.Measure(taskbar));
+                Check(restarted is { } restartOrder && restartOrder.AppIds.SequenceEqual(nativeContents!.Value.AppIds) &&
+                    Math.Abs(restartOrder.AppSlot - originalSlot!.Value) <= 1,
+                    "Starting a new capsule session preserves app order and the native button size.");
                 process.Kill();
                 await process.WaitForExitAsync();
                 Check(await WaitUntilRestored(), "The guard restores the original geometry after host termination.");
@@ -220,7 +237,7 @@ internal static class NativeTaskbarShapeVerification
         catch (Exception error) { failure = error.ToString(); }
         finally { session.Stop(); }
         File.WriteAllText(Path.Combine(root, "native-taskbar-shape.json"), JsonSerializer.Serialize(
-            new { passed = checks.Count, failure, checks, original = before, capsule = floating, expanded, trayGap },
+            new { passed = checks.Count, failure, checks, original = before, capsule = floating, expanded, trayGap, originalSlot, capsuleSlot },
             new JsonSerializerOptions { WriteIndented = true, IncludeFields = true }));
         return failure is null ? 0 : 1;
 

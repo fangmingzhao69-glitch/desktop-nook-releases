@@ -38,7 +38,7 @@ internal static class BrandMigration
             stream.CopyTo(memory);bytes=memory.ToArray();
         }
         string icon=ThemeShellIcon.SavePublicIcon(bytes,iconFolder);
-        var iconLocation=icon+",0";int changed=0;
+        var iconLocation=icon+",0";
         startFolder??=Environment.GetFolderPath(Environment.SpecialFolder.Programs);
         // Never enumerate or rewrite the user's pins implicitly. Explicit folders
         // are used only by an intentional migration/isolated verification.
@@ -50,22 +50,20 @@ internal static class BrandMigration
             bool owned = OwnsShortcut(shell,current,program);
             if(refreshShortcuts&&(legacy||owned)&&(!File.Exists(current)||owned))
             {
-                if(!File.Exists(current) && legacy){ShortcutInstaller.Install(startFolder);changed++;}
-                if (RefreshLink(shell,current,program,iconLocation,refreshName:true)) changed++;
+                if(!File.Exists(current) && legacy) ShortcutInstaller.Install(startFolder);
+                RefreshLink(shell,current,program,iconLocation,refreshName:true);
             }
             if (refreshShortcuts && pinnedFolder is not null && Directory.Exists(pinnedFolder))
-                changed += RefreshPins(shell,pinnedFolder,program,pinnedIconLocation ?? iconLocation,refreshName:true);
+                RefreshPins(shell,pinnedFolder,program,pinnedIconLocation ?? iconLocation,refreshName:true);
         }
         finally{Marshal.FinalReleaseComObject(shell);}
         using(var key=Registry.CurrentUser.OpenSubKey(registryKey,true))
         {
             if(string.Equals(key?.GetValue("InstallLocation") as string,Path.GetDirectoryName(program),StringComparison.OrdinalIgnoreCase))
             {
-                if(key!.GetValue("DisplayName") as string!="折页"||key.GetValue("DisplayIcon") as string!=iconLocation)changed++;
-                key.SetValue("DisplayName","折页");key.SetValue("DisplayIcon",iconLocation);key.SetValue("DisplayVersion",version);
+                key!.SetValue("DisplayName","折页");key.SetValue("DisplayIcon",iconLocation);key.SetValue("DisplayVersion",version);
             }
         }
-        if(changed>0)ShellIntegration.RefreshDesktop();
     }
 
     private static object CreateShell() => Activator.CreateInstance(

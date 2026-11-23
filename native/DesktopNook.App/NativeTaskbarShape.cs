@@ -63,8 +63,8 @@ internal sealed class NativeTaskbarShape
             using var guard = Process.Start(launch) ?? throw new IOException("无法启动原生任务栏恢复组件。");
             if (!await Task.Run(() => ready.WaitOne(TimeSpan.FromSeconds(8))) || guard.HasExited)
                 throw new IOException("原生任务栏恢复组件未就绪。");
-            // Explorer may switch from regular to small buttons after the first narrow
-            // layout. Learn its resulting sizes before showing a successful preview.
+            // Capture the original button density before narrowing the native child.
+            // Keep enough space for that density while Explorer settles its layout.
             _settling = true;
             int stableSamples = 0;
             for (int sample = 0; sample < 16; sample++)
@@ -173,15 +173,15 @@ internal sealed class NativeTaskbarShape
             int maximum = bounds.Right - 8;
             // When the new button cannot fit Windows may compress every app button at once.
             // Remember the regular slot from the unconstrained/native layout for this DPI.
-            double normalSlot = !calibrating && previous.Shape.Height == bounds.Bottom && previous.NormalAppSlot > 0
+            double normalSlot = previous.Shape.Height == bounds.Bottom && previous.NormalAppSlot > 0
                 ? previous.NormalAppSlot
                 : contents.AppSlot;
             bool squeezed = contents.AppSlot > 0 && contents.AppSlot < normalSlot * .9;
-            double normalChrome = squeezed && previous.ChromeCount == contents.ChromeCount
+            double normalChrome = previous.Shape.Height == bounds.Bottom && previous.ChromeCount == contents.ChromeCount
                 ? Math.Max(previous.NormalChromeWidth, contents.ChromeWidth)
                 : contents.ChromeWidth;
-            int squeezedSpace = squeezed ? (int)Math.Ceiling((normalSlot - contents.AppSlot) * contents.AppButtons.Length +
-                normalChrome - contents.ChromeWidth) : 0;
+            int squeezedSpace = (int)Math.Ceiling((squeezed ? normalSlot - contents.AppSlot : 0) * contents.AppButtons.Length +
+                Math.Max(0, normalChrome - contents.ChromeWidth));
             int measuredWidth = Math.Min(maximum, contents.PackedWidth + squeezedSpace);
             int count = contents.AppButtons.Length;
             // Hidden app buttons do not contribute to UI Automation's measured width.
@@ -192,6 +192,9 @@ internal sealed class NativeTaskbarShape
             bool laidOut = previous.Shape.Width > 0 && IsInPosition(bridge, taskbar, previous.Shape);
             if (laidOut && contents.HasOverflow)
                 minimum = Math.Max(minimum, previous.Shape.Width + Math.Max(padding, (int)Math.Ceiling(normalSlot)));
+            else if (laidOut && squeezed)
+                minimum = Math.Max(minimum, previous.Shape.Width +
+                    Math.Max(padding, squeezedSpace));
             else if (laidOut && GetWindowRect(bridge, out var position) &&
                 (contents.Left < position.Left - 2 || contents.Right > position.Right + 2))
                 minimum = Math.Max(minimum, previous.Shape.Width + padding);
@@ -250,7 +253,7 @@ internal sealed class NativeTaskbarShape
                 // app launch/close animations clips the face before the next scan
                 // can recenter the bridge, causing a visible sideways hop.
                 if (!contents.HasOverflow && calibrating)
-                    UpdateTrim(bridge, contents.TrayGap, trim, bounds.Right - width, ballWidth, bounds.Bottom);
+                    UpdateTrim(bridge, contents.TrayGap, trim, bounds.Right - width, width, ballWidth, bounds.Bottom);
             }
             if (_calibrating.TryGetValue(bridge, out int stable))
             {
@@ -295,7 +298,7 @@ internal sealed class NativeTaskbarShape
     private static int CenteredX(int shellWidth, int logicalWidth, int trim) =>
         Math.Min(shellWidth - logicalWidth, (shellWidth - logicalWidth + trim) / 2);
 
-    private static void UpdateTrim(nint bridge, double? measuredGap, int applied, int available, int ballWidth, int height)
+    private static void UpdateTrim(nint bridge, double? measuredGap, int applied, int available, int logicalWidth, int ballWidth, int height)
     {
         // Keep the logical width Explorer needs to lay out every app. Move the
         // native tray into the space Explorer otherwise reserves for overflow.
@@ -303,7 +306,7 @@ internal sealed class NativeTaskbarShape
         if (requested != applied) return;
         int target = Math.Max(8, height / 5) + (ballWidth > 0 ? ballWidth + 2 : 0);
         int trim = measuredGap is double gap
-            ? Math.Clamp((int)Math.Round(gap) + applied - target, 0, Math.Min(available, height * 2))
+            ? Math.Clamp((int)Math.Round(gap) + applied - target, 0, Math.Min(available, logicalWidth / 3))
             : 0;
         if (Math.Abs(trim - requested) < 3) return;
         if (trim == 0) RemoveProp(bridge, TrimProperty);
