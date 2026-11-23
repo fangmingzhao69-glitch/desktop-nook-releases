@@ -235,11 +235,14 @@ internal static class NotesVerification
             var checkbox = firstRow.Children.OfType<CheckBox>().Single();
             checkbox.ApplyTemplate();
             var boxBorder = (Border)checkbox.Template.FindName("Mark", checkbox);
-            double boxTop = boxBorder.TranslatePoint(new Point(), firstRow).Y;
-            // The first visible glyphs start two DIPs below the editor's top padding.
-            double textTop = reordered[0].TranslatePoint(new Point(0, reordered[0].Padding.Top + 2), firstRow).Y;
-            Check(Math.Abs(boxTop - textTop) <= 1 && checkbox.VerticalAlignment == VerticalAlignment.Top,
-                "待办首行文字与勾选框上缘对齐");
+            double boxCenter = boxBorder.TranslatePoint(new Point(0, boxBorder.ActualHeight / 2), firstRow).Y;
+            var firstLine = reordered[0].Document.ContentStart.GetInsertionPosition(LogicalDirection.Forward)
+                .GetCharacterRect(LogicalDirection.Forward);
+            double textCenter = reordered[0].TranslatePoint(new Point(0, firstLine.Top + firstLine.Height / 2), firstRow).Y;
+            var number = firstRow.Children.OfType<TextBlock>().Single();
+            double numberCenter = number.TranslatePoint(new Point(0, number.ActualHeight / 2), firstRow).Y;
+            Check(Math.Abs(boxCenter - textCenter) <= 1 && Math.Abs(numberCenter - textCenter) <= 1 &&
+                checkbox.VerticalAlignment == VerticalAlignment.Top, "待办序号和首行文字位于勾选框的垂直中心");
             Snapshot("notes-checklist-complete-order");
             var lastCheck = Find<CheckBox>(window.NotesHost).Last();
             lastCheck.IsChecked = false;
