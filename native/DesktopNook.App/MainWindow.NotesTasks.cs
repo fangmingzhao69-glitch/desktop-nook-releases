@@ -90,6 +90,24 @@ public partial class MainWindow
                 DockPanel.SetDock(check, Dock.Left);
                 row.Children.Add(check);
 
+                // Tasks are inserted at the front. Count back from the end so
+                // the oldest item is 1 and newly added items get the next number.
+                int number = note.Tasks.Count - index;
+                var sequence = new TextBlock
+                {
+                    Text = number.ToString(System.Globalization.CultureInfo.CurrentCulture) + ".",
+                    MinWidth = Math.Max(18, note.Tasks.Count.ToString().Length * 8 + 6),
+                    TextAlignment = TextAlignment.Right,
+                    Foreground = Brush("TextSecondaryBrush"),
+                    FontSize = 12,
+                    Margin = new Thickness(0, 8, 4, 0),
+                    VerticalAlignment = VerticalAlignment.Top
+                };
+                AutomationProperties.SetAutomationId(sequence, $"NoteTaskNumber-{note.Id}-{index}");
+                AutomationProperties.SetName(sequence, $"第 {number} 项待办");
+                DockPanel.SetDock(sequence, Dock.Left);
+                row.Children.Add(sequence);
+
                 var editor = new NoteTextEditor(task.Text, task.Strikes, batch => PasteTasks(task, batch), task.Highlights)
                 {
                     IsReadOnly = readOnly,
