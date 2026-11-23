@@ -271,6 +271,7 @@ public partial class MainWindow
 
     private Action AddNoteStrikeButton(DockPanel header, string id, Func<NoteTextEditor?> selectedEditor)
     {
+        Button? highlight = null;
         var button = NotesButton("S", clicked =>
         {
             if (_notesComposing || selectedEditor() is not { IsReadOnly: false, Selection.IsEmpty: false } editor) return;
@@ -283,6 +284,15 @@ public partial class MainWindow
         ToolTipService.SetShowOnDisabled(button, true);
         DockPanel.SetDock(button, Dock.Right);
         header.Children.Insert(header.Children.Count - 1, button);
+        highlight = NotesButton("标注", _ =>
+        {
+            if (_notesComposing || selectedEditor() is not { IsReadOnly: false, Selection.IsEmpty: false } editor) return;
+            Popup(button, NoteHighlightOptions(editor));
+        });
+        highlight.ToolTip = "为选中的文字设置背景色";
+        AutomationProperties.SetAutomationId(highlight, id + "-Highlight");
+        DockPanel.SetDock(highlight, Dock.Right);
+        header.Children.Insert(header.Children.Count - 1, highlight);
         Update(button);
         return () => Update(button);
 
@@ -290,11 +300,28 @@ public partial class MainWindow
         {
             var editor = selectedEditor();
             target.IsEnabled = editor is { IsReadOnly: false, Selection.IsEmpty: false };
+            if (highlight is not null) highlight.IsEnabled = target.IsEnabled;
             bool remove = target.IsEnabled && editor!.SelectionIsStruck();
             string action = remove ? "取消删除线" : "添加删除线";
             target.Background = remove ? Brush("SelectionBrush") : Brushes.Transparent;
             target.ToolTip = target.IsEnabled ? action : "选中文字后添加或取消删除线";
             AutomationProperties.SetName(target, action);
+        }
+    }
+
+    private IEnumerable<object> NoteHighlightOptions(NoteTextEditor editor)
+    {
+        foreach (var (name, color) in new (string, string?)[]
+        {
+            ("黄色", "#FFF0A6"), ("绿色", "#CBEFCB"), ("蓝色", "#CDE8FF"),
+            ("粉色", "#FFD7E5"), ("紫色", "#E3D6FF"), ("清除背景色", null)
+        })
+        {
+            var item = Menu(name, () => { editor.Focus(); editor.Highlight(color); },
+                !editor.IsReadOnly && !editor.Selection.IsEmpty);
+            if (color is not null) item.Icon = new Border { Width = 14, Height = 14,
+                CornerRadius = new CornerRadius(3), Background = new SolidColorBrush((Color)ColorConverter.ConvertFromString(color)) };
+            yield return item;
         }
     }
 
@@ -317,8 +344,13 @@ public partial class MainWindow
                 Menu("粘贴", editor.Paste, !editor.IsReadOnly && Clipboard.ContainsText())
             };
             if (editor is NoteTextEditor formatted)
+            {
                 entries.Add(Menu(formatted.SelectionIsStruck() ? "取消删除线" : "添加删除线",
                     formatted.ToggleStrike, !editor.IsReadOnly && hasSelection));
+                var highlight = Menu("文字背景色", () => { }, !editor.IsReadOnly && hasSelection);
+                foreach (var option in NoteHighlightOptions(formatted)) highlight.Items.Add(option);
+                entries.Add(highlight);
+            }
             entries.Add(new Separator());
             entries.Add(Menu(delete is null ? "删除便签…" : "删除此项", delete ?? (() => DeleteNote(note)), !editor.IsReadOnly));
             Popup(editor, entries);
@@ -362,7 +394,7 @@ public partial class MainWindow
         content.Children.Add(header);
         if(note.Kind=="text")
         {
-            var body = new NoteTextEditor(note.Text, note.BodyStrikes)
+            var body = new NoteTextEditor(note.Text, note.BodyStrikes, highlights: note.BodyHighlights)
             {
                 MinHeight = 65,
                 IsReadOnly = readOnly,
@@ -376,7 +408,10 @@ public partial class MainWindow
             body.TextChanged += (_, _) =>
             {
                 var (text, strikes) = body.ReadContent();
-                if (note.Text == text && (note.BodyStrikes ?? []).SequenceEqual(strikes ?? [])) return;
+                var highlights = body.ReadHighlights();
+                if (note.Text == text && (note.BodyStrikes ?? []).SequenceEqual(strikes ?? []) &&
+                    (note.BodyHighlights ?? []).SequenceEqual(highlights ?? [])) return;
+                note.BodyHighlights = highlights;
                 note.Text = text;
                 if (strikes is not null || note.BodyStrikes is not null) note.BodyStrikes = strikes ?? [];
                 NotesChanged(true, note);

@@ -36,13 +36,30 @@ public readonly record struct NoteStrikeRange(int Start, int Length)
     }
 }
 
+public readonly record struct NoteHighlightRange(int Start, int Length, string Color)
+{
+    internal static bool AreValid(string text, NoteHighlightRange[]? ranges)
+    {
+        int end = 0;
+        foreach (var range in ranges ?? [])
+        {
+            if (range.Start < end || range.Start > text.Length || range.Length <= 0 ||
+                range.Length > text.Length - range.Start || range.Color is not { Length: 7 } ||
+                range.Color[0] != '#' || !range.Color.Skip(1).All(Uri.IsHexDigit)) return false;
+            end = range.Start + range.Length;
+        }
+        return true;
+    }
+}
+
 public sealed class NoteTask
 {
     public string Text { get; set; } = "";
     public bool Done { get; set; }
     public NoteStrikeRange[]? Strikes { get; set; }
+    public NoteHighlightRange[]? Highlights { get; set; }
 
-    internal NoteTask Copy() => new() { Text = Text, Done = Done, Strikes = Strikes?.ToArray() };
+    internal NoteTask Copy() => new() { Text = Text, Done = Done, Strikes = Strikes?.ToArray(), Highlights = Highlights?.ToArray() };
 }
 public sealed class ProjectNote
 {
@@ -52,6 +69,7 @@ public sealed class ProjectNote
     public string Kind { get; set; } = "text";
     public string Text { get; set; } = "";
     public NoteStrikeRange[]? BodyStrikes { get; set; }
+    public NoteHighlightRange[]? BodyHighlights { get; set; }
     public List<NoteTask> Tasks { get; set; } = [];
     public bool Archived { get; set; }
     public bool Favorite { get; set; }
@@ -68,6 +86,7 @@ public sealed class ProjectNote
     {
         var copy = (ProjectNote)MemberwiseClone();
         copy.BodyStrikes = BodyStrikes?.ToArray();
+        copy.BodyHighlights = BodyHighlights?.ToArray();
         copy.Tasks = Tasks.Select(task => task.Copy()).ToList();
         return copy;
     }
@@ -79,14 +98,18 @@ public sealed class ProjectNote
         {
             Text = string.Join("\n", Tasks.Select(task => task.Text));
             var strikes = new List<NoteStrikeRange>();
+            var highlights = new List<NoteHighlightRange>();
             int offset = 0;
             foreach (var task in Tasks)
             {
                 foreach (var range in task.Strikes ?? [])
                     strikes.Add(new(offset + range.Start, range.Length));
+                foreach (var range in task.Highlights ?? [])
+                    highlights.Add(range with { Start = offset + range.Start });
                 offset += task.Text.Length + 1;
             }
             BodyStrikes = strikes.ToArray();
+            BodyHighlights = highlights.ToArray();
         }
         else if (kind == "todo")
         {
@@ -101,9 +124,19 @@ public sealed class ProjectNote
     private void RestoreChecklist()
     {
         var body = Text.ReplaceLineEndings("\n");
+        var highlights = BodyHighlights ?? [];
+        if (body.Length != Text.Length)
+        {
+            int Offset(int position) => Text[..position].ReplaceLineEndings("\n").Length;
+            highlights = highlights.Select(range => range with
+            {
+                Start = Offset(range.Start),
+                Length = Offset(range.Start + range.Length) - Offset(range.Start)
+            }).Where(range => range.Length > 0).ToArray();
+        }
         var strikes = BodyStrikes ?? [];
         // Text records written before body formatting could still carry the earlier checklist.
-        bool hasBodyFormatting = BodyStrikes is not null;
+        bool hasBodyFormatting = BodyStrikes is not null || BodyHighlights is not null;
         if (Tasks.Count == 0 || Text != string.Join("\n", Tasks.Select(task => task.Text)))
         {
             if (body.Length != Text.Length && strikes.Length > 0)
@@ -156,6 +189,10 @@ public sealed class ProjectNote
                 if (stop > start) (mapped ??= []).Add(new(start - offset, stop - start));
             }
             task.Strikes = mapped?.ToArray();
+            if (BodyHighlights is not null)
+                task.Highlights = highlights.Where(range => range.Start < end && range.Start + range.Length > offset)
+                    .Select(range => range with { Start = Math.Max(offset, range.Start) - offset,
+                        Length = Math.Min(end, range.Start + range.Length) - Math.Max(offset, range.Start) }).ToArray();
             offset = end + 1;
         }
     }
@@ -311,8 +348,9 @@ public sealed class NotesStore
             if (n is null || (state.Format == 2 && (n.DeletedUtc is not null || n.DeleteBatch is not null)) || !Guid.TryParseExact(n.Id, "N", out _) || !noteIds.Add(n.Id) ||
                 n.ProjectId is null || !projects.TryGetValue(n.ProjectId, out var project) ||
                 n.Kind is not ("text" or "todo") || n.Title is null || n.Text is null || n.Tasks is null ||
-                !NoteStrikeRange.AreValid(n.Text, n.BodyStrikes) ||
-                n.Tasks.Any(t => t is null || t.Text is null || !NoteStrikeRange.AreValid(t.Text, t.Strikes)) ||
+                !NoteStrikeRange.AreValid(n.Text, n.BodyStrikes) || !NoteHighlightRange.AreValid(n.Text, n.BodyHighlights) ||
+                n.Tasks.Any(t => t is null || t.Text is null || !NoteStrikeRange.AreValid(t.Text, t.Strikes) ||
+                    !NoteHighlightRange.AreValid(t.Text, t.Highlights)) ||
                 (n.DeletedUtc is null && project.DeletedUtc is not null))
                 throw new IOException("便签记录或分类归属无效。");
     }

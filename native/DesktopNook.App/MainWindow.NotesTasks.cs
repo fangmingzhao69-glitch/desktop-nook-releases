@@ -90,7 +90,7 @@ public partial class MainWindow
                 DockPanel.SetDock(check, Dock.Left);
                 row.Children.Add(check);
 
-                var editor = new NoteTextEditor(task.Text, task.Strikes, batch => PasteTasks(task, batch))
+                var editor = new NoteTextEditor(task.Text, task.Strikes, batch => PasteTasks(task, batch), task.Highlights)
                 {
                     IsReadOnly = readOnly,
                     IsInactiveSelectionHighlightEnabled = !readOnly,
@@ -116,9 +116,12 @@ public partial class MainWindow
                 editor.TextChanged += (_, _) =>
                 {
                     var (text, strikes) = editor.ReadContent();
-                    if (task.Text == text && (task.Strikes ?? []).SequenceEqual(strikes ?? [])) return;
+                    var highlights = editor.ReadHighlights();
+                    if (task.Text == text && (task.Strikes ?? []).SequenceEqual(strikes ?? []) &&
+                        (task.Highlights ?? []).SequenceEqual(highlights ?? [])) return;
                     task.Text = text;
                     task.Strikes = strikes;
+                    task.Highlights = highlights;
                     NotesChanged(true, note);
                     UpdateNoteCounts();
                     if (selectedEditor == editor) updateStrike?.Invoke();

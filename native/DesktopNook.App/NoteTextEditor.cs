@@ -10,7 +10,8 @@ namespace DesktopNook.App;
 
 internal sealed class NoteTextEditor : RichTextBox
 {
-    public NoteTextEditor(string text, NoteStrikeRange[]? strikes, Action<List<NoteTask>>? pasteTasks = null)
+    public NoteTextEditor(string text, NoteStrikeRange[]? strikes, Action<List<NoteTask>>? pasteTasks = null,
+        NoteHighlightRange[]? highlights = null)
     {
         FontSize = 12;
         Padding = new Thickness(4);
@@ -31,6 +32,12 @@ internal sealed class NoteTextEditor : RichTextBox
             start = mark.Start + mark.Length;
         }
         AddText(paragraph, text[start..], false);
+        foreach (var mark in highlights ?? [])
+        {
+            var range = new TextRange(PositionAt(mark.Start), PositionAt(mark.Start + mark.Length));
+            range.ApplyPropertyValue(TextElement.BackgroundProperty, new SolidColorBrush((Color)ColorConverter.ConvertFromString(mark.Color)));
+            range.ApplyPropertyValue(TextElement.ForegroundProperty, Brushes.Black);
+        }
         DataObject.AddPastingHandler(this, (_, args) =>
         {
             string format = args.DataObject.GetDataPresent(DataFormats.UnicodeText) ? DataFormats.UnicodeText : DataFormats.Text;
@@ -98,6 +105,39 @@ internal sealed class NoteTextEditor : RichTextBox
         if (IsReadOnly || Selection.IsEmpty) return;
         Selection.ApplyPropertyValue(Inline.TextDecorationsProperty,
             SelectionIsStruck() ? new TextDecorationCollection() : TextDecorations.Strikethrough);
+    }
+
+    internal void Highlight(string? color)
+    {
+        if (IsReadOnly || Selection.IsEmpty) return;
+        BeginChange();
+        try
+        {
+            Selection.ApplyPropertyValue(TextElement.BackgroundProperty, color is null
+                ? Brushes.Transparent : new SolidColorBrush((Color)ColorConverter.ConvertFromString(color)));
+            Selection.ApplyPropertyValue(TextElement.ForegroundProperty, color is null ? Foreground : Brushes.Black);
+        }
+        finally { EndChange(); }
+    }
+
+    internal NoteHighlightRange[]? ReadHighlights()
+    {
+        var highlights = new List<NoteHighlightRange>();
+        int offset = 0;
+        foreach (var segment in Segments())
+        {
+            if (segment.IsRun && segment.Start.Parent is Run run &&
+                run.Background is SolidColorBrush { Color.A: > 0 } brush && segment.Text.Length > 0)
+            {
+                string color = $"#{brush.Color.R:X2}{brush.Color.G:X2}{brush.Color.B:X2}";
+                if (highlights.Count > 0 && highlights[^1].Color == color &&
+                    highlights[^1].Start + highlights[^1].Length == offset)
+                    highlights[^1] = highlights[^1] with { Length = highlights[^1].Length + segment.Text.Length };
+                else highlights.Add(new(offset, segment.Text.Length, color));
+            }
+            offset += segment.Text.Length;
+        }
+        return highlights.Count == 0 ? null : highlights.ToArray();
     }
 
     internal (string Text, NoteStrikeRange[]? Strikes) ReadContent()

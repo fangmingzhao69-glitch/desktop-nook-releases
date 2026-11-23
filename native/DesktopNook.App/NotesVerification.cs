@@ -171,6 +171,35 @@ internal static class NotesVerification
                     AutomationProperties.GetName(b) == "记录标题").Parent), "删除线按钮和清单标题同行");
             taskBox.SelectCharacters(2, 2);
             Check(strike.IsEnabled && AutomationProperties.GetName(strike) == "添加删除线", "选中文字可从标题栏加删除线");
+            var marker = Find<Button>(window.NotesHost).Single(button =>
+                AutomationProperties.GetAutomationId(button) == "NoteTaskStrike-" + checklist.Id + "-Highlight");
+            marker.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            ClickMenu(window.LastMenu!.Items.OfType<MenuItem>().Single(item => Equals(item.Header, "黄色")));
+            NoteHighlightRange[] expectedHighlights = [new(2, 2, "#FFF0A6")];
+            Check(checklist.Tasks.Single().Highlights?.SequenceEqual(expectedHighlights) == true &&
+                window.FlushNotes(false) && new NotesStore(App.Store.DataDirectory).State.Notes.Last().Tasks.Single()
+                .Highlights?.SequenceEqual(expectedHighlights) == true, "标题栏文字背景色保存并重新读取");
+            window.RenderNotes();
+            await Layout();
+            taskBox = TaskEditors(checklist).Single();
+            Check(taskBox.ReadHighlights()?.SequenceEqual(expectedHighlights) == true, "重绘待办保留选中文字的背景色");
+            taskBox.SelectCharacters(0, 0);
+            taskBox.Selection.Text = "先";
+            Check(taskBox.ReadHighlights()?.Single().Start == 3, "在标注前输入时背景色跟随原文字");
+            taskBox.Undo();
+            taskBox.SelectCharacters(2, 2);
+            var colorMenu = OpenEditorMenu(taskBox).Items.OfType<MenuItem>().Single(item => Equals(item.Header, "文字背景色"));
+            ClickMenu(colorMenu.Items.OfType<MenuItem>().Single(item => Equals(item.Header, "清除背景色")));
+            Check(taskBox.ReadHighlights() is null && checklist.Tasks.Single().Highlights is null, "右键可清除文字背景色");
+            taskBox.Highlight("#FFF0A6");
+            var conversion = new ProjectNote { Kind = "todo", Tasks = [new NoteTask { Text = "确认设计方案", Highlights = expectedHighlights }] };
+            conversion.ChangeKind("text");
+            conversion.ChangeKind("todo");
+            Check(conversion.Tasks.Single().Highlights?.SequenceEqual(expectedHighlights) == true &&
+                NotesMarkdown.Export(new NotesState(), conversion).Contains("<mark style=\"background-color:#FFF0A6\">设计</mark>"),
+                "标注在类型转换和 Markdown 导出中保留");
+            strike = Find<Button>(window.NotesHost).Single(button =>
+                AutomationProperties.GetAutomationId(button) == "NoteTaskStrike-" + checklist.Id);
             strike.Focus();
             strike.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
             Check(taskBox.ReadContent().Strikes?.SequenceEqual([new NoteStrikeRange(2, 2)]) == true &&
@@ -204,6 +233,7 @@ internal static class NotesVerification
                 "勾选的待办移到底部并显示整行删除线");
             var firstRow = (DockPanel)reordered[0].Parent;
             var checkbox = firstRow.Children.OfType<CheckBox>().Single();
+            checkbox.ApplyTemplate();
             var boxBorder = (Border)checkbox.Template.FindName("Box", checkbox);
             double boxTop = boxBorder.TranslatePoint(new Point(), firstRow).Y;
             // The 12-DIP editor font leaves four DIPs above the visible glyphs in its first line box.
