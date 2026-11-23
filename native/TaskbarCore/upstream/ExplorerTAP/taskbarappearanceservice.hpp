@@ -43,6 +43,9 @@ public:
 	void RegisterTaskbarBackground(InstanceHandle frameHandle, wux::Shapes::Shape element);
 	void RegisterTaskbarBorder(InstanceHandle frameHandle, wux::Shapes::Shape element);
 	void UnregisterTaskbar(InstanceHandle frameHandle);
+	void RegisterPreview(InstanceHandle handle, const wux::FrameworkElement& element, HWND window);
+	void UnregisterPreview(InstanceHandle handle);
+	void RefreshPreviews();
 
 	~TaskbarAppearanceService();
 
@@ -50,6 +53,16 @@ public:
 	static void UninstallProxyStub();
 
 private:
+	struct PreviewInfo
+	{
+		wux::FrameworkElement element{nullptr};
+		HWND positionedHost{};
+		winrt::event_token changed{};
+		HWND window{};
+	};
+	void AlignPreview(InstanceHandle handle);
+	void RestorePreview(PreviewInfo& preview);
+	std::unordered_map<InstanceHandle, PreviewInfo> m_Previews;
 	template<typename T>
 	struct ControlInfo
 	{

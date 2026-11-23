@@ -102,6 +102,21 @@ HRESULT VisualTreeWatcher::OnVisualTreeChange(ParentChildRelation relation, Visu
 				m_NonMatchingXamlSources.erase(matched);
 			}
 		}
+		else if (std::wstring_view{name.get(), SysStringLen(name.get())} == L"HoverFlyoutGrid")
+		{
+			const auto grid = FromHandle<wux::FrameworkElement>(element.Handle);
+			m_AppearanceService->RegisterPreview(element.Handle, grid, nullptr);
+			if (const auto root = grid.XamlRoot())
+				for (const auto handle : m_NonMatchingXamlSources)
+				{
+					const auto source = FromHandle<wuxh::DesktopWindowXamlSource>(handle);
+					if (source.Content() != root.Content()) continue;
+					HWND window{};
+					if (SUCCEEDED(source.as<IDesktopWindowXamlSourceNative>()->get_WindowHandle(&window)))
+						m_AppearanceService->RegisterPreview(element.Handle, grid, window);
+					break;
+				}
+		}
 		else if (type_view == winrt::name_of<wux::Shapes::Rectangle>())
 		{
 			const std::wstring_view name_view { name.get(), SysStringLen(name.get())};
@@ -132,6 +147,7 @@ HRESULT VisualTreeWatcher::OnVisualTreeChange(ParentChildRelation relation, Visu
 
 	case Remove: // only element.Handle is valid
 		m_AppearanceService->UnregisterTaskbar(element.Handle);
+		m_AppearanceService->UnregisterPreview(element.Handle);
 		m_NonMatchingXamlSources.erase(element.Handle);
 		break;
 	}

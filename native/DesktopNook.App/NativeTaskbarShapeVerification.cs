@@ -15,8 +15,9 @@ internal static class NativeTaskbarShapeVerification
         Directory.CreateDirectory(root);
         if (parentProbe)
         {
-            var shape = new NativeTaskbarShape();
-            await shape.StartAsync();
+            var probeStore = new TaskbarAppearanceStore(root);
+            var probeSession = new TaskbarAppearanceSession(probeStore, new NativeTaskbarBackend(probeStore.DirectoryPath, sandbox: false));
+            await probeSession.PreviewAsync(new TaskbarAppearanceSettings { Enabled = true, Style = "normal", FloatingLayout = true }, allowDownload: false);
             File.WriteAllText(Path.Combine(root, "ready"), "ready");
             await Task.Delay(Timeout.Infinite);
             return 0;
@@ -73,8 +74,9 @@ internal static class NativeTaskbarShapeVerification
             Check(packed!.Value is { HasOverflow: false, TrayGap: >= 0 } &&
                 TryGetFace(bridge, out floating) && packed.Value.Right <= floating.Right + 2,
                 "The application strip and tray both fit without overflowing.");
-            Check(IsCentered(floating, before) && trayGap <= Math.Max(20, (floating.Bottom - floating.Top) / 2),
-                "Only a narrow separator gap remains after compacting the native tray.");
+            Check(IsCentered(floating, before) && trayGap >= packed!.Value.AppSlot + 8 &&
+                trayGap <= packed.Value.AppSlot + Math.Max(20, (floating.Bottom - floating.Top) / 2),
+                "The capsule reserves one native button slot before the tray separator.");
             Check(GetProp(bridge, NativeTaskbarShape.SmoothProperty) != 0,
                 "Explorer activated the antialiased Composition clip.");
             Check(GetProp(bridge, "DesktopNook.NativeTaskbarShape.DividerVisible") != 0,

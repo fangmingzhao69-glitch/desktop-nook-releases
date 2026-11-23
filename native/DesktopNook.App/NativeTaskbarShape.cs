@@ -169,13 +169,14 @@ internal sealed class NativeTaskbarShape
             if (previous.Shape.Height != bounds.Bottom) _calibrating[bridge] = 0;
             bool calibrating = _settling || _calibrating.ContainsKey(bridge);
             int ballWidth = _infoBall.WidthFor(taskbar);
-            int padding = Math.Max(8, (int)Math.Round(bounds.Bottom * .22)) + (ballWidth > 0 ? ballWidth + 2 : 0);
             int maximum = bounds.Right - 8;
             // When the new button cannot fit Windows may compress every app button at once.
             // Remember the regular slot from the unconstrained/native layout for this DPI.
             double normalSlot = previous.Shape.Height == bounds.Bottom && previous.NormalAppSlot > 0
                 ? previous.NormalAppSlot
                 : contents.AppSlot;
+            int padding = Math.Max(8, (int)Math.Round(bounds.Bottom * .22)) + (int)Math.Ceiling(normalSlot) +
+                (ballWidth > 0 ? ballWidth + 2 : 0);
             bool squeezed = contents.AppSlot > 0 && contents.AppSlot < normalSlot * .9;
             double normalChrome = previous.Shape.Height == bounds.Bottom && previous.ChromeCount == contents.ChromeCount
                 ? Math.Max(previous.NormalChromeWidth, contents.ChromeWidth)
@@ -192,7 +193,7 @@ internal sealed class NativeTaskbarShape
             bool laidOut = previous.Shape.Width > 0 && IsInPosition(bridge, taskbar, previous.Shape);
             if (laidOut && contents.HasOverflow)
                 minimum = Math.Max(minimum, previous.Shape.Width + Math.Max(padding, (int)Math.Ceiling(normalSlot)));
-            else if (laidOut && squeezed)
+            else if (laidOut && squeezed && calibrating)
                 minimum = Math.Max(minimum, previous.Shape.Width +
                     Math.Max(padding, squeezedSpace));
             else if (laidOut && GetWindowRect(bridge, out var position) &&
@@ -253,7 +254,7 @@ internal sealed class NativeTaskbarShape
                 // app launch/close animations clips the face before the next scan
                 // can recenter the bridge, causing a visible sideways hop.
                 if (!contents.HasOverflow && calibrating)
-                    UpdateTrim(bridge, contents.TrayGap, trim, bounds.Right - width, width, ballWidth, bounds.Bottom);
+                    UpdateTrim(bridge, contents.TrayGap, trim, bounds.Right - width, width, ballWidth, bounds.Bottom, normalSlot);
             }
             if (_calibrating.TryGetValue(bridge, out int stable))
             {
@@ -286,7 +287,7 @@ internal sealed class NativeTaskbarShape
             {
                 _infoBall.Align(taskbar, tray, end, shape.Top, shape.Bottom);
                 double groupStart = tray - (ballWidth > 0 ? ballWidth + 2 : 0);
-                int divider = (int)Math.Round((end + Math.Max(end, groupStart)) / 2 - shape.Left);
+                int divider = (int)Math.Round(Math.Max(end, groupStart - Math.Max(4, GetDpiForWindow(taskbar) / 24d)) - shape.Left);
                 if (GetProp(bridge, DividerProperty) != divider && SetProp(bridge, DividerProperty, divider))
                     NotifyVisual(bridge);
             }
@@ -298,13 +299,13 @@ internal sealed class NativeTaskbarShape
     private static int CenteredX(int shellWidth, int logicalWidth, int trim) =>
         Math.Min(shellWidth - logicalWidth, (shellWidth - logicalWidth + trim) / 2);
 
-    private static void UpdateTrim(nint bridge, double? measuredGap, int applied, int available, int logicalWidth, int ballWidth, int height)
+    private static void UpdateTrim(nint bridge, double? measuredGap, int applied, int available, int logicalWidth, int ballWidth, int height, double appSlot)
     {
         // Keep the logical width Explorer needs to lay out every app. Move the
         // native tray into the space Explorer otherwise reserves for overflow.
         int requested = (int)GetProp(bridge, TrimProperty);
         if (requested != applied) return;
-        int target = Math.Max(8, height / 5) + (ballWidth > 0 ? ballWidth + 2 : 0);
+        int target = (int)Math.Ceiling(appSlot) + Math.Max(8, height / 5) + (ballWidth > 0 ? ballWidth + 2 : 0);
         int trim = measuredGap is double gap
             ? Math.Clamp((int)Math.Round(gap) + applied - target, 0, Math.Min(available, logicalWidth / 3))
             : 0;

@@ -26,6 +26,9 @@ internal sealed class NativeTaskbarHover : IDisposable
     private nint _hook;
     private nint _showHook;
     private long _sequence;
+    private const string PreviewPosition = "DesktopNook.Capsule.PreviewButtonPosition";
+    private const string PreviewSize = "DesktopNook.Capsule.PreviewButtonSize";
+    private static readonly uint NativeRefresh = RegisterWindowMessage("DesktopNook.NativeTaskbarShape.VisualRefresh");
 
     internal NativeTaskbarHover() => _callback = OnWindowEvent;
 
@@ -46,7 +49,11 @@ internal sealed class NativeTaskbarHover : IDisposable
             ObserveButton(new System.Windows.Point(pointer.X, pointer.Y));
     }
 
-    internal void Remove(nint taskbar) => _bars.Remove(taskbar);
+    internal void Remove(nint taskbar)
+    {
+        ClearNativeAnchor(taskbar);
+        _bars.Remove(taskbar);
+    }
 
     public void Dispose()
     {
@@ -58,6 +65,7 @@ internal sealed class NativeTaskbarHover : IDisposable
         _pending.Clear();
         _anchored.Clear();
         _recent = null;
+        foreach (nint taskbar in _bars.Keys) ClearNativeAnchor(taskbar);
         _bars.Clear();
     }
 
@@ -79,7 +87,7 @@ internal sealed class NativeTaskbarHover : IDisposable
         if (GetClassName(window, className, className.Capacity) == 0) return;
         string name = className.ToString();
         bool overflow = name is "TopLevelWindowForOverflowXamlIsland" or "NotifyIconOverflowWindow";
-        if (!overflow && name is not ("TaskListThumbnailWnd" or "tooltips_class32" or "Xaml_WindowedPopupClass")) return;
+        if (!overflow && name is not ("TaskListThumbnailWnd" or "tooltips_class32" or "Xaml_WindowedPopupClass" or "XamlExplorerHostIslandWindow")) return;
         if (_pending.ContainsKey(window)) return;
         var anchor = overflow ? FindOverflowAnchor(window, point) : ObserveButton(point);
         if (!overflow && anchor is null && GetWindowRect(window, out var surface) && surface.Contains(point))
@@ -176,16 +184,41 @@ internal sealed class NativeTaskbarHover : IDisposable
             if (!bar.Capsule.Contains(point)) continue;
             var button = bar.Buttons.FirstOrDefault(rect => rect.Contains(point));
             // Moving across the tray clears app-hover context. Its flyouts use the system position.
+            nint bridge = FindWindowEx(taskbar, 0, "Windows.UI.Composition.DesktopWindowContentBridge", null);
+            if (button.Width > 0 && bridge != 0)
+            {
+                long position = (uint)(int)Math.Round(button.Left) | ((long)(int)Math.Round(button.Top) << 32);
+                long size = (uint)(int)Math.Round(button.Width) | ((long)(int)Math.Round(button.Height) << 32);
+                if (GetProp(bridge, PreviewPosition) != unchecked((nint)position) || GetProp(bridge, PreviewSize) != unchecked((nint)size))
+                {
+                    SetProp(bridge, PreviewPosition, unchecked((nint)position));
+                    SetProp(bridge, PreviewSize, unchecked((nint)size));
+                    if (NativeRefresh != 0) PostMessage(bridge, NativeRefresh, 0, 0);
+                }
+            }
+            else ClearNativeAnchor(taskbar);
             return _recent = button.Width > 0 ? new(taskbar, button, Environment.TickCount64) : null;
         }
         return null;
+    }
+
+    private static void ClearNativeAnchor(nint taskbar)
+    {
+        nint bridge = FindWindowEx(taskbar, 0, "Windows.UI.Composition.DesktopWindowContentBridge", null);
+        if (bridge != 0)
+        {
+            RemoveProp(bridge, PreviewSize);
+            RemoveProp(bridge, PreviewPosition);
+            foreach (var name in new[] { "PreviewAligned", "PreviewCardX", "PreviewCardY", "PreviewOffsetX", "PreviewOffsetY" })
+                RemoveProp(bridge, "DesktopNook.Capsule." + name);
+        }
     }
 
     private async Task RepositionAsync(nint window, HoverAnchor anchor, Rect shell, double scale, string name, long sequence)
     {
         try
         {
-            if (name == "Xaml_WindowedPopupClass" && !_anchored.ContainsKey(window) &&
+            if (name is "Xaml_WindowedPopupClass" or "XamlExplorerHostIslandWindow" && !_anchored.ContainsKey(window) &&
                 !await Task.Run(() => IsAppFlyout(window)).WaitAsync(TimeSpan.FromMilliseconds(300)))
                 return;
             nint taskbar = anchor.Taskbar;
@@ -193,6 +226,7 @@ internal sealed class NativeTaskbarHover : IDisposable
                 !_bars.ContainsKey(taskbar) || !IsWindowVisible(window) || !GetWindowRect(window, out var bounds))
                 return;
             if (bounds.Right <= bounds.Left || bounds.Bottom <= bounds.Top) return;
+            if (name == "XamlExplorerHostIslandWindow") return; // The native XAML card moves inside this full-screen host.
             GetWindowThreadProcessId(window, out uint pid);
             if (pid == 0 || pid != _processId || !GetCursorPos(out var pointer)) return;
             var point = new System.Windows.Point(pointer.X, pointer.Y);
@@ -232,15 +266,15 @@ internal sealed class NativeTaskbarHover : IDisposable
         {
             var root = AutomationElement.FromHandle(window);
             var walker = TreeWalker.RawViewWalker;
-            int remaining = 40;
+            int remaining = 160;
             return ContainsPreview(root, 0);
 
             bool ContainsPreview(AutomationElement item, int depth)
             {
-                if (depth > 6 || remaining-- <= 0) return false;
+                if (depth > 10 || remaining-- <= 0) return false;
                 var info = item.Current;
                 if (info.ControlType == ControlType.ToolTip || info.ClassName == "ToolTip" ||
-                    info.AutomationId == "TaskItemThumbnailListRepeater" ||
+                    info.AutomationId is "TaskItemThumbnailListRepeater" or "HoverFlyoutGrid" or "HoverFlyoutContent" ||
                     info.ClassName.StartsWith("Taskbar.TaskItemThumbnail", StringComparison.Ordinal))
                     return true;
                 for (var child = walker.GetFirstChild(item); child is not null && remaining > 0; child = walker.GetNextSibling(child))
@@ -263,6 +297,12 @@ internal sealed class NativeTaskbarHover : IDisposable
     }
     [StructLayout(LayoutKind.Sequential)] private struct MonitorInfo { public uint Size; public NativeRect Monitor, Work; public uint Flags; }
     private delegate void Callback(nint eventHook, uint eventId, nint window, int objectId, int childId, uint thread, uint time);
+    [DllImport("user32.dll", CharSet = CharSet.Unicode)] private static extern nint FindWindowEx(nint parent, nint after, string name, string? title);
+    [DllImport("user32.dll", CharSet = CharSet.Unicode)] private static extern bool SetProp(nint window, string name, nint value);
+    [DllImport("user32.dll", CharSet = CharSet.Unicode)] private static extern nint RemoveProp(nint window, string name);
+    [DllImport("user32.dll", CharSet = CharSet.Unicode)] private static extern nint GetProp(nint window, string name);
+    [DllImport("user32.dll", CharSet = CharSet.Unicode)] private static extern uint RegisterWindowMessage(string name);
+    [DllImport("user32.dll")] private static extern bool PostMessage(nint window, uint message, nint w, nint l);
     [DllImport("user32.dll", EntryPoint = "GetWindowLongPtrW")] private static extern nint GetWindowLongPtr(nint window, int index);
     [DllImport("kernel32.dll", CharSet = CharSet.Unicode, ExactSpelling = true)]
     private static extern int GetApplicationUserModelId(nint process, ref uint length, StringBuilder id);

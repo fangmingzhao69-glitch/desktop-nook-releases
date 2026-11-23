@@ -1,0 +1,47 @@
+{
+  "NativePreviews": [
+    {
+      "App": "Chrome",
+      "Class": "XamlExplorerHostIslandWindow",
+      "IconCenter": 1251,
+      "CardLeft": 1142,
+      "CardTop": 1216,
+      "HostLeft": 822,
+      "HostTop": -5,
+      "Aligned": true
+    },
+    {
+      "App": "Weixin",
+      "Class": "XamlExplorerHostIslandWindow",
+      "IconCenter": 1295,
+      "CardLeft": 1218,
+      "CardTop": 1215,
+      "HostLeft": 822,
+      "HostTop": -5,
+      "Aligned": true
+    }
+  ],
+  "MouseHoverVerified": [
+    "Chrome",
+    "Weixin"
+  ],
+  "RenderedCenterErrorPixels": {
+    "Weixin": 0,
+    "Chrome": 0.5
+  },
+  "Divider": {
+    "AdjacentColor": "#EEEEEE",
+    "Color": "#59646F",
+    "WidthPixels": 2
+  },
+  "ContextMenu": {
+    "DividerX": 1412,
+    "NativeTaskbarMenu": true,
+    "MenuItems": [
+      "任务管理器",
+      "任务栏设置"
+    ],
+    "ClickedX": 1388
+  },
+  "NativePreviewClickActivatesItsWindow": true
+}
