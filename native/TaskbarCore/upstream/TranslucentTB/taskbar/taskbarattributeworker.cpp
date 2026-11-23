@@ -553,6 +553,10 @@ void TaskbarAttributeWorker::SetAttribute(taskbar_iterator taskbar, TaskbarAppea
 		{
 			HresultVerify(m_TaskbarService->ReturnTaskbarToDefaultAppearance(taskbar->second.Taskbar.TaskbarWindow), spdlog::level::info, L"Failed to restore taskbar to normal");
 		}
+		else if (config.Accent == ACCENT_ENABLE_BLURBEHIND && config.LiquidGlass)
+		{
+			HresultVerify(m_TaskbarService->SetTaskbarAppearance(taskbar->second.Taskbar.TaskbarWindow, LiquidGlass, config.Color.ToABGR()), spdlog::level::info, L"Failed to set liquid glass brush");
+		}
 		else if (config.Accent == ACCENT_ENABLE_BLURBEHIND)
 		{
 			HresultVerify(m_TaskbarService->SetTaskbarBlur(taskbar->second.Taskbar.TaskbarWindow, config.Color.ToABGR(), config.BlurRadius / 3), spdlog::level::info, L"Failed to set taskbar brush");

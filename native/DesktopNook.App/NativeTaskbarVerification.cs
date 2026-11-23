@@ -112,9 +112,17 @@ internal static class NativeTaskbarVerification
             await session.CancelPreviewAsync();
             await WaitForColor("#D020E0");
 
-            await session.PreviewAsync(opaque with { Style = "liquid", Color = "#B0DBE6", Alpha = 38 }, allowDownload: false);
+            var glass = opaque with { Color = "#B0DBE6", Alpha = 38, BlurRadius = 6 };
+            await session.PreviewAsync(glass with { Style = "blur" }, allowDownload: false);
+            await Task.Delay(700);
+            colors["plainRim"] = TakeSamples(topEdge: true);
+            await session.PreviewAsync(glass with { Style = "liquid" }, allowDownload: false);
             await Task.Delay(900);
             colors.Add("liquid", TakeSamples());
+            colors["liquidRim"] = TakeSamples(topEdge: true);
+            static int Light(string color) => Convert.ToInt32(color[1..3],16) + Convert.ToInt32(color[3..5],16) + Convert.ToInt32(color[5..7],16);
+            Check(colors["liquidRim"].Zip(colors["plainRim"]).Count(pair => Light(pair.First) > Light(pair.Second) + 30) >= 5,
+                "Liquid glass highlights the rim compared with identical blur and tint.");
             await session.PreviewAsync(opaque with { Style = "frosted", Color = "#B0DBE6", Alpha = 104 }, allowDownload: false);
             await Task.Delay(900);
             colors.Add("frosted", TakeSamples());
@@ -171,7 +179,7 @@ internal static class NativeTaskbarVerification
         }
     }
 
-    private static string[] TakeSamples()
+    private static string[] TakeSamples(bool topEdge = false)
     {
         var window = FindWindowW("Shell_TrayWnd", null);
         if (window == IntPtr.Zero || !GetWindowRect(window, out var bounds)) throw new IOException("No taskbar in the interactive session.");
@@ -183,7 +191,7 @@ internal static class NativeTaskbarVerification
             for (int index = 0; index < result.Length; index++)
             {
                 int x = bounds.Left + (int)((bounds.Right - bounds.Left) * (0.08 + 0.025 * index));
-                int y = bounds.Top + (bounds.Bottom - bounds.Top) / 2;
+                int y = topEdge ? bounds.Top + 1 : bounds.Top + (bounds.Bottom - bounds.Top) / 2;
                 uint bgr = GetPixel(dc, x, y);
                 if (bgr == uint.MaxValue) throw new IOException("Couldn't sample the taskbar.");
                 result[index] = $"#{bgr & 255:X2}{(bgr >> 8) & 255:X2}{(bgr >> 16) & 255:X2}";

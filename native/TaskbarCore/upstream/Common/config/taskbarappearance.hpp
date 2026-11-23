@@ -27,6 +27,7 @@ struct TaskbarAppearance {
 	bool ShowPeek = true;
 	bool ShowLine = true;
 	float BlurRadius = 9.0f;
+	bool LiquidGlass = false;
 
 	constexpr TaskbarAppearance() noexcept = default;
 	constexpr TaskbarAppearance(ACCENT_STATE accent, Util::Color color, bool showPeek, bool showLine, float blurRadius) noexcept :
@@ -46,6 +47,7 @@ struct TaskbarAppearance {
 		rjh::Serialize(writer, ShowPeek, SHOW_PEEK_KEY);
 		rjh::Serialize(writer, ShowLine, SHOW_LINE_KEY);
 		rjh::Serialize(writer, BlurRadius, RADIUS_KEY);
+		rjh::Serialize(writer, LiquidGlass, L"liquid_glass");
 	}
 
 	void Deserialize(const rjh::value_t &obj, void (*unknownKeyCallback)(std::wstring_view))
@@ -90,6 +92,10 @@ protected:
 		else if (key == SHOW_LINE_KEY)
 		{
 			rjh::Deserialize(val, ShowLine, key);
+		}
+		else if (key == L"liquid_glass")
+		{
+			rjh::Deserialize(val, LiquidGlass, key);
 		}
 		else if (key == RADIUS_KEY)
 		{

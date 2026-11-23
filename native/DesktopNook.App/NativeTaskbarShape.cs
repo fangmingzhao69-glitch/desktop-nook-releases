@@ -241,7 +241,7 @@ internal sealed class NativeTaskbarShape
         {
             var visible = shape;
             visible.Right -= (int)GetProp(bridge, TrimAppliedProperty);
-            _hover.Update(taskbar, shell.ToRect(), visible.ToRect(), contents.AppButtons, contents.OverflowButton, GetDpiForWindow(taskbar));
+            _hover.Update(taskbar, shell.ToRect(), visible.ToRect(), contents, GetDpiForWindow(taskbar));
             if (contents.TrayStart is double tray && contents.LeftEnd is double end && tray >= end &&
                 end >= shape.Left && tray <= shape.Right)
             {

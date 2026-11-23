@@ -1,5 +1,6 @@
 using System.ComponentModel;
 using System.Diagnostics;
+using System.IO;
 using System.Runtime.InteropServices;
 using System.Text;
 
@@ -12,12 +13,90 @@ internal sealed class NativeTaskbarInfoBall
     private const string OwnerProperty = "DesktopNook.Capsule.InfoBallOwner";
     private const string OriginProperty = "DesktopNook.Capsule.InfoBallOrigin";
     private const uint MoveFlags = 0x4215;
+    private const string AssistedWidth = "DesktopNook.Capsule.InfoBallWidth";
+    private const string AssistedAligned = "DesktopNook.Capsule.InfoBallAligned";
+    private const string CapsuleOwner = "DesktopNook.NativeTaskbarShape.Owner";
+    private const string BridgeClass = "Windows.UI.Composition.DesktopWindowContentBridge";
     private nint _window;
     private nint _taskbar;
     private nint _refusedWindow;
     private long _nextSearch;
 
+    internal static async Task<string> RequestAssistanceAsync()
+    {
+        var taskbar = FindWindowEx(0, 0, "Shell_TrayWnd", null);
+        var bridge = FindWindowEx(taskbar, 0, BridgeClass, null);
+        if (bridge == 0 || GetProp(bridge, CapsuleOwner) != Environment.ProcessId)
+            throw new IOException("请先应用胶囊形态，再连接电脑管家信息球。");
+        if (GetProp(bridge, AssistedAligned) != 0) return "信息球已连接。";
+        if (GetProp(bridge, AssistedWidth) != 0) return "正在等待信息球移动到托盘。";
+        var launch = new ProcessStartInfo(Environment.ProcessPath!) { UseShellExecute = true, Verb = "runas" };
+        launch.ArgumentList.Add("--align-tencent-info-ball");
+        launch.ArgumentList.Add(Environment.ProcessId.ToString());
+        using var helper = Process.Start(launch) ?? throw new IOException("未能启动信息球定位。");
+        for (int i = 0; i < 50 && !helper.HasExited; i++)
+        {
+            await Task.Delay(120);
+            if (GetProp(bridge, AssistedAligned) != 0) return "电脑管家信息球已对齐到胶囊。";
+        }
+        throw new IOException("没有连接到可移动的信息球，请确认电脑管家的任务栏信息球已显示。");
+    }
+
+    internal static int RunAssistant(int owner)
+    {
+        var ball = new NativeTaskbarInfoBall();
+        var taskbar = FindWindowEx(0, 0, "Shell_TrayWnd", null);
+        var bridge = FindWindowEx(taskbar, 0, BridgeClass, null);
+        bool reserved = false;
+        try
+        {
+            using var parent = Process.GetProcessById(owner);
+            if (bridge == 0 || GetProp(bridge, CapsuleOwner) != owner ||
+                !string.Equals(parent.MainModule?.FileName, Environment.ProcessPath, StringComparison.OrdinalIgnoreCase) ||
+                parent.SessionId != Process.GetCurrentProcess().SessionId || GetProp(bridge, AssistedWidth) != 0)
+                return 1;
+            long lastAligned = Environment.TickCount64;
+            while (!parent.HasExited && GetProp(bridge, CapsuleOwner) == owner && GetWindowRect(bridge, out var frame))
+            {
+                int width = ball.Acquire(taskbar);
+                if (width == 0) return 2;
+                if (!reserved && !(reserved = SetProp(bridge, AssistedWidth, width))) return 3;
+                if (NativeTaskbarContents.Measure(taskbar) is { TrayStart: double tray, LeftEnd: double end } &&
+                    end >= frame.Left && tray <= frame.Right)
+                {
+                    ball.Align(taskbar, tray, end, frame.Top, frame.Bottom);
+                    if (tray - end >= width + 4 && GetWindowRect(ball._window, out var actual) &&
+                        Math.Abs(actual.Right + 2 - tray) <= 2 && Math.Abs(actual.Top + actual.Bottom - frame.Top - frame.Bottom) <= 2)
+                    {
+                        SetProp(bridge, AssistedAligned, 1);
+                        lastAligned = Environment.TickCount64;
+                    }
+                    else RemoveProp(bridge, AssistedAligned);
+                }
+                if (Environment.TickCount64 - lastAligned > 5500) return 4;
+                if (parent.WaitForExit(350)) break;
+            }
+            return 0;
+        }
+        catch (Exception error) when (error is Win32Exception or ArgumentException or InvalidOperationException) { return 1; }
+        finally
+        {
+            ball.Stop();
+            if (reserved)
+            {
+                RemoveProp(bridge, AssistedAligned);
+                RemoveProp(bridge, AssistedWidth);
+            }
+        }
+    }
+
     internal int WidthFor(nint taskbar)
+    {
+        int assisted = (int)GetProp(FindWindowEx(taskbar, 0, BridgeClass, null), AssistedWidth);
+        return assisted is >= 22 and <= 90 ? assisted : Acquire(taskbar);
+    }
+
+    private int Acquire(nint taskbar)
     {
         if (_window != 0)
         {

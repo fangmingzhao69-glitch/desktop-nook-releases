@@ -8,7 +8,7 @@ internal static class NativeTaskbarContents
 {
     internal readonly record struct Measurement(int PackedWidth, double Left, double Right, bool HasOverflow,
         Rect[] AppButtons, double? TrayGap, double AppSlot, int ChromeCount, double ChromeWidth,
-        double? TrayStart, double? LeftEnd, Rect OverflowButton);
+        double? TrayStart, double? LeftEnd, Rect OverflowButton, Rect[] TrayButtons, string[] AppIds);
 
     // This runs on a background thread: an Explorer automation call can wait on its UI thread.
     internal static Measurement? Measure(nint taskbar)
@@ -30,6 +30,8 @@ internal static class NativeTaskbarContents
             var items = new List<Rect>();
             var tray = new List<Rect>();
             var appButtons = new List<Rect>();
+            var appIds = new List<string>();
+            var trayButtons = new List<Rect>();
             Rect overflowButton = Rect.Empty;
             bool overflow = false;
             int visited = 0;
@@ -42,6 +44,8 @@ internal static class NativeTaskbarContents
                 if (info.ClassName.StartsWith("SystemTray.", StringComparison.Ordinal))
                 {
                     tray.Add(rect);
+                    if (info.ClassName is "SystemTray.NotifyIconView" or "SystemTray.NormalButton")
+                        trayButtons.Add(rect);
                     if (info.ClassName.Contains("Chevron", StringComparison.OrdinalIgnoreCase) ||
                         info.AutomationId.Contains("Chevron", StringComparison.OrdinalIgnoreCase) ||
                         info.Name.Contains("显示隐藏的图标", StringComparison.Ordinal) ||
@@ -54,7 +58,11 @@ internal static class NativeTaskbarContents
                 overflow |= info.ClassName.Contains("Overflow", StringComparison.OrdinalIgnoreCase) ||
                     info.AutomationId.Contains("Overflow", StringComparison.OrdinalIgnoreCase);
                 if (info.ClassName.Contains("TaskListButton", StringComparison.Ordinal))
+                {
                     appButtons.Add(rect);
+                    appIds.Add(info.AutomationId.StartsWith("Appid: ", StringComparison.OrdinalIgnoreCase)
+                        ? info.AutomationId[7..] : "");
+                }
                 else items.Add(rect);
             }
             if (items.Count + appButtons.Count == 0 || (tray.Count == 0 && root.Current.ClassName == "Shell_TrayWnd")) return null;
@@ -72,7 +80,8 @@ internal static class NativeTaskbarContents
                 overflowButton = tray.MinBy(rect => rect.Left);
             double? trayGap = trayStart - leftEnd;
             return new(width, all.Min(rect => rect.Left), all.Max(rect => rect.Right), overflow, appButtons.ToArray(), trayGap,
-                widths.Length == 0 ? 0 : widths[widths.Length / 2], items.Count, chromeWidth, trayStart, leftEnd, overflowButton);
+                widths.Length == 0 ? 0 : widths[widths.Length / 2], items.Count, chromeWidth, trayStart, leftEnd, overflowButton,
+                trayButtons.Where(button => button != overflowButton).ToArray(), appIds.ToArray());
         }
         catch (Exception error) when (error is ElementNotAvailableException or COMException or InvalidOperationException or ArgumentException)
         {

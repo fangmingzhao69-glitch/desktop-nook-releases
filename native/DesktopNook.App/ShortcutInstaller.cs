@@ -100,6 +100,32 @@ internal static class ShortcutInstaller
         finally { Marshal.FinalReleaseComObject(store); }
     }
 
+    internal static string? WindowApplicationId(IntPtr window)
+    {
+        var iid = typeof(IPropertyStore).GUID;
+        if (window == 0 || SHGetPropertyStoreForWindow(window, ref iid, out var store) < 0) return null;
+        try
+        {
+            var key = new PropertyKey { Format = AppUserModelFormat, Id = 5 };
+            store.GetValue(ref key, out var value);
+            try { return value.Type == 31 ? Marshal.PtrToStringUni(value.Text) : null; }
+            finally { PropVariantClear(ref value); }
+        }
+        finally { Marshal.FinalReleaseComObject(store); }
+    }
+
+#if NOOK_UI_VERIFICATION
+    internal static void SetProbeWindowId(nint window, string id)
+    {
+        var iid = typeof(IPropertyStore).GUID;
+        Marshal.ThrowExceptionForHR(SHGetPropertyStoreForWindow(window, ref iid, out var store));
+        var key = new PropertyKey { Format = AppUserModelFormat, Id = 5 };
+        var value = new Variant { Type = 31, Text = Marshal.StringToCoTaskMemUni(id) };
+        try { store.SetValue(ref key, ref value); store.Commit(); }
+        finally { PropVariantClear(ref value); Marshal.FinalReleaseComObject(store); }
+    }
+#endif
+
     internal static void SetWindowIdentity(IntPtr window, string program, string? iconLocation = null, bool attachCleanup = true)
     {
         var iid = typeof(IPropertyStore).GUID;

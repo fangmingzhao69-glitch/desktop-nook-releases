@@ -13,6 +13,7 @@
 #include "util/color.hpp"
 
 #include "XamlBlurBrush.h"
+#include "effects/RefractedBackdrop.h"
 
 extern "C"
 {
@@ -42,6 +43,10 @@ namespace
 		wuc::CompositionRoundedRectangleGeometry Outline{ nullptr };
 		wuc::ContainerVisual DividerParent{ nullptr };
 		wuc::SpriteVisual Divider{ nullptr };
+		wux::UIElement GlassBackground{ nullptr };
+		wuc::ShapeVisual GlassEdges{ nullptr };
+		wuc::CompositionRoundedRectangleGeometry GlassOutline{ nullptr };
+		wuc::CompositionRoundedRectangleGeometry RefractionOutline{ nullptr };
 		wux::UIElement Tray{ nullptr };
 		wux::Media::Transform OriginalTrayTransform{ nullptr };
 		wux::Media::Transform TrayTransform{ nullptr };
@@ -49,6 +54,65 @@ namespace
 		int Width = 0, Height = 0, Inset = -1;
 		int Trim = 0;
 		UINT Dpi = 0;
+
+		void SizeGlass(HWND window)
+		{
+			RECT rect{};
+			if (!GlassEdges || !GetClientRect(window, &rect)) return;
+			const bool capsule = GetPropW(window, CapsuleOwner) && GetPropW(window, CapsulePosition);
+			const float pixel = 96.f / static_cast<float>(GetDpiForWindow(window));
+			const float width = (rect.right - (capsule ? Trim : 0)) * pixel;
+			const float height = rect.bottom * pixel;
+			if (width < height || height < 8.f) return;
+			GlassEdges.Size({width, height});
+			auto sizeOutline = [&](auto const& geometry, float stroke)
+			{
+				float radius = capsule ? (height - stroke) / 2.f : 0.f;
+				geometry.Offset({stroke / 2, stroke / 2});
+				geometry.Size({width - stroke, height - stroke});
+				geometry.CornerRadius({radius,radius});
+			};
+			sizeOutline(GlassOutline, 3.f);
+			if (RefractionOutline) sizeOutline(RefractionOutline, 6.f);
+		}
+
+		void SetGlass(HWND window, const wux::UIElement& background)
+		{
+			if (GlassBackground == background && GlassEdges) { SizeGlass(window); return; }
+			if (GlassBackground && wuxh::ElementCompositionPreview::GetElementChildVisual(GlassBackground) == GlassEdges)
+				wuxh::ElementCompositionPreview::SetElementChildVisual(GlassBackground, nullptr);
+			GlassBackground = nullptr; GlassEdges = nullptr; GlassOutline = nullptr; RefractionOutline = nullptr;
+			if (!background || wuxh::ElementCompositionPreview::GetElementChildVisual(background)) return;
+			auto compositor = wuxh::ElementCompositionPreview::GetElementVisual(background).Compositor();
+			GlassEdges = compositor.CreateShapeVisual();
+			auto stroke = [&](auto const& geometry, auto const& brush, float thickness)
+			{
+				auto line = compositor.CreateSpriteShape(geometry);
+				line.StrokeThickness(thickness);
+				line.StrokeBrush(brush);
+				GlassEdges.Shapes().Append(line);
+			};
+			try
+			{
+				auto offset = winrt::make_self<RefractedBackdrop>();
+				offset->Source = wuc::CompositionEffectSourceParameter(L"backdrop");
+				auto brush = compositor.CreateEffectFactory(*offset).CreateBrush();
+				brush.SetSourceParameter(L"backdrop", compositor.CreateBackdropBrush());
+				RefractionOutline = compositor.CreateRoundedRectangleGeometry();
+				stroke(RefractionOutline, brush, 6.f);
+			}
+			catch (const winrt::hresult_error&) { RefractionOutline = nullptr; }
+			auto light = compositor.CreateLinearGradientBrush();
+			light.StartPoint({0,0}); light.EndPoint({0,1});
+			light.ColorStops().Append(compositor.CreateColorGradientStop(0.f,{190,255,255,255}));
+			light.ColorStops().Append(compositor.CreateColorGradientStop(.45f,{32,255,255,255}));
+			light.ColorStops().Append(compositor.CreateColorGradientStop(1.f,{80,230,245,255}));
+			GlassOutline = compositor.CreateRoundedRectangleGeometry();
+			stroke(GlassOutline, light, 3.f);
+			GlassBackground = background;
+			SizeGlass(window);
+			wuxh::ElementCompositionPreview::SetElementChildVisual(background, GlassEdges);
+		}
 
 		static wux::UIElement FindTray(const wux::DependencyObject& parent, int depth)
 		{
@@ -144,6 +208,7 @@ namespace
 			if (!Content || !packed || !insetValue || !GetPropW(window, CapsuleOwner))
 			{
 				Reset(window);
+				SizeGlass(window);
 				return;
 			}
 			const int inset = static_cast<int>(insetValue) - 1;
@@ -206,6 +271,7 @@ namespace
 				SetPropW(window, CapsuleTrimApplied, reinterpret_cast<HANDLE>(static_cast<UINT_PTR>(trim)));
 			else
 				RemovePropW(window, CapsuleTrimApplied);
+			SizeGlass(window);
 			if (Divider)
 			{
 				const auto x = reinterpret_cast<std::uintptr_t>(GetPropW(window, CapsuleDivider));
@@ -275,8 +341,15 @@ namespace
 		{
 			RemovePropW(window, CapsuleGeometryLock);
 			std::unique_ptr<CapsuleVisual> capsule(reinterpret_cast<CapsuleVisual*>(context));
-			try { capsule->Reset(window); } catch (...) {}
+			try { capsule->SetGlass(window, nullptr); capsule->Reset(window); } catch (...) {}
 		}
+	}
+
+	void SetGlassEdges(HWND window, const wux::UIElement& background)
+	{
+		DWORD_PTR context{};
+		if (GetWindowSubclass(window, KeepCapsulePosition, CapsuleSubclassId, &context))
+			reinterpret_cast<CapsuleVisual*>(context)->SetGlass(window, background);
 	}
 }
 
@@ -322,6 +395,12 @@ HRESULT TaskbarAppearanceService::SetTaskbarAppearance(HWND taskbar, TaskbarBrus
 
 				newBrush = std::move(acrylicBrush);
 			}
+			else if (brush == LiquidGlass)
+			{
+				auto compositor = wuxh::ElementCompositionPreview::GetElementVisual(info->background.control).Compositor();
+				const wfn::float4 rgba{ tint.R / 255.f, tint.G / 255.f, tint.B / 255.f, tint.A / 255.f };
+				newBrush = winrt::make<XamlBlurBrush>(compositor, 2.f, rgba);
+			}
 			else if (brush == SolidColor)
 			{
 				wux::Media::SolidColorBrush solidBrush;
@@ -331,6 +410,7 @@ HRESULT TaskbarAppearanceService::SetTaskbarAppearance(HWND taskbar, TaskbarBrus
 			}
 
 			info->background.control.Fill(newBrush);
+			SetGlassEdges(info->window, brush == LiquidGlass ? info->background.control : nullptr);
 		}
 	}
 
@@ -357,6 +437,7 @@ HRESULT TaskbarAppearanceService::SetTaskbarBlur(HWND taskbar, UINT color, FLOAT
 
 			auto compositor = wuxh::ElementCompositionPreview::GetElementVisual(info->background.control).Compositor();
 			info->background.control.Fill(winrt::make<XamlBlurBrush>(std::move(compositor), blurAmount, tintHdr));
+			SetGlassEdges(info->window, nullptr);
 		}
 	}
 
@@ -374,6 +455,7 @@ HRESULT TaskbarAppearanceService::ReturnTaskbarToDefaultAppearance(HWND taskbar)
 		if (GetAncestor(info.window, GA_PARENT) == taskbar)
 		{
 			RestoreDefaultControlFill(info.background);
+			SetGlassEdges(info.window, nullptr);
 			break;
 		}
 	}
@@ -422,6 +504,7 @@ HRESULT TaskbarAppearanceService::RestoreAllTaskbarsToDefault() try
 	{
 		RestoreDefaultControlFill(info.background);
 		RestoreDefaultControlFill(info.border);
+		SetGlassEdges(info.window, nullptr);
 	}
 
 	return S_OK;

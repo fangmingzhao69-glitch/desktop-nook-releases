@@ -20,6 +20,11 @@ public partial class App : Application
     {
         try
         {
+            if (e.Args is ["--align-tencent-info-ball", string host])
+            {
+                Shutdown(int.TryParse(host, out int owner) && owner > 0 ? NativeTaskbarInfoBall.RunAssistant(owner) : 64);
+                return;
+            }
             if (e.Args is ["--watch-native-taskbar-shape", string guardKey, string guardPid, string guardStart])
             {
                 Shutdown(int.TryParse(guardPid, out int pid) && long.TryParse(guardStart, out long creationTime)

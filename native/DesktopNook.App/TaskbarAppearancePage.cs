@@ -50,7 +50,7 @@ internal sealed class TaskbarAppearancePage : UserControl
         _style.Items.Add(new ComboBoxItem { Content = "纯色", Tag = "opaque" });
         _style.Items.Add(new ComboBoxItem { Content = "模糊", Tag = "blur" });
         _style.Items.Add(new ComboBoxItem { Content = "亚克力", Tag = "acrylic" });
-        _style.Items.Add(new ComboBoxItem { Content = "液态玻璃", Tag = "liquid", ToolTip = "轻模糊，保留更多背景细节。" });
+        _style.Items.Add(new ComboBoxItem { Content = "液态玻璃", Tag = "liquid", ToolTip = "轻模糊的背景在边缘产生折射，并沿上下沿显示渐变高光。" });
         _style.Items.Add(new ComboBoxItem { Content = "柔雾玻璃", Tag = "frosted", ToolTip = "提高背景模糊强度，减轻背景干扰。" });
 
         var sceneCard = new StackPanel();
@@ -70,7 +70,17 @@ internal sealed class TaskbarAppearancePage : UserControl
 
         var appearanceCard = new StackPanel();
         _layout.ToolTip = "开始按钮、应用和托盘合在一起，宽度随图标数量自动调整。";
-        appearanceCard.Children.Add(FieldRow("任务栏形态", _layout));
+        var layoutOptions = new DockPanel();
+        var assistBall = MakeButton("授权定位信息球…", () => _ = RunAsync(async () =>
+        {
+            if (App.IsSandbox) throw new InvalidOperationException("隔离模式不请求管理员权限。");
+            _message.Text = await NativeTaskbarInfoBall.RequestAssistanceAsync();
+        }));
+        assistBall.Margin = new Thickness(8, 0, 0, 0);
+        DockPanel.SetDock(assistBall, Dock.Right);
+        layoutOptions.Children.Add(assistBall);
+        layoutOptions.Children.Add(_layout);
+        appearanceCard.Children.Add(FieldRow("任务栏形态", layoutOptions));
         appearanceCard.Children.Add(FieldRow("样式", _style));
         var colorControls = new StackPanel { Orientation = Orientation.Horizontal };
         _colorSample.BorderBrush = ThemePalette.Brush("OutlineBrush");

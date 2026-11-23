@@ -46,6 +46,7 @@ public record TaskbarAppearanceProfile
             ["color"] = $"{Color}{Alpha:X2}"
         };
         if (dynamic) result["enabled"] = Enabled;
+        if (Style == "liquid") result["liquid_glass"] = true;
         if ((preset ?? BlurRadius) is double radius) result["blur_radius"] = radius;
         if (ShowLine is bool line) result["show_line"] = line;
         if (ShowPeek is bool peek) result["show_peek"] = peek;

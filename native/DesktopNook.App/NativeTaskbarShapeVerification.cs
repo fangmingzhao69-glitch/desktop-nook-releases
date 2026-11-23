@@ -134,6 +134,31 @@ internal static class NativeTaskbarShapeVerification
                             throw new IOException("The expanded capsule moved again without another taskbar change.");
                     }
                     checks.Add("The expanded capsule stays still across successive layout scans.");
+                    var appId = $"DesktopNook.CapsuleVerification.{icon.Id}";
+                    int probeIndex = Array.FindIndex(groups!.Value.AppIds, id => id == appId);
+                    Check(probeIndex >= 0, "Identified the separate probe process by its native taskbar app ID.");
+                    var button = groups.Value.AppButtons[probeIndex];
+                    var pointer = new NativePoint { X = (int)(button.X + button.Width / 2), Y = (int)(button.Y + button.Height / 2) };
+                    if (!GetCursorPos(out var saved) || !SetCursorPos(pointer.X, pointer.Y)) throw new IOException("Cannot position the test pointer.");
+                    try
+                    {
+                        icon.Refresh();
+                        PostMessage(icon.MainWindowHandle, ShowProbePopup, 0, 0);
+                        var limit = Stopwatch.StartNew();
+                        bool positioned = false;
+                        do
+                        {
+                            await Task.Delay(100);
+                            nint popup = FindWindowEx(0, 0, "Static", appId);
+                            positioned = popup != 0 && GetWindowRect(popup, out var surface) &&
+                                Math.Abs((surface.Left + surface.Right) / 2 - pointer.X) <= 3 && surface.Bottom <= button.Top;
+                        } while (!positioned && limit.ElapsedMilliseconds < 3000);
+                        Check(positioned, "A non-Explorer popup from the probe process aligns above its own taskbar icon.");
+                    }
+                    finally
+                    {
+                        if (GetCursorPos(out var current) && current.Equals(pointer)) SetCursorPos(saved.X, saved.Y);
+                    }
                 }
                 finally { if (!icon.HasExited) { icon.Kill(); await icon.WaitForExitAsync(); } }
             }
@@ -267,8 +292,24 @@ internal static class NativeTaskbarShapeVerification
             WindowStartupLocation = WindowStartupLocation.CenterScreen
         };
         Application.Current.MainWindow = window;
+        var handle = new System.Windows.Interop.WindowInteropHelper(window).EnsureHandle();
+        string id = $"DesktopNook.CapsuleVerification.{Environment.ProcessId}";
+        ShortcutInstaller.SetProbeWindowId(handle, id);
+        System.Windows.Interop.HwndSource.FromHwnd(handle)!.AddHook((nint hwnd, int message, nint w, nint l, ref bool handled) =>
+        {
+            if (message == ShowProbePopup && GetCursorPos(out var point))
+            {
+                CreateWindowEx(0x08000080, "Static", id, 0x90000000, point.X + 120, point.Y - 90, 150, 56, hwnd, 0, 0, 0);
+                handled = true;
+            }
+            return 0;
+        });
         window.Show();
     }
+    private const int ShowProbePopup = 0x8104;
+    [DllImport("user32.dll", CharSet = CharSet.Unicode)] private static extern nint CreateWindowEx(uint exStyle, string cls, string name, uint style,
+        int x, int y, int width, int height, nint parent, nint menu, nint instance, nint parameter);
+    [DllImport("user32.dll", CharSet = CharSet.Unicode)] private static extern bool PostMessage(nint window, int msg, nint w, nint l);
     [StructLayout(LayoutKind.Sequential)] private struct Rect { public int Left, Top, Right, Bottom; }
     [StructLayout(LayoutKind.Sequential)] private struct NativePoint { public int X, Y; }
     [DllImport("user32.dll", CharSet = CharSet.Unicode)] private static extern nint FindWindowEx(nint parent, nint after, string name, string? title);
