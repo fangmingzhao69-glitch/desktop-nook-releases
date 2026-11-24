@@ -1,0 +1,25 @@
+{
+  "Date": "2026-11-24",
+  "Owner": 12684,
+  "Helper": 27840,
+  "Aligned": 1,
+  "Ball": [
+    1416,
+    1396,
+    1458,
+    1436
+  ],
+  "Capsule": [
+    778,
+    1392,
+    1782,
+    1440
+  ],
+  "DividerX": 1412,
+  "AppRestartAutomaticallyReconnected": true,
+  "RestartElevationRequested": false,
+  "OldHelperExited": true,
+  "NewHelperCount": 1,
+  "ConfigurationWriteDenied": true,
+  "ProtectedFilesOwnedByAdministrators": true
+}

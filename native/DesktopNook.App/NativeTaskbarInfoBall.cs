@@ -104,7 +104,8 @@ internal sealed class NativeTaskbarInfoBall
         if (assisted is >= 22 and <= 90) return assisted;
         int width = Acquire(taskbar);
 #if !INFOBALL_HELPER
-        if (width == 0 && _refusedWindow != 0) NativeInfoBallAutomatic.TryStart();
+        if (width == 0 && _refusedWindow != 0 && IsWindowVisible(_refusedWindow) && IsTencentInfoBall(_refusedWindow))
+            NativeInfoBallAutomatic.TryStart();
 #endif
         return width;
     }
