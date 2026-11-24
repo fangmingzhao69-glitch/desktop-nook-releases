@@ -107,6 +107,31 @@ internal static class BrandVerification
                 if (themedHash != LocalUpdater.Hash(ownedPath) || startBefore != LocalUpdater.Hash(renamed))
                     throw new Exception("主题刷新重写了正确的固定入口或修改了开始菜单。");
                 checks.Add("Theme changes update the owned fixed shortcut and its shell artwork without changing launch arguments or other shortcuts");
+                var unrelatedStartHash = LocalUpdater.Hash(legacy);
+                BrandMigration.RefreshStartMenuAppearance(themedPath + ",0", folder);
+                dynamic themedStart = shell.CreateShortcut(renamed);
+                try
+                {
+                    if ((string)themedStart.IconLocation != themedPath + ",0" ||
+                        (string)themedStart.TargetPath != Environment.ProcessPath ||
+                        (string)themedStart.Arguments != "--autostart" || (string)themedStart.WorkingDirectory != root)
+                        throw new Exception("开始菜单主题图标未同步或启动参数被更改。");
+                }
+                finally { Marshal.FinalReleaseComObject(themedStart); }
+                if (ShortcutInstaller.SetIdentity(renamed, themedPath + ",0", Environment.ProcessPath!, "--autostart"))
+                    throw new Exception("开始菜单重启图标属性仍指向旧配色。");
+                var themedStartHash = LocalUpdater.Hash(renamed);
+                var themedStartTime = File.GetLastWriteTimeUtc(renamed);
+                for (int n = 0; n < 3; n++)
+                {
+                    BrandMigration.RefreshStartMenuAppearance(themedPath + ",0", folder);
+                    BrandMigration.Refresh(App.Store.DataDirectory, folder, registryKey: reg, iconFolder: publicIcons,
+                        shellIconLocation: themedPath + ",0");
+                }
+                if (LocalUpdater.Hash(renamed) != themedStartHash || File.GetLastWriteTimeUtc(renamed) != themedStartTime ||
+                    LocalUpdater.Hash(ownedPath) != themedHash || LocalUpdater.Hash(legacy) != unrelatedStartHash)
+                    throw new Exception("日常入口刷新覆盖了主题图标或改写了固定项和无关入口。");
+                checks.Add("Start-menu icon and relaunch metadata follow the theme; repeated startup refreshes preserve theme, pins, launch arguments and unrelated links");
                 if((File.GetAttributes(expectedIcon)&FileAttributes.Encrypted)!=0)throw new Exception("公开图标仍被 EFS 加密。");using(var key=Microsoft.Win32.Registry.CurrentUser.OpenSubKey(reg))if(key?.GetValue("DisplayName") as string!="折页")throw new Exception("安装显示名未迁移。");
                 if(LocalUpdater.Hash(otherPath)!=otherHash||!File.Exists(legacy)||LocalUpdater.Hash(Path.Combine(App.Store.DataDirectory,"state.json"))!=stateHash)throw new Exception("迁移影响了其他入口或收纳配置。");
             }

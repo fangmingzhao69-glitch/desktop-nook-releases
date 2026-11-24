@@ -7,8 +7,8 @@ namespace DesktopNook.App;
 
 internal static class BrandMigration
 {
-    internal static void RefreshAfterUpgrade(string dataRoot, string? pinnedIconLocation = null) =>
-        Refresh(dataRoot, pinnedFolder: PinnedFolder(), pinnedIconLocation: pinnedIconLocation);
+    internal static void RefreshAfterUpgrade(string dataRoot, string? shellIconLocation = null) =>
+        Refresh(dataRoot, pinnedFolder: PinnedFolder(), shellIconLocation: shellIconLocation);
 
     private static string? PinnedFolder()
     {
@@ -27,7 +27,16 @@ internal static class BrandMigration
         finally { Marshal.FinalReleaseComObject(shell); }
     }
 
-    internal static void Refresh(string dataRoot,string? startFolder=null,string? pinnedFolder=null,string registryKey=@"Software\Microsoft\Windows\CurrentVersion\Uninstall\DesktopNook",string? iconFolder=null,bool refreshShortcuts=true,string? pinnedIconLocation=null)
+    internal static void RefreshStartMenuAppearance(string iconLocation, string? folder = null)
+    {
+        folder ??= Environment.GetFolderPath(Environment.SpecialFolder.Programs);
+        if (string.IsNullOrEmpty(folder) || !Directory.Exists(folder)) return;
+        object shell = CreateShell();
+        try { RefreshPins(shell, folder, Environment.ProcessPath!, iconLocation); }
+        finally { Marshal.FinalReleaseComObject(shell); }
+    }
+
+    internal static void Refresh(string dataRoot,string? startFolder=null,string? pinnedFolder=null,string registryKey=@"Software\Microsoft\Windows\CurrentVersion\Uninstall\DesktopNook",string? iconFolder=null,bool refreshShortcuts=true,string? shellIconLocation=null)
     {
         var program=Environment.ProcessPath??throw new IOException("无法定位程序。");
         var version=System.Reflection.Assembly.GetExecutingAssembly().GetName().Version!.ToString(3);
@@ -51,10 +60,10 @@ internal static class BrandMigration
             if(refreshShortcuts&&(legacy||owned)&&(!File.Exists(current)||owned))
             {
                 if(!File.Exists(current) && legacy) ShortcutInstaller.Install(startFolder);
-                RefreshLink(shell,current,program,iconLocation,refreshName:true);
+                RefreshLink(shell,current,program,shellIconLocation ?? iconLocation,refreshName:true);
             }
             if (refreshShortcuts && pinnedFolder is not null && Directory.Exists(pinnedFolder))
-                RefreshPins(shell,pinnedFolder,program,pinnedIconLocation ?? iconLocation,refreshName:true);
+                RefreshPins(shell,pinnedFolder,program,shellIconLocation ?? iconLocation,refreshName:true);
         }
         finally{Marshal.FinalReleaseComObject(shell);}
         using(var key=Registry.CurrentUser.OpenSubKey(registryKey,true))

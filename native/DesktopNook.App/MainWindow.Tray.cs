@@ -37,6 +37,7 @@ public partial class MainWindow
             var folder = App.IsSandbox ? Path.Combine(App.SandboxRoot!, "ShellIconCache") : null;
             var path = ThemeShellIcon.FileFor(ThemePalette.Family, folder);
             var location = path + ",0";
+            if (!App.IsSandbox) BrandMigration.RefreshStartMenuAppearance(location);
             if (refreshPins && !App.IsSandbox) BrandMigration.RefreshPinnedAppearance(location);
             if (!App.IsSandbox)
                 ShortcutInstaller.SetWindowIdentity(handle, Environment.ProcessPath!, location, attachCleanup: initialize,

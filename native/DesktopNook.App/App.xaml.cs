@@ -152,7 +152,7 @@ public partial class App : Application
                         BrandMigration.RefreshAfterUpgrade(Store.DataDirectory, window.ShellIconLocation);
                         window.RefreshTaskbarPlacement();
                     }
-                    else BrandMigration.Refresh(Store.DataDirectory);
+                    else BrandMigration.Refresh(Store.DataDirectory, shellIconLocation: window.ShellIconLocation);
                 }
                 catch (Exception) { window.SetStatus("入口图标刷新未完成，可在设置中刷新程序入口。"); }
             }, resumeIndex >= 0 ? System.Windows.Threading.DispatcherPriority.Loaded : System.Windows.Threading.DispatcherPriority.ContextIdle);
