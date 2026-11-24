@@ -1,6 +1,7 @@
 #pragma once
 #include <optional>
 #include <unordered_map>
+#include <unordered_set>
 #include <xamlOM.h>
 #include "winrt.hpp"
 #include "undefgetcurrenttime.h"
@@ -63,6 +64,7 @@ private:
 	void AlignPreview(InstanceHandle handle);
 	void RestorePreview(PreviewInfo& preview);
 	std::unordered_map<InstanceHandle, PreviewInfo> m_Previews;
+	std::unordered_set<HWND> m_PreviewHosts;
 	template<typename T>
 	struct ControlInfo
 	{

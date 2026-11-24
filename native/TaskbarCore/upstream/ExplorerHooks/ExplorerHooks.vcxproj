@@ -20,7 +20,7 @@
       <PreprocessorDefinitions>EXPLORERHOOKS_EXPORTS;WIL_SUPPRESS_EXCEPTIONS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
     </ClCompile>
     <Link>
-      <AdditionalDependencies>detours.lib;kernel32.lib;ole32.lib;user32.lib</AdditionalDependencies>
+      <AdditionalDependencies>detours.lib;kernel32.lib;ole32.lib;user32.lib;shell32.lib</AdditionalDependencies>
       <SubSystem>Windows</SubSystem>
     </Link>
   </ItemDefinitionGroup>

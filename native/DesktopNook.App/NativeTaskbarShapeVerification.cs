@@ -84,7 +84,7 @@ internal static class NativeTaskbarShapeVerification
             if (!packed.Value.OverflowButton.IsEmpty)
             {
                 var arrow = packed.Value.OverflowButton;
-                Check(ClickOverflow(taskbar, arrow), "Clicked the chevron inside the original Explorer taskbar.");
+                Check(ClickTaskbarButton(taskbar, arrow), "Clicked the chevron inside the original Explorer taskbar.");
                 try
                 {
                     var wait = Stopwatch.StartNew();
@@ -159,6 +159,41 @@ internal static class NativeTaskbarShapeVerification
                     int probeIndex = Array.FindIndex(groups!.Value.AppIds, id => id == appId);
                     Check(probeIndex >= 0, "Identified the separate probe process by its native taskbar app ID.");
                     var button = groups.Value.AppButtons[probeIndex];
+                    icon.Refresh();
+                    var probeWindow = icon.MainWindowHandle;
+                    SetForegroundWindow(probeWindow);
+                    await Task.Delay(150);
+                    if (GetForegroundWindow() != probeWindow)
+                    {
+                        Check(ClickTaskbarButton(taskbar, button), "Activated the isolated probe through its taskbar button.");
+                        for (int wait = 0; wait < 25 && GetForegroundWindow() != probeWindow; wait++) await Task.Delay(80);
+                    }
+                    Check(GetForegroundWindow() == probeWindow, "The isolated probe is active before the minimize click.");
+                    Check(PostMessage(probeWindow, 0x0112, 0xF020, 0), "Requested native minimization of the isolated probe.");
+                    for (int wait = 0; wait < 25 && !IsIconic(probeWindow); wait++) await Task.Delay(80);
+                    Check(IsIconic(probeWindow), "Minimized the isolated probe through the normal system command.");
+                    await Task.Delay(150);
+                    nint targetWindow = GetProp(bridge, "DesktopNook.Animation.Window");
+                    long targetPoint = GetProp(bridge, "DesktopNook.Animation.Target");
+                    int animationX = unchecked((int)targetPoint), animationY = (int)(targetPoint >> 32);
+                    Check(targetWindow == probeWindow &&
+                        Math.Abs(animationX - (button.X + button.Width / 2)) <= 2 &&
+                        Math.Abs(animationY - (button.Y + button.Height / 2)) <= 2,
+                        "The minimize animation targets the rendered native capsule button.");
+                    long minimizeTick = GetProp(bridge, "DesktopNook.Animation.Tick");
+                    Check(PostMessage(probeWindow, 0x0112, 0xF120, 0), "Requested native restoration of the isolated probe.");
+                    for (int wait = 0; wait < 25 && IsIconic(probeWindow); wait++) await Task.Delay(80);
+                    Check(!IsIconic(probeWindow), "Restored the isolated probe through the normal system command.");
+                    await Task.Delay(200);
+                    targetWindow = GetProp(bridge, "DesktopNook.Animation.Window");
+                    targetPoint = GetProp(bridge, "DesktopNook.Animation.Target");
+                    animationX = unchecked((int)targetPoint); animationY = (int)(targetPoint >> 32);
+                    Check(targetWindow == probeWindow && GetProp(bridge, "DesktopNook.Animation.Tick") > minimizeTick &&
+                        Math.Abs(animationX - (button.X + button.Width / 2)) <= 2 &&
+                        Math.Abs(animationY - (button.Y + button.Height / 2)) <= 2,
+                        $"The system animation rectangle targets the rendered native capsule button " +
+                        $"(window={targetWindow}, " +
+                        $"expectedWindow={probeWindow}, target={animationX},{animationY}, expectedX={button.X + button.Width / 2}).");
                     var pointer = new NativePoint { X = (int)(button.X + button.Width / 2), Y = (int)(button.Y + button.Height / 2) };
                     if (!GetCursorPos(out var saved) || !SetCursorPos(pointer.X, pointer.Y)) throw new IOException("Cannot position the test pointer.");
                     try
@@ -258,7 +293,7 @@ internal static class NativeTaskbarShapeVerification
         return true;
     }
 
-    private static bool ClickOverflow(nint taskbar, System.Windows.Rect button)
+    private static bool ClickTaskbarButton(nint taskbar, System.Windows.Rect button)
     {
         var center = new NativePoint { X = (int)(button.Left + button.Width / 2), Y = (int)(button.Top + button.Height / 2) };
         nint hit = WindowFromPoint(center);
@@ -270,6 +305,9 @@ internal static class NativeTaskbarShapeVerification
             if (!GetCursorPos(out var actual) || !actual.Equals(center)) return false;
             mouse_event(2, 0, 0, 0, 0);
             mouse_event(4, 0, 0, 0, 0);
+            // Input is queued; keep the pointer over the native control until
+            // Explorer consumes the click instead of restoring it immediately.
+            System.Threading.Thread.Sleep(100);
             return true;
         }
         finally
@@ -344,6 +382,9 @@ internal static class NativeTaskbarShapeVerification
     [DllImport("user32.dll", CharSet = CharSet.Unicode)] private static extern nint FindWindowEx(nint parent, nint after, string name, string? title);
     [DllImport("user32.dll", CharSet = CharSet.Unicode)] private static extern nint GetProp(nint window, string name);
     [DllImport("user32.dll")] private static extern bool IsWindowVisible(nint window);
+    [DllImport("user32.dll")] private static extern bool IsIconic(nint window);
+    [DllImport("user32.dll")] private static extern bool SetForegroundWindow(nint window);
+    [DllImport("user32.dll")] private static extern nint GetForegroundWindow();
     [DllImport("user32.dll")] private static extern nint WindowFromPoint(NativePoint point);
     [DllImport("user32.dll")] private static extern nint GetAncestor(nint window, uint flags);
     [DllImport("user32.dll")] private static extern bool GetCursorPos(out NativePoint point);

@@ -1,0 +1,29 @@
+{
+  "Date": "2026-11-24",
+  "WindowsBuild": "10.0.26340.0",
+  "Scenario": "Native Chrome and Weixin previews, physical mouse input, full-screen XAML island",
+  "Switches": 18,
+  "Samples": 234,
+  "VisibleSamples": 234,
+  "HostAtUncorrectedScreenOrigin": 0,
+  "ScreenshotsVisuallyVerified": [
+    {
+      "CardRight": 1447,
+      "Application": "Chrome",
+      "CardLeft": 1230,
+      "IconCenterX": 1339
+    },
+    {
+      "CardRight": 1168,
+      "Application": "Weixin",
+      "CardLeft": 982,
+      "IconCenterX": 1075
+    }
+  ],
+  "Divider": {
+    "Argb": "9B647080",
+    "ReservedSlot": "One native button before divider",
+    "PhysicalWidth": 2
+  },
+  "Limitations": "Single monitor, Windows build 26340.10032. No claim of every third-party application being tested."
+}

@@ -200,10 +200,10 @@ internal sealed class NativeTaskbarModule
         "Windows 资源管理器仍载有另一版本的任务栏材质组件。请在任务管理器中重启「Windows 资源管理器」后再试。";
     private static readonly Dictionary<string, string> Hashes = new(StringComparer.OrdinalIgnoreCase)
     {
-        [Filename] = "D08124BF76EF2E3AAC4895C1A0536D12BA97A46140F52C3EDAA31AAA1ABD7625",
+        [Filename] = "C467E933383DDD559AE1D38523D3F2097DDAC16577E213D18B018239FB2BCBBA",
         ["ProgramLog.dll"] = "6130AA4DBA33027BFAFEAB1D32C6BF92E2AC05B6E6E723FAF8E0C99937B33A32",
-        [ExplorerModule] = "517685A283EA37279207DCF17A4B9FD1DBF0DC1573D51F36107590E7C28A7F27",
-        ["ExplorerHooks.dll"] = "59471557A447B1CF82296248EFE2008AB520742B99590D78F4D5885AF2F63FC9"
+        [ExplorerModule] = "DE07A95B6A9DC1279980B1BBACBE01FF79C02D1825527E7436A356B457521082",
+        ["ExplorerHooks.dll"] = "3246BA2C33375C3C2CB0736529156D15CC44D32718296BA22C60D64EDE8F0BC4"
     };
 
     [UnmanagedFunctionPointer(CallingConvention.Winapi)]

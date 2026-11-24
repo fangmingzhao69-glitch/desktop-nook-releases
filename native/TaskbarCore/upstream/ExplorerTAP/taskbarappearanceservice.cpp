@@ -38,6 +38,39 @@ namespace
 	constexpr wchar_t PreviewOrigin[] = L"DesktopNook.Preview.Origin";
 	constexpr wchar_t PreviewX[] = L"DesktopNook.Preview.X";
 	constexpr wchar_t PreviewY[] = L"DesktopNook.Preview.Y";
+	constexpr wchar_t PreviewAnchorX[] = L"DesktopNook.Preview.AnchorX";
+
+	bool PreviewButton(HWND bridge, RECT& button)
+	{
+		POINT pointer{};
+		if (!GetCursorPos(&pointer)) return false;
+		const auto count = reinterpret_cast<INT_PTR>(GetPropW(bridge, L"DesktopNook.Capsule.ButtonCount"));
+		for (INT_PTR index = 0; index < count && index < 128; ++index)
+		{
+			wchar_t key[96]{};
+			swprintf_s(key, L"DesktopNook.Capsule.Button.%lld.Position", static_cast<long long>(index));
+			const auto origin = reinterpret_cast<std::uintptr_t>(GetPropW(bridge, key));
+			swprintf_s(key, L"DesktopNook.Capsule.Button.%lld.Size", static_cast<long long>(index));
+			const auto size = reinterpret_cast<std::uintptr_t>(GetPropW(bridge, key));
+			RECT candidate{static_cast<LONG>(origin), static_cast<LONG>(origin >> 32), 0, 0};
+			candidate.right = candidate.left + static_cast<LONG>(size);
+			candidate.bottom = candidate.top + static_cast<LONG>(size >> 32);
+			if (PtInRect(&candidate, pointer)) { button = candidate; return true; }
+		}
+		return false;
+	}
+
+	bool PreviewScreenOrigin(HWND bridge, POINT& origin)
+	{
+		if (!bridge || !GetPropW(bridge, CapsuleOwner)) return false;
+		RECT child{}, taskbar{};
+		MONITORINFO monitor{sizeof(monitor)};
+		if (!GetWindowRect(bridge, &child) || !GetWindowRect(GetParent(bridge), &taskbar) ||
+			!GetMonitorInfoW(MonitorFromWindow(bridge, MONITOR_DEFAULTTONEAREST), &monitor)) return false;
+		origin = {monitor.rcMonitor.left + child.left - taskbar.left,
+			monitor.rcMonitor.top + child.top - taskbar.top};
+		return true;
+	}
 
 	LRESULT CALLBACK KeepPreviewPosition(HWND window, UINT message, WPARAM w, LPARAM l, UINT_PTR id, DWORD_PTR)
 	{
@@ -45,23 +78,36 @@ namespace
 		{
 			auto result = DefSubclassProc(window, message, w, l);
 			const auto bridge = static_cast<HWND>(GetPropW(window, PreviewBridge));
-			if (bridge && GetPropW(bridge, CapsuleOwner))
+			POINT origin{};
+			if (PreviewScreenOrigin(bridge, origin))
 			{
+				if (const auto saved = reinterpret_cast<INT_PTR>(GetPropW(window, PreviewX)))
+				{
+					origin.x = static_cast<int>(saved) - 1000000;
+					origin.y = static_cast<int>(reinterpret_cast<INT_PTR>(GetPropW(window, PreviewY))) - 1000000;
+					RECT button{};
+					const auto previous = reinterpret_cast<INT_PTR>(GetPropW(window, PreviewAnchorX));
+					if (previous && PreviewButton(bridge, button))
+					{
+						const int center = (button.left + button.right) / 2;
+						origin.x += center - (static_cast<int>(previous) - 1000000);
+						SetPropW(window, PreviewX, reinterpret_cast<HANDLE>(static_cast<INT_PTR>(origin.x + 1000000)));
+						SetPropW(window, PreviewAnchorX, reinterpret_cast<HANDLE>(static_cast<INT_PTR>(center + 1000000)));
+					}
+				}
 				auto& position = *reinterpret_cast<WINDOWPOS*>(l);
-				position.x = static_cast<int>(reinterpret_cast<INT_PTR>(GetPropW(window, PreviewX))) - 1000000;
-				position.y = static_cast<int>(reinterpret_cast<INT_PTR>(GetPropW(window, PreviewY))) - 1000000;
+				position.x = origin.x;
+				position.y = origin.y;
 				position.flags &= ~SWP_NOMOVE;
 			}
 			return result;
 		}
-		if ((message == WM_SHOWWINDOW && !w) || message == WM_NCDESTROY)
+		if (message == WM_NCDESTROY)
 		{
 			RemoveWindowSubclass(window, KeepPreviewPosition, id);
-			const auto packed = reinterpret_cast<std::uintptr_t>(RemovePropW(window, PreviewOrigin));
-			RemovePropW(window, PreviewBridge); RemovePropW(window, PreviewX); RemovePropW(window, PreviewY);
-			if (message != WM_NCDESTROY)
-				SetWindowPos(window, nullptr, static_cast<int>(packed), static_cast<int>(packed >> 32), 0, 0,
-					SWP_NOSIZE | SWP_NOACTIVATE | SWP_NOZORDER);
+			RemovePropW(window, PreviewOrigin);
+			RemovePropW(window, PreviewBridge);
+			RemovePropW(window, PreviewX); RemovePropW(window, PreviewY); RemovePropW(window, PreviewAnchorX);
 		}
 		return DefSubclassProc(window, message, w, l);
 	}
@@ -71,7 +117,8 @@ namespace
 		if (!window || !GetPropW(window, PreviewBridge)) return;
 		RemoveWindowSubclass(window, KeepPreviewPosition, PreviewSubclassId);
 		const auto packed = reinterpret_cast<std::uintptr_t>(RemovePropW(window, PreviewOrigin));
-		RemovePropW(window, PreviewBridge); RemovePropW(window, PreviewX); RemovePropW(window, PreviewY);
+		RemovePropW(window, PreviewBridge);
+		RemovePropW(window, PreviewX); RemovePropW(window, PreviewY); RemovePropW(window, PreviewAnchorX);
 		SetWindowPos(window, nullptr, static_cast<int>(packed), static_cast<int>(packed >> 32), 0, 0,
 			SWP_NOSIZE | SWP_NOACTIVATE | SWP_NOZORDER);
 	}
@@ -279,7 +326,7 @@ namespace
 				if (DividerParent)
 				{
 					Divider = compositor.CreateSpriteVisual();
-					Divider.Brush(compositor.CreateColorBrush({ 210, 57, 70, 84 }));
+					Divider.Brush(compositor.CreateColorBrush({ 155, 100, 112, 128 }));
 					DividerParent.Children().InsertAtTop(Divider);
 				}
 			}
@@ -401,7 +448,11 @@ DWORD TaskbarAppearanceService::s_ProxyStubRegistrationCookie = 0;
 
 void TaskbarAppearanceService::RestorePreview(PreviewInfo& preview)
 {
-	RestorePreviewHost(preview.positionedHost);
+	if (preview.positionedHost)
+	{
+		auto bridge = static_cast<HWND>(GetPropW(preview.positionedHost, PreviewBridge));
+		if (!bridge || !GetPropW(bridge, CapsuleOwner)) RestorePreviewHost(preview.positionedHost);
+	}
 	preview.positionedHost = nullptr;
 }
 
@@ -410,6 +461,7 @@ void TaskbarAppearanceService::RegisterPreview(InstanceHandle handle, const wux:
 	if (const auto found = m_Previews.find(handle); found != m_Previews.end())
 	{
 		if (window) found->second.window = window;
+		try { AlignPreview(handle); } catch (const winrt::hresult_error&) {}
 		return;
 	}
 	PreviewInfo preview;
@@ -421,6 +473,7 @@ void TaskbarAppearanceService::RegisterPreview(InstanceHandle handle, const wux:
 			try { self->AlignPreview(handle); } catch (const winrt::hresult_error&) {}
 	});
 	m_Previews.emplace(handle, std::move(preview));
+	try { AlignPreview(handle); } catch (const winrt::hresult_error&) {}
 }
 
 void TaskbarAppearanceService::UnregisterPreview(InstanceHandle handle)
@@ -439,6 +492,16 @@ void TaskbarAppearanceService::UnregisterPreview(InstanceHandle handle)
 
 void TaskbarAppearanceService::RefreshPreviews()
 {
+	for (auto host = m_PreviewHosts.begin(); host != m_PreviewHosts.end();)
+	{
+		auto bridge = static_cast<HWND>(GetPropW(*host, PreviewBridge));
+		if (!IsWindow(*host) || !bridge || !GetPropW(bridge, CapsuleOwner))
+		{
+			RestorePreviewHost(*host);
+			host = m_PreviewHosts.erase(host);
+		}
+		else ++host;
+	}
 	for (const auto& [frame, info] : m_Taskbars) RemovePropW(info.window, L"DesktopNook.Capsule.PreviewAligned");
 	for (const auto& [handle, preview] : m_Previews)
 		try { AlignPreview(handle); } catch (const winrt::hresult_error&) {}
@@ -446,72 +509,73 @@ void TaskbarAppearanceService::RefreshPreviews()
 
 void TaskbarAppearanceService::AlignPreview(InstanceHandle handle)
 {
-	auto& preview = m_Previews.at(handle);
-	const auto root = preview.element.XamlRoot();
-	if (!root || preview.element.ActualWidth() < 10 || preview.element.ActualHeight() < 10) return;
-	HWND host = preview.window;
-	{
-		// Newer Explorer builds host the card in a full-screen island.
-		HWND candidate{};
-		while ((candidate = FindWindowExW(nullptr, candidate, L"XamlExplorerHostIslandWindow", nullptr)))
-			if (GetWindowThreadProcessId(candidate, nullptr) == GetCurrentThreadId() && IsWindowVisible(candidate))
-			{ host = candidate; break; }
-	}
-	if (!host || !IsWindowVisible(host)) return;
-	POINT pointer{};
-	if (!GetCursorPos(&pointer)) return;
-	for (const auto& [frame, info] : m_Taskbars)
-	{
-		if (!GetPropW(info.window, CapsuleOwner)) continue;
-		const auto size = reinterpret_cast<std::uintptr_t>(GetPropW(info.window, L"DesktopNook.Capsule.PreviewButtonSize"));
-		const auto origin = reinterpret_cast<std::uintptr_t>(GetPropW(info.window, L"DesktopNook.Capsule.PreviewButtonPosition"));
-		if (!size) continue;
-		RECT button{static_cast<int>(origin), static_cast<int>(origin >> 32), 0, 0};
-		button.right = button.left + static_cast<int>(size);
-		button.bottom = button.top + static_cast<int>(size >> 32);
-		const auto bounds = preview.element.TransformToVisual(root.Content()).TransformBounds(
-			{0, 0, static_cast<float>(preview.element.ActualWidth()), static_cast<float>(preview.element.ActualHeight())});
-		const float scale = static_cast<float>(GetDpiForWindow(info.window)) / 96.f;
-		POINT hostOrigin{};
-		if (!ClientToScreen(host, &hostOrigin)) continue;
-		RECT current{hostOrigin.x + static_cast<int>(bounds.X * scale), hostOrigin.y + static_cast<int>(bounds.Y * scale), 0, 0};
-		current.right = current.left + static_cast<int>(bounds.Width * scale);
-		current.bottom = current.top + static_cast<int>(bounds.Height * scale);
-		if (!PtInRect(&button, pointer) && !PtInRect(&current, pointer)) continue;
-		if (MonitorFromWindow(info.window, MONITOR_DEFAULTTONEAREST) != MonitorFromWindow(host, MONITOR_DEFAULTTONEAREST)) continue;
-		POINT anchor{(button.left + button.right) / 2, button.top - static_cast<int>(5 * scale)};
-		SIZE dimensions{current.right - current.left, current.bottom - current.top};
-		RECT placed{};
-		if (!CalculatePopupWindowPosition(&anchor, &dimensions, TPM_CENTERALIGN | TPM_BOTTOMALIGN | TPM_VERTICAL | TPM_WORKAREA,
-			&button, &placed)) continue;
-		RECT hostBounds{};
-		if (!GetWindowRect(host, &hostBounds)) continue;
-		int x = hostBounds.left + placed.left - current.left;
-		int y = hostBounds.top + placed.top - current.top;
-		if (!GetPropW(host, PreviewBridge))
-		{
-			const auto hostOriginalPosition = static_cast<std::uint64_t>(static_cast<std::uint32_t>(hostBounds.left)) |
-				(static_cast<std::uint64_t>(static_cast<std::uint32_t>(hostBounds.top)) << 32);
-			if (!SetPropW(host, PreviewOrigin, reinterpret_cast<HANDLE>(hostOriginalPosition)) ||
-				!SetPropW(host, PreviewBridge, info.window) ||
-				!SetWindowSubclass(host, KeepPreviewPosition, PreviewSubclassId, 0))
-			{ RestorePreviewHost(host); continue; }
-		}
-		SetPropW(host, PreviewX, reinterpret_cast<HANDLE>(static_cast<INT_PTR>(x + 1000000)));
-		SetPropW(host, PreviewY, reinterpret_cast<HANDLE>(static_cast<INT_PTR>(y + 1000000)));
-		preview.positionedHost = host;
-		if (std::abs(x - hostBounds.left) > 1 || std::abs(y - hostBounds.top) > 1)
-			SetWindowPos(host, nullptr, x, y, 0, 0, SWP_NOSIZE | SWP_NOACTIVATE | SWP_NOZORDER);
-		SetPropW(info.window, L"DesktopNook.Capsule.PreviewCardX", reinterpret_cast<HANDLE>(static_cast<INT_PTR>(current.left + 1000000)));
-		SetPropW(info.window, L"DesktopNook.Capsule.PreviewCardY", reinterpret_cast<HANDLE>(static_cast<INT_PTR>(current.top + 1000000)));
-		SetPropW(info.window, L"DesktopNook.Capsule.PreviewOffsetX", reinterpret_cast<HANDLE>(static_cast<INT_PTR>(placed.left - current.left + 1000000)));
-		SetPropW(info.window, L"DesktopNook.Capsule.PreviewOffsetY", reinterpret_cast<HANDLE>(static_cast<INT_PTR>(placed.top - current.top + 1000000)));
-		SetPropW(info.window, L"DesktopNook.Capsule.PreviewAligned", reinterpret_cast<HANDLE>(host));
-		return;
-	}
-	if (preview.positionedHost) RestorePreview(preview);
+    auto& preview = m_Previews.at(handle);
+    HWND host = GetAncestor(preview.window, GA_ROOT);
+    wchar_t hostClass[128]{};
+    if (!host || !GetClassNameW(host, hostClass, ARRAYSIZE(hostClass)) ||
+        std::wstring_view(hostClass) != L"XamlExplorerHostIslandWindow")
+    {
+        host = nullptr;
+        HWND candidate{};
+        while ((candidate = FindWindowExW(nullptr, candidate, L"XamlExplorerHostIslandWindow", nullptr)))
+            if (GetWindowThreadProcessId(candidate, nullptr) == GetCurrentThreadId()) { host = candidate; break; }
+    }
+    if (!host) return;
+    for (const auto& [frame, info] : m_Taskbars)
+    {
+        POINT target{};
+        if (!PreviewScreenOrigin(info.window, target)) continue;
+        if (MonitorFromWindow(info.window, MONITOR_DEFAULTTONEAREST) != MonitorFromWindow(host, MONITOR_DEFAULTTONEAREST)) continue;
+        RECT hostBounds{};
+        if (!GetWindowRect(host, &hostBounds)) continue;
+        const auto root = preview.element.XamlRoot();
+        RECT button{};
+        RECT placed{};
+        bool positioned = false;
+        if (root && preview.element.ActualWidth() > 10 && preview.element.ActualHeight() > 10 && PreviewButton(info.window, button))
+        {
+            const auto bounds = preview.element.TransformToVisual(root.Content()).TransformBounds(
+                {0, 0, static_cast<float>(preview.element.ActualWidth()), static_cast<float>(preview.element.ActualHeight())});
+            const float scale = static_cast<float>(GetDpiForWindow(info.window)) / 96.f;
+            POINT clientOrigin{};
+            if (!ClientToScreen(host, &clientOrigin)) continue;
+            const POINT anchor{(button.left + button.right) / 2, button.top - static_cast<int>(5 * scale)};
+            const SIZE dimensions{static_cast<LONG>(bounds.Width * scale), static_cast<LONG>(bounds.Height * scale)};
+            if (CalculatePopupWindowPosition(&anchor, &dimensions, TPM_CENTERALIGN | TPM_BOTTOMALIGN | TPM_VERTICAL | TPM_WORKAREA,
+                &button, &placed))
+            {
+                target.x = hostBounds.left + placed.left - clientOrigin.x - static_cast<int>(bounds.X * scale);
+                target.y = hostBounds.top + placed.top - clientOrigin.y - static_cast<int>(bounds.Y * scale);
+                positioned = true;
+                SetPropW(host, PreviewAnchorX, reinterpret_cast<HANDLE>(static_cast<INT_PTR>(anchor.x + 1000000)));
+            }
+        }
+        if (!positioned && GetPropW(host, PreviewX)) continue;
+        SetPropW(host, PreviewX, reinterpret_cast<HANDLE>(static_cast<INT_PTR>(target.x + 1000000)));
+        SetPropW(host, PreviewY, reinterpret_cast<HANDLE>(static_cast<INT_PTR>(target.y + 1000000)));
+        if (!GetPropW(host, PreviewBridge))
+        {
+            const auto original = static_cast<std::uint64_t>(static_cast<std::uint32_t>(hostBounds.left)) |
+                (static_cast<std::uint64_t>(static_cast<std::uint32_t>(hostBounds.top)) << 32);
+            if (!SetPropW(host, PreviewOrigin, reinterpret_cast<HANDLE>(original)) ||
+                !SetPropW(host, PreviewBridge, info.window) || !SetWindowSubclass(host, KeepPreviewPosition, PreviewSubclassId, 0))
+            { RestorePreviewHost(host); continue; }
+        }
+        preview.positionedHost = host;
+        m_PreviewHosts.insert(host);
+        if (hostBounds.left != target.x || hostBounds.top != target.y)
+            SetWindowPos(host, nullptr, target.x, target.y, 0, 0, SWP_NOSIZE | SWP_NOACTIVATE | SWP_NOZORDER);
+        if (positioned)
+        {
+            SetPropW(info.window, L"DesktopNook.Capsule.PreviewCardX", reinterpret_cast<HANDLE>(static_cast<INT_PTR>(placed.left + 1000000)));
+            SetPropW(info.window, L"DesktopNook.Capsule.PreviewCardY", reinterpret_cast<HANDLE>(static_cast<INT_PTR>(placed.top + 1000000)));
+            SetPropW(info.window, L"DesktopNook.Capsule.PreviewOffsetX", reinterpret_cast<HANDLE>(1000000));
+            SetPropW(info.window, L"DesktopNook.Capsule.PreviewOffsetY", reinterpret_cast<HANDLE>(1000000));
+        }
+        SetPropW(info.window, L"DesktopNook.Capsule.PreviewAligned", host);
+        return;
+    }
 }
-
 TaskbarAppearanceService::TaskbarAppearanceService() :
 	m_RegisterCookie(0),
 	m_XamlThreadQueue(winrt::Windows::System::DispatcherQueue::GetForCurrentThread())
@@ -657,6 +721,8 @@ catch (...)
 
 HRESULT TaskbarAppearanceService::RestoreAllTaskbarsToDefault() try
 {
+	for (HWND host : m_PreviewHosts) RestorePreviewHost(host);
+	m_PreviewHosts.clear();
 	for (auto& [handle, preview] : m_Previews) RestorePreview(preview);
 	for (const auto& [handle, info] : m_Taskbars)
 	{
@@ -802,6 +868,8 @@ void TaskbarAppearanceService::UnregisterTaskbar(InstanceHandle frameHandle)
 
 TaskbarAppearanceService::~TaskbarAppearanceService()
 {
+	for (HWND host : m_PreviewHosts) RestorePreviewHost(host);
+	m_PreviewHosts.clear();
 	while (!m_Previews.empty()) UnregisterPreview(m_Previews.begin()->first);
 	if (m_PackageCatalog)
 	{

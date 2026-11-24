@@ -26,6 +26,7 @@ internal sealed class NativeTaskbarShape
     private readonly Dictionary<nint, PendingResize> _pendingWidths = new();
     private readonly Dictionary<nint, int> _calibrating = new();
     private readonly NativeTaskbarHover _hover = new();
+    private readonly NativeTaskbarAnimation _animation = new();
     private readonly NativeTaskbarInfoBall _infoBall = new();
     private Task<Dictionary<nint, NativeTaskbarContents.Measurement>>? _pendingMeasure;
     private int _revision;
@@ -100,6 +101,7 @@ internal sealed class NativeTaskbarShape
         _settling = false;
         _revision++;
         _hover.Dispose();
+        _animation.Stop();
         _infoBall.Stop();
         _pendingWidths.Clear();
         _calibrating.Clear();
@@ -162,6 +164,7 @@ internal sealed class NativeTaskbarShape
                 _pendingWidths.Remove(bridge);
                 _calibrating.Remove(bridge);
                 _hover.Remove(taskbar);
+                _animation.Remove(bridge);
                 continue;
             }
             if (!measurements.TryGetValue(bridge, out var contents)) continue;
@@ -240,6 +243,7 @@ internal sealed class NativeTaskbarShape
                 Restore(taskbar, bridge, owner);
                 _owned.Remove(bridge);
                 _hover.Remove(taskbar);
+                _animation.Remove(bridge);
                 continue;
             }
             _owned[bridge] = new(taskbar, desired, minimum, normalSlot, contents.ChromeCount, normalChrome, count, contents.HasOverflow);
@@ -269,6 +273,7 @@ internal sealed class NativeTaskbarShape
             nint taskbar = _owned[bridge].Parent;
             Restore(taskbar, bridge, owner);
             _hover.Remove(taskbar);
+            _animation.Remove(bridge);
             _pendingWidths.Remove(bridge);
             _calibrating.Remove(bridge);
             _owned.Remove(bridge);
@@ -280,6 +285,7 @@ internal sealed class NativeTaskbarShape
         if (GetWindowRect(taskbar, out var shell) && GetWindowRect(bridge, out var shape))
         {
             var visible = shape;
+            _animation.Update(bridge, contents);
             visible.Right -= (int)GetProp(bridge, TrimAppliedProperty);
             _hover.Update(taskbar, shell.ToRect(), visible.ToRect(), contents, GetDpiForWindow(taskbar));
             if (contents.TrayStart is double tray && contents.LeftEnd is double end && tray >= end &&

@@ -1119,6 +1119,17 @@ void TaskbarAttributeWorker::InsertTaskbar(HMONITOR mon, Window window)
 			LastErrorHandle(spdlog::level::critical, L"Failed to set hook.");
 		}
 	}
+	if (wil::unique_hhook hook{m_InjectTaskbarAnimationHook(window)})
+	{
+		m_Hooks.push_back(std::move(hook));
+	}
+	wchar_t taskbarClass[64]{};
+	GetClassNameW(window, taskbarClass, ARRAYSIZE(taskbarClass));
+	const auto desktop = GetShellWindow();
+	if (std::wstring_view(taskbarClass) == L"Shell_TrayWnd" && desktop &&
+		GetWindowThreadProcessId(desktop, nullptr) != GetWindowThreadProcessId(window, nullptr))
+		if (wil::unique_hhook hook{m_InjectTaskbarAnimationHook(desktop)})
+			m_Hooks.push_back(std::move(hook));
 }
 
 BOOL TaskbarAttributeWorker::MonitorEnumProc(HMONITOR hMonitor, HDC, LPRECT lprcMonitor, LPARAM dwData)
@@ -1263,6 +1274,7 @@ TaskbarAttributeWorker::TaskbarAttributeWorker(ConfigManager &cfgManager, HINSTA
 	m_LastExplorerPid(0),
 	m_HookDll(storageFolder, cfgManager.GetConfig().CopyDlls.value_or(true), L"ExplorerHooks.dll"),
 	m_InjectExplorerHook(m_HookDll.GetProc<PFN_INJECT_EXPLORER_HOOK>("InjectExplorerHook")),
+	m_InjectTaskbarAnimationHook(m_HookDll.GetProc<PFN_INJECT_EXPLORER_HOOK>("InjectTaskbarAnimationHook")),
 	m_TAPDll(storageFolder, cfgManager.GetConfig().CopyDlls.value_or(true), L"ExplorerTAP.dll"),
 	m_InjectExplorerTAP(m_TAPDll.GetProc<PFN_INJECT_EXPLORER_TAP>("InjectExplorerTAP")),
 	m_IsWindows11(win32::IsAtLeastBuild(22000)),

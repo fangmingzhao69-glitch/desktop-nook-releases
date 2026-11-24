@@ -126,12 +126,13 @@ internal static class ShortcutInstaller
     }
 #endif
 
-    internal static void SetWindowIdentity(IntPtr window, string program, string? iconLocation = null, bool attachCleanup = true)
+    internal static void SetWindowIdentity(IntPtr window, string program, string? iconLocation = null, bool attachCleanup = true,
+        bool notifyShellIcon = false)
     {
         var iid = typeof(IPropertyStore).GUID;
         Marshal.ThrowExceptionForHR(SHGetPropertyStoreForWindow(window, ref iid, out var store));
         if (attachCleanup) System.Windows.Interop.HwndSource.FromHwnd(window)?.AddHook(ClearWindowIdentity);
-        try { UpdateIdentity(store, iconLocation ?? program + ",0", program, ""); }
+        try { UpdateIdentity(store, iconLocation ?? program + ",0", program, "", notifyShellIcon); }
         finally { Marshal.FinalReleaseComObject(store); }
     }
 
@@ -155,10 +156,11 @@ internal static class ShortcutInstaller
         return IntPtr.Zero;
     }
 
-    private static bool UpdateIdentity(IPropertyStore store, string icon, string program, string arguments)
+    private static bool UpdateIdentity(IPropertyStore store, string icon, string program, string arguments, bool notifyShellIcon = false)
     {
         string command = "\"" + program + "\"" + (arguments.Length > 0 ? " " + arguments : "");
-        if (Matches(2, command) && Matches(3, icon) && Matches(4, DisplayName) && Matches(5, ApplicationId))
+        bool iconChanged = !Matches(3, icon);
+        if (!notifyShellIcon && Matches(2, command) && Matches(3, icon) && Matches(4, DisplayName) && Matches(5, ApplicationId))
             return false;
 
         Set(2, command);
@@ -179,9 +181,9 @@ internal static class ShortcutInstaller
 
         void Set(uint id, string text)
         {
-            // Reassigning an unchanged AppUserModelID asks Explorer to rebuild
-            // the taskbar association even when only the icon has changed.
-            if (Matches(id, text)) return;
+            // Notify the taskbar for a changed icon or identity while leaving
+            // already-correct relaunch metadata untouched.
+            if (Matches(id, text) && !(id == 5 && (iconChanged || notifyShellIcon))) return;
             var key = new PropertyKey { Format = AppUserModelFormat, Id = id };
             var value = new Variant { Type = 31, Text = Marshal.StringToCoTaskMemUni(text) };
             try { store.SetValue(ref key, ref value); }

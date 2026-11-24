@@ -145,6 +145,7 @@ private:
 	// Hook DLL
 	LoadableDll m_HookDll;
 	PFN_INJECT_EXPLORER_HOOK m_InjectExplorerHook;
+	PFN_INJECT_EXPLORER_HOOK m_InjectTaskbarAnimationHook;
 	std::vector<wil::unique_hhook> m_Hooks;
 
 	// TAP DLL

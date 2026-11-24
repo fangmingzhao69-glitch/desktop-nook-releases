@@ -11,3 +11,11 @@ __declspec(dllimport)
 HHOOK InjectExplorerHook(HWND window) noexcept;
 
 using PFN_INJECT_EXPLORER_HOOK = decltype(&InjectExplorerHook);
+
+extern "C"
+#ifdef EXPLORERHOOKS_EXPORTS
+__declspec(dllexport)
+#else
+__declspec(dllimport)
+#endif
+HHOOK InjectTaskbarAnimationHook(HWND window) noexcept;
