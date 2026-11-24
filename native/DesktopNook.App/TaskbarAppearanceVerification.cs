@@ -274,6 +274,9 @@ internal static class TaskbarAppearanceVerification
                     var scenes = Find<ComboBox>(dialog).Single(item => AutomationProperties.GetAutomationId(item) == "AppearanceScene");
                     var styles = Find<ComboBox>(dialog).Single(item => AutomationProperties.GetAutomationId(item) == "AppearanceStyle");
                     var layout = Find<ComboBox>(dialog).Single(item => AutomationProperties.GetAutomationId(item) == "NativeTaskbarLayout");
+                    var automaticBall = Find<CheckBox>(dialog).Single(item => AutomationProperties.GetAutomationId(item) == "Taskbar-InfoBall-Automatic");
+                    Check(automaticBall.IsVisible && !automaticBall.IsEnabled && automaticBall.IsChecked == false,
+                        "自动连接信息球设置可见，沙箱禁止登记管理员定位任务");
                     Check(layout.Items.Cast<string>().SequenceEqual(new[] { "系统布局", "胶囊形态" }) &&
                         !Find<Expander>(dialog).Any(item => Equals(item.Header, "细线与窗口规则")),
                         "任务栏形态使用原生布局设置");

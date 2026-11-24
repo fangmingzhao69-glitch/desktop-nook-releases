@@ -1,0 +1,16 @@
+{
+  "passed": 10,
+  "failure": null,
+  "checks": [
+    "The release embeds a separate executable helper.",
+    "The helper task has no logon, boot, timed or arbitrary event trigger.",
+    "Only the current user\u0027s existing interactive session is used, with no stored password.",
+    "Only the dedicated task requests the required window permissions.",
+    "There is exactly one fixed executable action.",
+    "The task invokes the protected helper directly, without PowerShell, a shell or caller-supplied arguments.",
+    "Repeated requests cannot spawn concurrent positioning helpers.",
+    "A long-running capsule session is not interrupted by a scheduler timeout.",
+    "The ordinary user cannot rewrite the privileged task, its owner or its access controls.",
+    "Sandbox configuration cannot register a privileged task."
+  ]
+}

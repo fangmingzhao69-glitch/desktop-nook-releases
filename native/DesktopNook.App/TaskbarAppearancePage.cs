@@ -71,7 +71,7 @@ internal sealed class TaskbarAppearancePage : UserControl
         var appearanceCard = new StackPanel();
         _layout.ToolTip = "开始按钮、应用和托盘合在一起，宽度随图标数量自动调整。";
         var layoutOptions = new DockPanel();
-        var assistBall = MakeButton("授权定位信息球…", () => _ = RunAsync(async () =>
+        var assistBall = MakeButton("临时定位信息球…", () => _ = RunAsync(async () =>
         {
             if (App.IsSandbox) throw new InvalidOperationException("隔离模式不请求管理员权限。");
             _message.Text = await NativeTaskbarInfoBall.RequestAssistanceAsync();
@@ -81,6 +81,21 @@ internal sealed class TaskbarAppearancePage : UserControl
         layoutOptions.Children.Add(assistBall);
         layoutOptions.Children.Add(_layout);
         appearanceCard.Children.Add(FieldRow("任务栏形态", layoutOptions));
+        var automaticBall = new CheckBox
+        {
+            Content = "自动连接信息球",
+            Margin = new Thickness(14, 0, 0, 0),
+            IsChecked = !App.IsSandbox && NativeInfoBallAutomatic.Enabled,
+            IsEnabled = !App.IsSandbox,
+            ToolTip = "首次启用需一次 Windows 授权。以后按需启动定位助手，折页主程序保持普通权限；关闭后移除授权任务。"
+        };
+        AutomationProperties.SetAutomationId(automaticBall, "Taskbar-InfoBall-Automatic");
+        automaticBall.Click += (_, _) => _ = RunAsync(async () =>
+        {
+            try { _message.Text = await NativeInfoBallAutomatic.ConfigureAsync(automaticBall.IsChecked == true); }
+            finally { automaticBall.IsChecked = NativeInfoBallAutomatic.Enabled; }
+        });
+        switches.Children.Add(automaticBall);
         appearanceCard.Children.Add(FieldRow("样式", _style));
         var colorControls = new StackPanel { Orientation = Orientation.Horizontal };
         _colorSample.BorderBrush = ThemePalette.Brush("OutlineBrush");

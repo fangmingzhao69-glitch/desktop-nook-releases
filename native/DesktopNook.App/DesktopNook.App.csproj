@@ -1,7 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
     <OutputType>WinExe</OutputType><TargetFramework>net10.0-windows</TargetFramework><UseWPF>true</UseWPF>
-    <AssemblyName>DesktopNook</AssemblyName><RootNamespace>DesktopNook.App</RootNamespace><Version>0.21.18</Version><Product>DesktopNook</Product><Title>折页</Title><AssemblyTitle>折页</AssemblyTitle><Description>折页 — 常用与灵感，折页之间。</Description>
+    <AssemblyName>DesktopNook</AssemblyName><RootNamespace>DesktopNook.App</RootNamespace><Version>0.21.19</Version><Product>DesktopNook</Product><Title>折页</Title><AssemblyTitle>折页</AssemblyTitle><Description>折页 — 常用与灵感，折页之间。</Description>
     <ApplicationIcon>Assets\AppIcon.ico</ApplicationIcon><ApplicationManifest>app.manifest</ApplicationManifest>
     <GiteeMirrorRepository>zfmdx/desktop-nook-releases</GiteeMirrorRepository>
   </PropertyGroup>
@@ -14,12 +14,18 @@
     <Compile Include="LiveVerification.cs;OnlineUpdateVerification.cs;PayloadVerification.cs;UpdateVerification.cs" />
   </ItemGroup>
   <ItemGroup>
+    <ProjectReference Include="..\DesktopNook.InfoBallHelper\DesktopNook.InfoBallHelper.csproj" ReferenceOutputAssembly="false" />
+    <EmbeddedResource Include="..\artifacts\info-ball-helper\DesktopNook.InfoBallHelper.exe" LogicalName="DesktopNook.InfoBallHelper" />
     <EmbeddedResource Include="..\..\LICENSE" LogicalName="DesktopNook.GplLicense" />
     <EmbeddedResource Include="..\artifacts\native-shape\Qingxia-TaskbarCore-win-x64.zip"
       LogicalName="DesktopNook.NativeTaskbarPackage"
       Condition="Exists('..\artifacts\native-shape\Qingxia-TaskbarCore-win-x64.zip')" />
     <AssemblyMetadata Include="GiteeMirrorRepository" Value="$(GiteeMirrorRepository)" Condition="'$(GiteeMirrorRepository)' != ''" />
   </ItemGroup>
+  <Target Name="PublishInfoBallHelper" BeforeTargets="PrepareResources" Condition="'$(MSBuildProjectName)' == 'DesktopNook.App' and '$(DesignTimeBuild)' != 'true'">
+    <MSBuild Projects="..\DesktopNook.InfoBallHelper\DesktopNook.InfoBallHelper.csproj" Targets="Publish"
+      Properties="Configuration=$(Configuration);RuntimeIdentifier=win-x64;PublishSingleFile=true;SelfContained=false;PublishDir=$(MSBuildThisFileDirectory)..\artifacts\info-ball-helper\" />
+  </Target>
   <ItemGroup>
     <Compile Remove="MainWindow.FloatingTaskbar.cs;FloatingTaskbar*.cs;TaskbarSettingsPage.cs;DockScreens.cs" />
   </ItemGroup>

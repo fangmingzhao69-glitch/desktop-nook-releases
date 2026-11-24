@@ -22,7 +22,16 @@ internal static class Maintenance
             }
             return 0;
         }
-        if(command=="remove-shortcut"){if(!sandbox)ShortcutInstaller.RemoveOwned();return 0;}
+        if(command=="remove-shortcut")
+        {
+            if(!sandbox)
+            {
+                if (NativeInfoBallAutomatic.HasAuthorization)
+                    NativeInfoBallAutomatic.ConfigureAsync(false).GetAwaiter().GetResult();
+                ShortcutInstaller.RemoveOwned();
+            }
+            return 0;
+        }
         using var mutex=new Mutex(false,"Local\\DesktopNook-"+signature);bool owned=false;
         try
         {

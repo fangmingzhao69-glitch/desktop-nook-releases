@@ -20,6 +20,13 @@ public partial class App : Application
     {
         try
         {
+            if (e.Args is ["--configure-info-ball-auto", string setupParent, string setupStart, string setupAction])
+            {
+                Shutdown(int.TryParse(setupParent, out int parentId) && long.TryParse(setupStart, out long creation) &&
+                    setupAction is "enable" or "disable"
+                    ? NativeInfoBallAutomatic.ConfigureElevated(parentId, creation, setupAction == "enable") : 64);
+                return;
+            }
             if (e.Args is ["--align-tencent-info-ball", string host])
             {
                 Shutdown(int.TryParse(host, out int owner) && owner > 0 ? NativeTaskbarInfoBall.RunAssistant(owner) : 64);
@@ -48,6 +55,12 @@ public partial class App : Application
                 || arg is "--billiards-parent-probe" or "--billiards-perf-test" or "--verification-marker" or "--native-taskbar-shape-parent-probe" or "--native-taskbar-capsule-icon-probe");
 #if NOOK_UI_VERIFICATION
             if (interactiveVerification && !e.Args.Contains("--sandbox")) throw new IOException("界面自检必须使用沙箱。");
+            if (e.Args is ["--sandbox", string ballTestRoot, "--info-ball-auto-self-test"])
+            {
+                IsSandbox = true;
+                Shutdown(InfoBallAutomaticVerification.Run(Path.GetFullPath(ballTestRoot)));
+                return;
+            }
             if (e.Args is ["--sandbox", string capsuleProbeRoot, "--native-taskbar-capsule-icon-probe"])
             {
                 NativeTaskbarShapeVerification.ShowIconProbe(Path.GetFullPath(capsuleProbeRoot));

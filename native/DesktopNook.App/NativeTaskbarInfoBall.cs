@@ -15,6 +15,8 @@ internal sealed class NativeTaskbarInfoBall
     private const uint MoveFlags = 0x4215;
     private const string AssistedWidth = "DesktopNook.Capsule.InfoBallWidth";
     private const string AssistedAligned = "DesktopNook.Capsule.InfoBallAligned";
+    internal const string AssistedProcess = "DesktopNook.Capsule.InfoBallProcess";
+    internal const string AssistedStop = "DesktopNook.Capsule.InfoBallStop";
     private const string CapsuleOwner = "DesktopNook.NativeTaskbarShape.Owner";
     private const string BridgeClass = "Windows.UI.Composition.DesktopWindowContentBridge";
     private nint _window;
@@ -22,6 +24,7 @@ internal sealed class NativeTaskbarInfoBall
     private nint _refusedWindow;
     private long _nextSearch;
 
+#if !INFOBALL_HELPER
     internal static async Task<string> RequestAssistanceAsync()
     {
         var taskbar = FindWindowEx(0, 0, "Shell_TrayWnd", null);
@@ -41,8 +44,9 @@ internal sealed class NativeTaskbarInfoBall
         }
         throw new IOException("没有连接到可移动的信息球，请确认电脑管家的任务栏信息球已显示。");
     }
+#endif
 
-    internal static int RunAssistant(int owner)
+    internal static int RunAssistant(int owner, string? expectedProgram = null)
     {
         var ball = new NativeTaskbarInfoBall();
         var taskbar = FindWindowEx(0, 0, "Shell_TrayWnd", null);
@@ -52,15 +56,17 @@ internal sealed class NativeTaskbarInfoBall
         {
             using var parent = Process.GetProcessById(owner);
             if (bridge == 0 || GetProp(bridge, CapsuleOwner) != owner ||
-                !string.Equals(parent.MainModule?.FileName, Environment.ProcessPath, StringComparison.OrdinalIgnoreCase) ||
+                !string.Equals(parent.MainModule?.FileName, expectedProgram ?? Environment.ProcessPath, StringComparison.OrdinalIgnoreCase) ||
                 parent.SessionId != Process.GetCurrentProcess().SessionId || GetProp(bridge, AssistedWidth) != 0)
                 return 1;
             long lastAligned = Environment.TickCount64;
             while (!parent.HasExited && GetProp(bridge, CapsuleOwner) == owner && GetWindowRect(bridge, out var frame))
             {
+                if (GetProp(bridge, AssistedStop) == Environment.ProcessId) break;
                 int width = ball.Acquire(taskbar);
                 if (width == 0) return 2;
                 if (!reserved && !(reserved = SetProp(bridge, AssistedWidth, width))) return 3;
+                SetProp(bridge, AssistedProcess, Environment.ProcessId);
                 if (NativeTaskbarContents.Measure(taskbar) is { TrayStart: double tray, LeftEnd: double end } &&
                     end >= frame.Left && tray <= frame.Right)
                 {
@@ -82,10 +88,12 @@ internal sealed class NativeTaskbarInfoBall
         finally
         {
             ball.Stop();
-            if (reserved)
+            if (reserved && GetProp(bridge, AssistedProcess) == Environment.ProcessId)
             {
                 RemoveProp(bridge, AssistedAligned);
                 RemoveProp(bridge, AssistedWidth);
+                RemoveProp(bridge, AssistedProcess);
+                RemoveProp(bridge, AssistedStop);
             }
         }
     }
@@ -93,7 +101,12 @@ internal sealed class NativeTaskbarInfoBall
     internal int WidthFor(nint taskbar)
     {
         int assisted = (int)GetProp(FindWindowEx(taskbar, 0, BridgeClass, null), AssistedWidth);
-        return assisted is >= 22 and <= 90 ? assisted : Acquire(taskbar);
+        if (assisted is >= 22 and <= 90) return assisted;
+        int width = Acquire(taskbar);
+#if !INFOBALL_HELPER
+        if (width == 0 && _refusedWindow != 0) NativeInfoBallAutomatic.TryStart();
+#endif
+        return width;
     }
 
     private int Acquire(nint taskbar)
