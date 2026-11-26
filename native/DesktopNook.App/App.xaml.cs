@@ -66,6 +66,14 @@ public partial class App : Application
                 NativeTaskbarShapeVerification.ShowIconProbe(Path.GetFullPath(capsuleProbeRoot));
                 return;
             }
+            if (e.Args is ["--sandbox", string groupProbeRoot, "--native-taskbar-group-probe" or "--native-taskbar-group-self-test"])
+            {
+                IsSandbox = true;
+                GroupPreviewVerification.ShowProbe(Path.GetFullPath(groupProbeRoot));
+                if (e.Args[2] == "--native-taskbar-group-self-test")
+                    Dispatcher.BeginInvoke(async () => await GroupPreviewVerification.Run(Path.GetFullPath(groupProbeRoot)));
+                return;
+            }
             if (e.Args.Contains("--native-taskbar-shape-self-test") || e.Args.Contains("--native-taskbar-shape-parent-probe"))
             {
                 int sandbox = Array.IndexOf(e.Args, "--sandbox");
@@ -189,6 +197,7 @@ public partial class App : Application
 #if NOOK_UI_VERIFICATION
             if(e.Args.Contains("--brand-self-test"))Dispatcher.BeginInvoke(async()=>{var checks=new List<string>();string failure="";try{window.KeepOpenForVerification=true;await BrandVerification.Run(window,root,checks);}catch(Exception ex){failure=ex.ToString();}File.WriteAllText(Path.Combine(root,"brand-verification.json"),System.Text.Json.JsonSerializer.Serialize(new{passed=checks.Count,failure,checks}));Shutdown(failure.Length==0?0:1);},System.Windows.Threading.DispatcherPriority.Loaded);
             if (IsSandbox && e.Args.Contains("--notes-self-test")) Dispatcher.BeginInvoke(async () => await NotesVerification.Run(window, root), System.Windows.Threading.DispatcherPriority.Loaded);
+            if (IsSandbox && e.Args.Contains("--features-self-test")) Dispatcher.BeginInvoke(async () => await FeatureVerification.Run(window, root), System.Windows.Threading.DispatcherPriority.Loaded);
             var taskbarTest = Array.IndexOf(e.Args, "--taskbar-appearance-self-test");
             if (IsSandbox && taskbarTest >= 0)
             {

@@ -271,6 +271,10 @@ internal static class TaskbarAppearanceVerification
                         buttons.Contains("选颜色…") && buttons.Contains("恢复系统外观"),
                         "任务栏外观没有导入入口，保留手动选色和恢复");
 
+                    var advanced = Find<Expander>(dialog).Single(item => AutomationProperties.GetAutomationId(item) == "AppearanceAdvanced");
+                    Check(!advanced.IsExpanded, "场景和信息球选项默认收进高级设置");
+                    advanced.IsExpanded = true;
+                    dialog.UpdateLayout();
                     var scenes = Find<ComboBox>(dialog).Single(item => AutomationProperties.GetAutomationId(item) == "AppearanceScene");
                     var styles = Find<ComboBox>(dialog).Single(item => AutomationProperties.GetAutomationId(item) == "AppearanceStyle");
                     var layout = Find<ComboBox>(dialog).Single(item => AutomationProperties.GetAutomationId(item) == "NativeTaskbarLayout");
@@ -300,6 +304,7 @@ internal static class TaskbarAppearanceVerification
                     scenes.SelectedIndex = 2;
                     styles.SelectedIndex = 3;
                     blur.Value = 34;
+                    blur.BringIntoView();
                     Check(enabled.IsChecked == true, "直接选择未启用场景的外观会启用该场景");
                     scenes.SelectedIndex = 0;
                     Check(styles.SelectedIndex == 1, "修改最大化场景后，桌面样式独立保持");
@@ -307,14 +312,16 @@ internal static class TaskbarAppearanceVerification
                     Check(blur.Value == 34 && styles.SelectedIndex == 3 && enabled.IsChecked == true,
                         "切换场景保留未应用的模糊半径、样式及启用开关");
                     dialog.UpdateLayout();
-                    Check(SliderFits(blur) && SliderFits(opacity) && blur.Template.FindName("PART_Track", blur) != null,
-                        "模糊场景的不透明度和模糊半径可同时查看，保留原生滑块轨道");
+                    blur.BringIntoView();
+                    dialog.UpdateLayout();
+                    Check(blur.IsVisible && blur.ActualWidth > 100 && blur.Template.FindName("PART_Track", blur) != null,
+                        "高级设置保留可操作的模糊半径和原生滑块轨道");
                     string theme = ThemePalette.Mode;
                     try
                     {
                         ThemePalette.Apply("dark");
                         dialog.UpdateLayout();
-                        Check(ThemePalette.IsDark && SliderFits(blur) && Bounds(apply).Top >= Bounds(scroll).Bottom,
+                        Check(ThemePalette.IsDark && blur.IsVisible && Bounds(apply).Top >= Bounds(scroll).Bottom,
                             "深色主题下维持完整滑块和底部操作区");
                         SavePage(dialog, "taskbar-appearance-dark.png");
                     }
@@ -346,6 +353,8 @@ internal static class TaskbarAppearanceVerification
             {
                 try
                 {
+                    uniformDialog.UpdateLayout();
+                    Find<Expander>(uniformDialog).Single(item => AutomationProperties.GetAutomationId(item) == "AppearanceAdvanced").IsExpanded = true;
                     uniformDialog.UpdateLayout();
                     Check(Find<TextBlock>(uniformDialog).Any(text => text.Text.Contains("窗口最大化") &&
                         text.Text.Contains("替代桌面外观")), "桌面页面明确提示可能覆盖桌面的场景");

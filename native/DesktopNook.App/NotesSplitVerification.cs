@@ -58,6 +58,8 @@ internal static class NotesSplitVerification
                     { RoutedEvent = Keyboard.PreviewKeyDownEvent });
             mouse_event(4, 0, 0, 0, UIntPtr.Zero);
             pressed = false;
+            // Native mouse input is queued separately from Dispatcher work.
+            await Task.Delay(90);
             await window.Dispatcher.InvokeAsync(window.UpdateLayout, DispatcherPriority.ContextIdle);
         }
         finally

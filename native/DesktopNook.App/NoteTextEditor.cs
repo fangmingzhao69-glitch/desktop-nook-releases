@@ -11,7 +11,7 @@ namespace DesktopNook.App;
 internal sealed class NoteTextEditor : RichTextBox
 {
     public NoteTextEditor(string text, NoteStrikeRange[]? strikes, Action<List<NoteTask>>? pasteTasks = null,
-        NoteHighlightRange[]? highlights = null)
+        NoteHighlightRange[]? highlights = null, NoteBoldRange[]? bolds = null)
     {
         FontSize = 12;
         Padding = new Thickness(4);
@@ -32,6 +32,9 @@ internal sealed class NoteTextEditor : RichTextBox
             start = mark.Start + mark.Length;
         }
         AddText(paragraph, text[start..], false);
+        foreach (var mark in bolds ?? [])
+            new TextRange(PositionAt(mark.Start), PositionAt(mark.Start + mark.Length))
+                .ApplyPropertyValue(TextElement.FontWeightProperty, FontWeights.Bold);
         foreach (var mark in highlights ?? [])
         {
             var range = new TextRange(PositionAt(mark.Start), PositionAt(mark.Start + mark.Length));
@@ -105,6 +108,45 @@ internal sealed class NoteTextEditor : RichTextBox
         if (IsReadOnly || Selection.IsEmpty) return;
         Selection.ApplyPropertyValue(Inline.TextDecorationsProperty,
             SelectionIsStruck() ? new TextDecorationCollection() : TextDecorations.Strikethrough);
+    }
+
+    internal bool SelectionIsBold()
+    {
+        var (start, length) = CharacterSelection();
+        if (length == 0) return false;
+        int end = start + length, cursor = start;
+        foreach (var range in ReadBolds() ?? [])
+        {
+            if (range.Start + range.Length <= cursor) continue;
+            if (range.Start >= end) break;
+            if (range.Start > cursor && !PlainText.AsSpan(cursor, range.Start - cursor).Trim("\r\n").IsEmpty) return false;
+            cursor = Math.Min(end, range.Start + range.Length);
+            if (cursor == end) return true;
+        }
+        return cursor > start && PlainText.AsSpan(cursor, end - cursor).Trim("\r\n").IsEmpty;
+    }
+
+    internal void ToggleBold()
+    {
+        if (IsReadOnly || Selection.IsEmpty) return;
+        Selection.ApplyPropertyValue(TextElement.FontWeightProperty, SelectionIsBold() ? FontWeights.Normal : FontWeights.Bold);
+    }
+
+    internal NoteBoldRange[]? ReadBolds()
+    {
+        var ranges = new List<NoteBoldRange>();
+        int offset = 0;
+        foreach (var segment in Segments())
+        {
+            if (segment.IsRun && segment.Start.Parent is Run run && run.FontWeight.ToOpenTypeWeight() >= 600 && segment.Text.Length > 0)
+            {
+                if (ranges.Count > 0 && ranges[^1].Start + ranges[^1].Length == offset)
+                    ranges[^1] = ranges[^1] with { Length = ranges[^1].Length + segment.Text.Length };
+                else ranges.Add(new(offset, segment.Text.Length));
+            }
+            offset += segment.Text.Length;
+        }
+        return ranges.Count == 0 ? null : ranges.ToArray();
     }
 
     internal void Highlight(string? color)

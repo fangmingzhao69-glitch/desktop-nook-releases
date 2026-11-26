@@ -4,18 +4,20 @@ namespace DesktopNook.Core;
 
 public static class NotesMarkdown
 {
-    private static string Formatted(string text, NoteStrikeRange[]? strikes, NoteHighlightRange[]? highlights)
+    private static string Formatted(string text, NoteStrikeRange[]? strikes, NoteHighlightRange[]? highlights, NoteBoldRange[]? bolds)
     {
-        if (highlights is not { Length: > 0 }) return WithStrikes(text, strikes);
+        if (highlights is not { Length: > 0 } && bolds is not { Length: > 0 }) return WithStrikes(text, strikes);
         var boundaries = new SortedSet<int> { 0, text.Length };
-        foreach (var range in highlights) { boundaries.Add(range.Start); boundaries.Add(range.Start + range.Length); }
+        foreach (var range in highlights ?? []) { boundaries.Add(range.Start); boundaries.Add(range.Start + range.Length); }
+        foreach (var range in bolds ?? []) { boundaries.Add(range.Start); boundaries.Add(range.Start + range.Length); }
         foreach (var range in strikes ?? []) { boundaries.Add(range.Start); boundaries.Add(range.Start + range.Length); }
         var output = new StringBuilder();
         var points = boundaries.ToArray();
         for (int i = 0; i + 1 < points.Length; i++)
         {
             int start = points[i], length = points[i + 1] - start;
-            var highlight = highlights.FirstOrDefault(range => range.Start <= start && range.Start + range.Length >= start + length);
+            var highlight = (highlights ?? []).FirstOrDefault(range => range.Start <= start && range.Start + range.Length >= start + length);
+            bool bold = (bolds ?? []).Any(range => range.Start <= start && range.Start + range.Length >= start + length);
             bool struck = (strikes ?? []).Any(range => range.Start <= start && range.Start + range.Length >= start + length);
             var lines = text.Substring(start, length).ReplaceLineEndings("\n").Split('\n');
             for (int line = 0; line < lines.Length; line++)
@@ -24,7 +26,9 @@ public static class NotesMarkdown
                 if (lines[line].Length == 0) continue;
                 if (highlight.Length > 0) output.Append("<mark style=\"background-color:").Append(highlight.Color).Append("\">");
                 if (struck) output.Append("<s>");
+                if (bold) output.Append("<strong>");
                 output.Append(System.Net.WebUtility.HtmlEncode(lines[line]));
+                if (bold) output.Append("</strong>");
                 if (struck) output.Append("</s>");
                 if (highlight.Length > 0) output.Append("</mark>");
             }
@@ -69,10 +73,10 @@ public static class NotesMarkdown
             output.Append(new string('#', level)).Append(' ').AppendLine(Heading(record.Title));
             if (record.Archived) output.AppendLine("（已归档）");
             output.AppendLine();
-            if (record.Kind == "text") output.AppendLine(Formatted(record.Text, record.BodyStrikes, record.BodyHighlights));
+            if (record.Kind == "text") output.AppendLine(Formatted(record.Text, record.BodyStrikes, record.BodyHighlights, record.BodyBolds));
             else foreach (var task in record.TasksInDisplayOrder())
             {
-                var lines = Formatted(task.Text, task.Strikes, task.Highlights).ReplaceLineEndings("\n").Split('\n');
+                var lines = Formatted(task.Text, task.Strikes, task.Highlights, task.Bolds).ReplaceLineEndings("\n").Split('\n');
                 output.Append(task.Done ? "- [x] " : "- [ ] ").AppendLine(lines[0]);
                 foreach (var line in lines.Skip(1)) output.Append("      ").AppendLine(line);
             }

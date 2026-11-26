@@ -256,7 +256,7 @@ internal static class NotesVerification
             var disposable = TaskEditors(checklist)[0];
             var editMenu = OpenEditorMenu(disposable);
             Check(editMenu.Items.OfType<MenuItem>().Select(m=>m.Header?.ToString()).SequenceEqual(
-                ["剪切","复制","粘贴","添加删除线","删除此项"]), "明细右键保持统一菜单并包含删除线和删除");
+                ["剪切","复制","粘贴","字体加粗","添加删除线","文字背景色","删除此项"]), "明细右键保留编辑、加粗、删除线、背景色和删除");
             ClickMenu(editMenu.Items.OfType<MenuItem>().Last()); await Layout();
             ClickMenu(OpenEditorMenu(TaskEditors(checklist)[0]).Items.OfType<MenuItem>().Last()); await Layout();
             Check(window.FlushNotes(false)&&new NotesStore(App.Store.DataDirectory).State.Notes.Last().Tasks.Count==1,"右键删除实际移除细项并保存");
@@ -350,8 +350,8 @@ internal static class NotesVerification
             var cards = Find<Border>(window.NotesHost).Where(border => border.Tag is ProjectNote).ToList();
             var handles = Find<Thumb>(window.NotesHost).Where(thumb => AutomationProperties.GetAutomationId(thumb).StartsWith("NoteOrder-")).ToList();
             Check(handles.Select(handle => handle.Tag).SequenceEqual(new object[] { 1, 2 }), "分类内便签显示连续序号");
-            Check(handles[0].ActualWidth >= cards[0].ActualWidth - cards[0].Padding.Left - cards[0].Padding.Right
-                - cards[0].BorderThickness.Left - cards[0].BorderThickness.Right - 1, "排序栏覆盖卡片内容区，可从远离序号的位置拖动");
+            Check(handles[0].Parent is StackPanel cardContent && handles[0].ActualWidth >= cardContent.ActualWidth - 1,
+                "排序栏覆盖卡片内容区，可从远离序号的位置拖动");
             var firstId = ((ProjectNote)cards[0].Tag).Id;
             var secondId = ((ProjectNote)cards[1].Tag).Id;
             await NotesSplitVerification.DragNote(window, handles[1], cards[0], cancel: true);

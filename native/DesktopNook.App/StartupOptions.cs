@@ -9,6 +9,7 @@ internal sealed class StartupOptions(string runKey = @"Software\Microsoft\Window
     private sealed class Preferences {public bool? CloseEndsProcess {get;set;} public WindowSizePreference? WindowSize {get;set;} [JsonIgnore(Condition=JsonIgnoreCondition.WhenWritingNull)]public string? CollectView {get;set;} [JsonIgnore(Condition=JsonIgnoreCondition.WhenWritingNull)]public string? MotionMode {get;set;} [JsonIgnore(Condition=JsonIgnoreCondition.WhenWritingNull)]public string? PanelStyle {get;set;} [JsonIgnore(Condition=JsonIgnoreCondition.WhenWritingNull)]public string? Theme {get;set;} [JsonIgnore(Condition=JsonIgnoreCondition.WhenWritingNull)]public string? ColorTheme {get;set;}
         [JsonIgnore(Condition=JsonIgnoreCondition.WhenWritingNull)] public string? UpdateChannel {get;set;}
         [JsonIgnore(Condition=JsonIgnoreCondition.WhenWritingNull)] public string? VisualStyle {get;set;}
+        [JsonIgnore(Condition=JsonIgnoreCondition.WhenWritingNull)] public bool? PanelPinned {get;set;}
     }
     private Preferences? ReadPreferences()
     {
@@ -38,15 +39,22 @@ internal sealed class StartupOptions(string runKey = @"Software\Microsoft\Window
         var current = ReadPreferences();
         return new() { CloseEndsProcess=CloseEndsProcess, WindowSize=ReadWindowSize(),
             CollectView=SavedCollectView, MotionMode=SavedMotionMode, PanelStyle=current?.PanelStyle,
-            Theme=current?.Theme, ColorTheme=current?.ColorTheme, UpdateChannel=current?.UpdateChannel, VisualStyle=current?.VisualStyle };
+            Theme=current?.Theme, ColorTheme=current?.ColorTheme, UpdateChannel=current?.UpdateChannel, VisualStyle=current?.VisualStyle,
+            PanelPinned=current?.PanelPinned };
+    }
+
+    internal bool PanelPinned
+    {
+        get => ReadPreferences()?.PanelPinned == true;
+        set { var preferences = Snapshot(); preferences.PanelPinned = value ? true : null; SavePreferences(preferences); }
     }
 
     internal string VisualStyle
     {
-        get => ReadPreferences()?.VisualStyle is "mist" or "glass" ? ReadPreferences()!.VisualStyle! : "paper";
+        get => ReadPreferences()?.VisualStyle is "mist" or "glass" or "crystal" ? ReadPreferences()!.VisualStyle! : "paper";
         set
         {
-            if (value is not ("paper" or "mist" or "glass")) throw new ArgumentException("无效界面风格。", nameof(value));
+            if (value is not ("paper" or "mist" or "glass" or "crystal")) throw new ArgumentException("无效界面风格。", nameof(value));
             var preferences = Snapshot(); preferences.VisualStyle = value == "paper" ? null : value;
             SavePreferences(preferences);
         }

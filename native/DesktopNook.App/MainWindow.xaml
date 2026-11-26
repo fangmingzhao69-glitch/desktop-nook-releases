@@ -13,6 +13,17 @@
    <Grid>
     <Border x:Name="Surface" Width="1080" Height="620" Background="{DynamicResource CanvasBrush}"
      BorderBrush="{DynamicResource FoldEdgeBrush}" BorderThickness="1" CornerRadius="14" SnapsToDevicePixels="True">
+     <Grid>
+      <Border x:Name="GlassSheen" Visibility="Collapsed" IsHitTestVisible="False" CornerRadius="13" Margin="1">
+       <Border.Background>
+        <LinearGradientBrush StartPoint="0,0" EndPoint=".3,1">
+         <GradientStop Color="#50FFFFFF" Offset="0"/>
+         <GradientStop Color="#12FFFFFF" Offset=".34"/>
+         <GradientStop Color="#00FFFFFF" Offset=".7"/>
+         <GradientStop Color="#18FFFFFF" Offset="1"/>
+        </LinearGradientBrush>
+       </Border.Background>
+      </Border>
      <Grid x:Name="SurfaceContent" SizeChanged="OnSurfaceContentSizeChanged">
       <Grid.RowDefinitions><RowDefinition Height="54"/><RowDefinition Height="*"/></Grid.RowDefinitions>
       <Border x:Name="TitleSurface" Background="{DynamicResource FoldTitleBrush}" BorderBrush="{DynamicResource LineBrush}"
@@ -24,6 +35,9 @@
          <TextBlock x:Name="BrandSubtitle" Text="ZHEYE" FontFamily="Consolas" Foreground="{DynamicResource TextSecondaryBrush}" FontSize="11" Margin="12,0,0,0" VerticalAlignment="Center"/>
         </StackPanel>
         <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Center">
+         <Button x:Name="PinButton" Width="36" Height="36" Padding="0" ToolTip="钉住面板" AutomationProperties.Name="钉住面板" AutomationProperties.AutomationId="PanelPin" Click="OnPinButton">
+          <Path Data="M6,2 H14 M8,2 V7 L5,11 V12 H15 V11 L12,7 V2 M10,12 V18" Width="18" Height="18" Stretch="Uniform" Stroke="{DynamicResource AccentInkBrush}" StrokeThickness="1.65" StrokeStartLineCap="Round" StrokeEndLineCap="Round" StrokeLineJoin="Round"/>
+         </Button>
          <Button Height="36" Padding="10,0" Click="OnGamesButton" AutomationProperties.Name="图标台球">
           <StackPanel Orientation="Horizontal"><Path Data="M3,13 L5,7 Q6,5 8,5 H12 Q14,5 15,7 L17,13 Q17,16 15,16 L12,13 H8 L5,16 Q3,16 3,13 M6,9 H10 M8,7 V11 M12,9 H12.1 M14,10.5 H14.1" Width="17" Height="17" Stretch="Uniform" Stroke="{DynamicResource AccentInkBrush}" StrokeThickness="1.7" StrokeStartLineCap="Round" StrokeEndLineCap="Round" StrokeLineJoin="Round"/><TextBlock Text="图标台球" Margin="6,0,0,0" FontSize="12" VerticalAlignment="Center"/></StackPanel>
          </Button>
@@ -119,6 +133,7 @@
         <Border Width="5" HorizontalAlignment="Right" Background="{DynamicResource FoldCreaseLightBrush}" Opacity=".4"/>
        </Grid>
       </Grid>
+     </Grid>
      </Grid>
     </Border>
     <Grid x:Name="ShutterOverlay" Visibility="Collapsed" IsHitTestVisible="False"/>

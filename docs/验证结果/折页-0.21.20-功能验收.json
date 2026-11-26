@@ -1,0 +1,31 @@
+{
+  "version": "0.21.20",
+  "date": "2026-11-26",
+  "platform": "Windows 11 x64 build 26340, single display, 96 DPI",
+  "execution": "本轮独立沙箱实际执行；不使用历史报告替代结果",
+  "checks": {
+    "storageAndNotesCore": 69,
+    "gameCore": 39,
+    "networkCore": 18,
+    "notesUi": 93,
+    "taskbarAppearance": 49,
+    "requestedFeatures": 24,
+    "groupedWindowNativeMouse": 10
+  },
+  "passed": 302,
+  "failed": 0,
+  "evidence": [
+    "真实鼠标单击三个隔离窗口的任务栏分组，弹出 DWM 缩略图并还原、激活指定的最小化窗口",
+    "切换其他窗口时钉住面板保持展开，主动收起仍然有效，主题和尺寸保存不覆盖图钉偏好",
+    "便签加粗、删除线和背景色可重叠保存、重绘、类型转换及导出；非法区间不会替换原文件",
+    "晶透玻璃在独立双色背景前以桌面合成截图核验真实 alpha，经典纸页和高对比度回退保留",
+    "30 个标准色色块实际可见，点击后确认返回准确颜色值；高级任务栏选项折叠且可以展开配置",
+    "便签分类、拖拽、排序、归档、删除、分栏和 Markdown 导出原有回归通过"
+  ],
+  "limitations": [
+    "其他 Windows 版本、跨显示器及混合 DPI 未在本轮实测",
+    "晶透玻璃采用半透明表面和高光，不将旧模糊接口返回成功视为真实模糊证据",
+    "网络使用本机 IPv4 / IPv6 回环，不宣称跨电脑或公网验收"
+  ],
+  "reports": "本地正式交付目录 发布/折页-v0.21.20/验收摘要"
+}

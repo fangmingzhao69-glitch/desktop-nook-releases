@@ -7,7 +7,7 @@ namespace DesktopNook.App;
 
 internal static class PanelVisualStyle
 {
-    internal static readonly (string Id, string Name)[] Choices = [("paper", "经典纸页"), ("mist", "柔雾纸页"), ("glass", "通透玻璃")];
+    internal static readonly (string Id, string Name)[] Choices = [("paper", "经典纸页"), ("mist", "柔雾纸页"), ("glass", "通透玻璃"), ("crystal", "晶透玻璃")];
     internal static string Selected { get; private set; } = "paper";
     internal static void Select(string style)
     {
@@ -17,14 +17,19 @@ internal static class PanelVisualStyle
     internal static void Apply(MainWindow main)
     {
         bool paper = Selected == "paper" || SystemParameters.HighContrast;
-        bool glass = Selected == "glass" && !SystemParameters.HighContrast;
+        bool glass = Selected is "glass" or "crystal" && !SystemParameters.HighContrast;
+        bool crystal = Selected == "crystal" && !SystemParameters.HighContrast;
         var canvas = ThemePalette.Brush("CanvasBrush").Color;
         var title = ThemePalette.Brush("FoldTitleBrush").Color;
-        bool blur = SetBlur(new WindowInteropHelper(main).Handle, !paper, glass);
+        // An accent on a per-pixel WPF window becomes opaque on current builds.
+        // Clear that accent for crystal glass and keep the real alpha surface.
+        bool materialReady = SetBlur(new WindowInteropHelper(main).Handle, !paper && !crystal, glass);
+        if (crystal) materialReady = true;
         // Unsupported composition keeps the readable opaque surface.
-        main.ApplyPanelSurface(new SolidColorBrush(Color.FromArgb(!paper && blur ? glass ? (byte)170 : (byte)226 : (byte)255, canvas.R, canvas.G, canvas.B)),
-            new SolidColorBrush(Color.FromArgb(glass && blur ? (byte)130 : (byte)255, title.R, title.G, title.B)), paper ? 1 : glass ? 0 : .32,
+        main.ApplyPanelSurface(new SolidColorBrush(Color.FromArgb(!paper && materialReady ? crystal ? (byte)150 : glass ? (byte)170 : (byte)226 : (byte)255, canvas.R, canvas.G, canvas.B)),
+            new SolidColorBrush(Color.FromArgb(glass && materialReady ? (byte)130 : (byte)255, title.R, title.G, title.B)), paper ? 1 : glass ? 0 : .32,
             paper ? 1 : glass ? 0 : .38);
+        main.ApplyGlassDetails(crystal && materialReady);
         main.PanelMotion.InvalidateSnapshot();
     }
     [StructLayout(LayoutKind.Sequential)] private struct Accent { public int State, Flags, Color, Animation; }
@@ -48,6 +53,21 @@ internal static class PanelVisualStyle
 
 public partial class MainWindow
 {
+    internal void ApplyGlassDetails(bool enabled)
+    {
+        GlassSheen.Visibility = enabled ? Visibility.Visible : Visibility.Collapsed;
+        Surface.BorderBrush = enabled
+            ? new SolidColorBrush(Color.FromArgb(150, 255, 255, 255)) : ThemePalette.Brush("FoldEdgeBrush");
+        Brush Tint(string key, byte alpha)
+        {
+            var color = ThemePalette.Brush(key).Color;
+            var brush = new SolidColorBrush(Color.FromArgb(alpha, color.R, color.G, color.B));
+            brush.Freeze();
+            return brush;
+        }
+        Resources["NoteSurfaceBrush"] = enabled ? Tint("SurfaceBrush", 210) : ThemePalette.Brush("SurfaceBrush");
+    }
+
     internal void ApplyPanelSurface(Brush surface, Brush title, double gridOpacity, double rulesOpacity)
     {
         Surface.Background = surface;

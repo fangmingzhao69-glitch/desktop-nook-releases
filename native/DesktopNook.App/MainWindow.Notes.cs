@@ -272,6 +272,7 @@ public partial class MainWindow
     private Action AddNoteStrikeButton(DockPanel header, string id, Func<NoteTextEditor?> selectedEditor)
     {
         Button? highlight = null;
+        Button? bold = null;
         var button = NotesButton("S", clicked =>
         {
             if (_notesComposing || selectedEditor() is not { IsReadOnly: false, Selection.IsEmpty: false } editor) return;
@@ -284,6 +285,18 @@ public partial class MainWindow
         ToolTipService.SetShowOnDisabled(button, true);
         DockPanel.SetDock(button, Dock.Right);
         header.Children.Insert(header.Children.Count - 1, button);
+        bold = NotesButton("B", _ =>
+        {
+            if (_notesComposing || selectedEditor() is not { IsReadOnly: false, Selection.IsEmpty: false } editor) return;
+            editor.Focus();
+            editor.ToggleBold();
+            Update(button);
+        });
+        bold.Content = new TextBlock { Text = "B", FontWeight = FontWeights.Bold };
+        AutomationProperties.SetAutomationId(bold, id + "-Bold");
+        ToolTipService.SetShowOnDisabled(bold, true);
+        DockPanel.SetDock(bold, Dock.Right);
+        header.Children.Insert(header.Children.Count - 1, bold);
         highlight = NotesButton("标注", _ =>
         {
             if (_notesComposing || selectedEditor() is not { IsReadOnly: false, Selection.IsEmpty: false } editor) return;
@@ -301,6 +314,14 @@ public partial class MainWindow
             var editor = selectedEditor();
             target.IsEnabled = editor is { IsReadOnly: false, Selection.IsEmpty: false };
             if (highlight is not null) highlight.IsEnabled = target.IsEnabled;
+            if (bold is not null)
+            {
+                bold.IsEnabled = target.IsEnabled;
+                bool isBold = target.IsEnabled && editor!.SelectionIsBold();
+                bold.Background = isBold ? Brush("SelectionBrush") : Brushes.Transparent;
+                bold.ToolTip = target.IsEnabled ? isBold ? "取消加粗（Ctrl+B）" : "字体加粗（Ctrl+B）" : "选中文字后添加或取消加粗";
+                AutomationProperties.SetName(bold, isBold ? "取消加粗" : "字体加粗");
+            }
             bool remove = target.IsEnabled && editor!.SelectionIsStruck();
             string action = remove ? "取消删除线" : "添加删除线";
             target.Background = remove ? Brush("SelectionBrush") : Brushes.Transparent;
@@ -314,7 +335,9 @@ public partial class MainWindow
         foreach (var (name, color) in new (string, string?)[]
         {
             ("黄色", "#FFF0A6"), ("绿色", "#CBEFCB"), ("蓝色", "#CDE8FF"),
-            ("粉色", "#FFD7E5"), ("紫色", "#E3D6FF"), ("清除背景色", null)
+            ("粉色", "#FFD7E5"), ("紫色", "#E3D6FF"), ("橙色", "#FFD8AF"),
+            ("珊瑚色", "#FFC9C4"), ("薄荷色", "#BBEEDF"), ("青色", "#BDEDF2"),
+            ("青柠色", "#E4EFA9"), ("米色", "#EEDFC5"), ("灰色", "#DFE3EB"), ("清除背景色", null)
         })
         {
             var item = Menu(name, () => { editor.Focus(); editor.Highlight(color); },
@@ -345,6 +368,8 @@ public partial class MainWindow
             };
             if (editor is NoteTextEditor formatted)
             {
+                entries.Add(Menu(formatted.SelectionIsBold() ? "取消加粗" : "字体加粗",
+                    formatted.ToggleBold, !editor.IsReadOnly && hasSelection));
                 entries.Add(Menu(formatted.SelectionIsStruck() ? "取消删除线" : "添加删除线",
                     formatted.ToggleStrike, !editor.IsReadOnly && hasSelection));
                 var highlight = Menu("文字背景色", () => { }, !editor.IsReadOnly && hasSelection);
@@ -376,6 +401,7 @@ public partial class MainWindow
         var content=new StackPanel();
         var border = new Border { Tag=note, CornerRadius=new CornerRadius(5), BorderBrush=Brush("LineBrush"),
             BorderThickness=new Thickness(1), Margin=new Thickness(0,0,0,10), Background=Brush("SurfaceBrush") };
+        border.SetResourceReference(Border.BackgroundProperty, "NoteSurfaceBrush");
         var inset = new Border { BorderThickness=new Thickness(3,0,0,0), CornerRadius=new CornerRadius(4),
             BorderBrush=Brush(note.Kind == "text" ? "FoldCoralBrush" : "PrimaryBrush"),
             Padding=new Thickness(10,10,12,10), Child=content };
@@ -394,7 +420,7 @@ public partial class MainWindow
         content.Children.Add(header);
         if(note.Kind=="text")
         {
-            var body = new NoteTextEditor(note.Text, note.BodyStrikes, highlights: note.BodyHighlights)
+            var body = new NoteTextEditor(note.Text, note.BodyStrikes, highlights: note.BodyHighlights, bolds: note.BodyBolds)
             {
                 MinHeight = 65,
                 IsReadOnly = readOnly,
@@ -409,9 +435,11 @@ public partial class MainWindow
             {
                 var (text, strikes) = body.ReadContent();
                 var highlights = body.ReadHighlights();
+                var bolds = body.ReadBolds();
                 if (note.Text == text && (note.BodyStrikes ?? []).SequenceEqual(strikes ?? []) &&
-                    (note.BodyHighlights ?? []).SequenceEqual(highlights ?? [])) return;
+                    (note.BodyHighlights ?? []).SequenceEqual(highlights ?? []) && (note.BodyBolds ?? []).SequenceEqual(bolds ?? [])) return;
                 note.BodyHighlights = highlights;
+                if (bolds is not null || note.BodyBolds is not null) note.BodyBolds = bolds ?? [];
                 note.Text = text;
                 if (strikes is not null || note.BodyStrikes is not null) note.BodyStrikes = strikes ?? [];
                 NotesChanged(true, note);

@@ -11,6 +11,7 @@ namespace DesktopNook.App;
 // Reanchor Explorer's app previews, app tooltips, and hidden-icons flyout.
 internal sealed class NativeTaskbarHover : IDisposable
 {
+    private readonly NativeTaskbarGroupPreview _groups = new();
     private const uint ObjectDestroy = 0x8001;
     private const uint ObjectShow = 0x8002;
     private const uint ObjectHide = 0x8003;
@@ -45,6 +46,7 @@ internal sealed class NativeTaskbarHover : IDisposable
         }
         _bars[taskbar] = (shell, capsule, contents.AppButtons, contents.OverflowButton, dpi == 0 ? 1 : dpi / 96d,
             contents.TrayButtons, contents.AppIds);
+        _groups.Update(taskbar, contents);
         if (GetCursorPos(out var pointer))
             ObserveButton(new System.Windows.Point(pointer.X, pointer.Y));
     }
@@ -53,10 +55,12 @@ internal sealed class NativeTaskbarHover : IDisposable
     {
         ClearNativeAnchor(taskbar);
         _bars.Remove(taskbar);
+        _groups.Remove(taskbar);
     }
 
     public void Dispose()
     {
+        _groups.Dispose();
         if (_hook != 0) UnhookWinEvent(_hook);
         if (_showHook != 0) UnhookWinEvent(_showHook);
         _showHook = 0;

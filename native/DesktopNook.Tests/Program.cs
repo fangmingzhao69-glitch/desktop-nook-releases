@@ -469,6 +469,37 @@ Test("Notes failed writes leave committed state and draft available for retry",r
     Assert(before.SequenceEqual(File.ReadAllBytes(store.FilePath)),"failed publication preserves main file");store.Commit(draft);
     Assert(new NotesStore(root).State.Notes[0].Text=="unsaved latest","retry succeeds");
 });
+Test("Bold formatting survives save, copy isolation, kind conversion and Markdown export", root => {
+    var store = new NotesStore(root); var draft = store.Draft(); var category = NotesStore.AddProject(draft, "格式");
+    var note = new ProjectNote { ProjectId = category.Id, Kind = "todo", Tasks = [
+        new NoteTask { Text = "甲乙", Bolds = [new(0, 1)] }, new NoteTask { Text = "丙丁", Bolds = [new(1, 1)] }] };
+    draft.Notes.Add(note); store.Commit(draft);
+    draft.Notes[0].Tasks[0].Bolds![0] = new(1, 1);
+    Assert(store.State.Notes[0].Tasks[0].Bolds![0] == new NoteBoldRange(0, 1), "committed ranges isolated");
+    var saved = new NotesStore(root).Draft(); note = saved.Notes.Single();
+    note.ChangeKind("text"); Assert(note.BodyBolds!.SequenceEqual(new NoteBoldRange[] { new(0, 1), new(4, 1) }), "mapped to body");
+    note.ChangeKind("todo"); Assert(note.Tasks[0].Bolds![0] == new NoteBoldRange(0, 1) && note.Tasks[1].Bolds![0] == new NoteBoldRange(1, 1), "mapped to tasks");
+    Assert(NotesMarkdown.Export(saved, note).Contains("<strong>甲</strong>乙"), "bold exported");
+    note.ChangeKind("text"); note.BodyBolds = []; note.ChangeKind("todo");
+    Assert(note.Tasks.All(task => task.Bolds is { Length: 0 }), "explicit clear removes former task formatting");
+});
+Test("Bold range validation rejects malformed input without replacing committed notes", root => {
+    var store = new NotesStore(root); var draft = store.Draft(); var category = NotesStore.AddProject(draft, "格式");
+    draft.Notes.Add(new() { ProjectId = category.Id, Kind = "text", Text = "甲乙丙", BodyBolds = [new(0, 2)] }); store.Commit(draft);
+    var before = File.ReadAllBytes(store.FilePath);
+    foreach (var invalid in new NoteBoldRange[][] { [new(-1, 1)], [new(0, 0)], [new(1, 4)], [new(0, 2), new(1, 1)] }) {
+        draft.Notes[0].BodyBolds = invalid;
+        try { store.Commit(draft); throw new Exception("accepted invalid range"); } catch (IOException) { }
+        Assert(File.ReadAllBytes(store.FilePath).SequenceEqual(before), "committed data preserved");
+    }
+});
+Test("Bold spans across CRLF lines are mapped correctly and export combined formatting safely", root => {
+    var note = new ProjectNote { Kind = "text", Text = "甲\r\n乙<&", BodyBolds = [new(0, 4)], BodyHighlights = [new(3, 3, "#FFF0A6")] };
+    note.ChangeKind("todo");
+    Assert(note.Tasks[0].Bolds![0] == new NoteBoldRange(0, 1) && note.Tasks[1].Bolds![0] == new NoteBoldRange(0, 1), "CRLF offsets normalized");
+    var exported = NotesMarkdown.Export(new NotesState(), note);
+    Assert(exported.Contains("<strong>乙</strong>") && exported.Contains("&lt;&amp;"), "combined formatting is escaped");
+});
 var failed = results.Count(r => JsonSerializer.Serialize(r).Contains("\"passed\":false"));
 var output = args.FirstOrDefault() ?? Path.Combine(runRoot,"results.json");Directory.CreateDirectory(Path.GetDirectoryName(Path.GetFullPath(output))!);
 File.WriteAllText(output,JsonSerializer.Serialize(new{passed=results.Count-failed,failed,runRoot,checks=results},new JsonSerializerOptions{WriteIndented=true}));

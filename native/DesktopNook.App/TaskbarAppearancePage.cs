@@ -31,6 +31,7 @@ internal sealed class TaskbarAppearancePage : UserControl
     private readonly TextBlock _message = new() { FontSize = 12, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 0, 0, 7) };
     private readonly StackPanel _body = new() { Margin = new Thickness(22, 2, 22, 10) };
     private readonly StackPanel _footer = new();
+    private readonly TextBlock _profileCaption = new() { FontSize = 13, FontWeight = FontWeights.SemiBold, Margin = new Thickness(0, 2, 0, 8) };
     private TaskbarAppearanceSettings _draft;
     private TaskbarAppearanceScene _activeScene = TaskbarAppearanceSettings.Scenes[0];
     private bool _loading;
@@ -54,9 +55,9 @@ internal sealed class TaskbarAppearancePage : UserControl
         _style.Items.Add(new ComboBoxItem { Content = "柔雾玻璃", Tag = "frosted", ToolTip = "提高背景模糊强度，减轻背景干扰。" });
 
         var sceneCard = new StackPanel();
+        _enabled.Margin = new Thickness(0, 0, 0, 10);
+        _body.Children.Add(_enabled);
         var switches = new WrapPanel { Margin = new Thickness(0, -3, 0, 5) };
-        _enabled.Margin = new Thickness(0, 0, 14, 0);
-        switches.Children.Add(_enabled);
         switches.Children.Add(_followScenes);
         sceneCard.Children.Add(switches);
         _scene.ItemsSource = TaskbarAppearanceSettings.Scenes;
@@ -66,9 +67,10 @@ internal sealed class TaskbarAppearancePage : UserControl
         _sceneHint.Foreground = ThemePalette.Brush("TextSecondaryBrush");
         _sceneHint.Margin = new Thickness(88, 1, 0, 0);
         sceneCard.Children.Add(_sceneHint);
-        _body.Children.Add(Card(sceneCard));
 
         var appearanceCard = new StackPanel();
+        _profileCaption.Foreground = ThemePalette.Brush("TextPrimaryBrush");
+        appearanceCard.Children.Add(_profileCaption);
         _layout.ToolTip = "开始按钮、应用和托盘合在一起，宽度随图标数量自动调整。";
         var layoutOptions = new DockPanel();
         var assistBall = MakeButton("临时定位信息球…", () => _ = RunAsync(async () =>
@@ -78,13 +80,13 @@ internal sealed class TaskbarAppearancePage : UserControl
         }));
         assistBall.Margin = new Thickness(8, 0, 0, 0);
         DockPanel.SetDock(assistBall, Dock.Right);
-        layoutOptions.Children.Add(assistBall);
+        var informationBall = new StackPanel { Margin = new Thickness(0, 10, 0, 0) };
         layoutOptions.Children.Add(_layout);
         appearanceCard.Children.Add(FieldRow("任务栏形态", layoutOptions));
         var automaticBall = new CheckBox
         {
             Content = "自动连接信息球",
-            Margin = new Thickness(14, 0, 0, 0),
+            Margin = new Thickness(0, 0, 0, 6),
             IsChecked = !App.IsSandbox && NativeInfoBallAutomatic.Enabled,
             IsEnabled = !App.IsSandbox,
             ToolTip = "首次启用需一次 Windows 授权。以后按需启动定位助手，折页主程序保持普通权限；关闭后移除授权任务。"
@@ -95,7 +97,8 @@ internal sealed class TaskbarAppearancePage : UserControl
             try { _message.Text = await NativeInfoBallAutomatic.ConfigureAsync(automaticBall.IsChecked == true); }
             finally { automaticBall.IsChecked = NativeInfoBallAutomatic.Enabled; }
         });
-        switches.Children.Add(automaticBall);
+        informationBall.Children.Add(automaticBall);
+        informationBall.Children.Add(assistBall);
         appearanceCard.Children.Add(FieldRow("样式", _style));
         var colorControls = new StackPanel { Orientation = Orientation.Horizontal };
         _colorSample.BorderBrush = ThemePalette.Brush("OutlineBrush");
@@ -116,8 +119,13 @@ internal sealed class TaskbarAppearancePage : UserControl
         appearanceCard.Children.Add(FieldRow("颜色", colorControls));
         appearanceCard.Children.Add(FieldRow("不透明度", SliderField(_opacity, _opacityLabel, "颜色不透明度")));
         _radiusRow = FieldRow("模糊半径", SliderField(_radius, _radiusLabel, "模糊半径"));
-        appearanceCard.Children.Add(_radiusRow);
+        sceneCard.Children.Add(_radiusRow);
+        sceneCard.Children.Add(informationBall);
         _body.Children.Add(Card(appearanceCard));
+        var advanced = new Expander { Header = "高级设置 · 场景与信息球", Content = sceneCard,
+            Padding = new Thickness(0, 8, 0, 4), Margin = new Thickness(0, 4, 0, 0), Foreground = ThemePalette.Brush("TextPrimaryBrush") };
+        AutomationProperties.SetAutomationId(advanced, "AppearanceAdvanced");
+        _body.Children.Add(advanced);
 
         _message.Foreground = ThemePalette.Brush("TextSecondaryBrush");
         _footer.Children.Add(_message);
@@ -132,7 +140,8 @@ internal sealed class TaskbarAppearancePage : UserControl
         actions.Children.Add(MakeButton("预览", () => _ = RunAsync(PreviewAsync)));
         var uniform = MakeButton("设为统一外观", () => _ = RunAsync(ApplyUniformAsync));
         uniform.ToolTip = "立即对所有场景使用当前样式。保存的动态场景仍可重新启用。";
-        actions.Children.Add(uniform);
+        sceneCard.Children.Add(uniform);
+        uniform.Margin = new Thickness(0, 10, 0, 0);
         var apply = MakeButton("应用", () => _ = RunAsync(ApplyAsync), primary: true);
         apply.MinWidth = 68;
         apply.Margin = new Thickness(4, 0, 0, 0);
@@ -209,7 +218,7 @@ internal sealed class TaskbarAppearancePage : UserControl
             });
         };
         LoadFields(session.Saved);
-        _message.Text = session.Restriction ?? (session.Running ? "外观组件已启动。" : "可以先预览，或应用后保存设置。");
+        _message.Text = session.Restriction ?? "预览 12 秒后自动还原；点击应用保存。";
     }
 
     private Button MakeButton(string label, Action click, bool primary = false)
@@ -293,6 +302,7 @@ internal sealed class TaskbarAppearancePage : UserControl
     {
         _loading = true;
         _activeScene = scene;
+        _profileCaption.Text = scene.Key == TaskbarAppearanceSettings.DesktopScene ? "默认外观" : scene.Name + "外观";
         var profile = _draft.ProfileFor(scene.Key);
         var defaults = TaskbarAppearanceSettings.SceneDefaultsFor(scene.Key);
         _scene.SelectedItem = scene;

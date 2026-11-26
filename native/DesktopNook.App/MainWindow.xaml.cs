@@ -33,6 +33,7 @@ public partial class MainWindow : Window
     internal string UpdateMenuText=>_latestRelease is null?$"检查在线更新（当前 {CurrentVersionLabel}）…":$"更新到 v{_latestRelease.Version.ToString(3)}（当前 {CurrentVersionLabel}）…";
     private Point _mouseDown; private bool _dragging; private int _interactions; private int _menus; private bool _allowExit; private DateTime _suppressUntil;
     public bool KeepOpenForVerification { get; set; }
+    private bool _panelPinned;
     internal bool HoldVisibleForMotionProbe {get;set;}
     public NookStore Store => App.Store;
     public string? ActiveCategory => _activeCategory;
@@ -47,6 +48,7 @@ public partial class MainWindow : Window
     {
         InitializeComponent();InitializePanelMotion();InitializeNotes(deferNoteVisuals);InitializeSizing();Activated+=(_,_)=>{Place();if(IsLoaded&&!App.IsSandbox&&DateTime.UtcNow-_lastUpdateCheck>TimeSpan.FromMinutes(15))_=CheckOnlineUpdateAsync(false);};
         SourceInitialized+=(_,_)=>UiMotion.PrepareWindow(this);
+        UpdatePinButton();
         _updateTimer.Tick+=(_,_)=>_=CheckOnlineUpdateAsync(false);
         Closed+=(_,_)=>_updateTimer.Stop();
         Render();
@@ -115,8 +117,23 @@ public partial class MainWindow : Window
     private void OnStateChanged(object? sender,EventArgs e) { if(WindowState!=WindowState.Minimized){Place();if(IsLoaded||ContentParked)OpenPanelMotion();}else {FinishPanelMotion();UiMotion.CancelAll();ScheduleIdleRelease();} }
     private void OnDeactivated(object? sender,EventArgs e)
     {
-        if(HoldVisibleForMotionProbe||TaskbarPlacement.PointerOverButton()||_tray?.PointerOverIcon()==true)return;
-        Dispatcher.BeginInvoke(()=>{if(!HoldVisibleForMotionProbe&&!KeepOpenForVerification&&!IsActive&&_interactions==0&&!_dragging&&_menus==0&&WindowState!=WindowState.Minimized)BeginHidePanel();},System.Windows.Threading.DispatcherPriority.Background);
+        if(_panelPinned||HoldVisibleForMotionProbe||TaskbarPlacement.PointerOverButton()||_tray?.PointerOverIcon()==true)return;
+        Dispatcher.BeginInvoke(()=>{if(!_panelPinned&&!HoldVisibleForMotionProbe&&!KeepOpenForVerification&&!IsActive&&_interactions==0&&!_dragging&&_menus==0&&WindowState!=WindowState.Minimized)BeginHidePanel();},System.Windows.Threading.DispatcherPriority.Background);
+    }
+    private void OnPinButton(object sender, RoutedEventArgs e)
+    {
+        try { App.Options.PanelPinned = !App.Options.PanelPinned; UpdatePinButton(); }
+        catch (Exception error) when (error is IOException or UnauthorizedAccessException)
+        { SetStatus("未能保存钉住状态：" + error.Message); }
+    }
+    private void UpdatePinButton()
+    {
+        bool pinned = _panelPinned = App.Options.PanelPinned;
+        if (pinned) PinButton.SetResourceReference(Button.BackgroundProperty, "SelectionBrush");
+        else PinButton.Background = Brushes.Transparent;
+        PinButton.ToolTip = pinned ? "取消钉住 · 点击其他窗口时自动收起" : "钉住面板 · 点击其他窗口时保持展开";
+        AutomationProperties.SetName(PinButton, pinned ? "取消钉住面板" : "钉住面板");
+        _shutter.InvalidateSnapshot();
     }
     private void OnClosing(object? sender,CancelEventArgs e)
     {
