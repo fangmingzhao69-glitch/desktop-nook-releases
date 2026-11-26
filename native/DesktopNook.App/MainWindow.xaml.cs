@@ -122,17 +122,22 @@ public partial class MainWindow : Window
     }
     private void OnPinButton(object sender, RoutedEventArgs e)
     {
-        try { App.Options.PanelPinned = !App.Options.PanelPinned; UpdatePinButton(); }
+        try
+        {
+            App.Options.PanelPinned = !App.Options.PanelPinned;
+            UpdatePinButton();
+            SetStatus(_panelPinned ? "已钉住面板，点击其他窗口时保持展开" : "已取消钉住，点击其他窗口时自动收起");
+        }
         catch (Exception error) when (error is IOException or UnauthorizedAccessException)
         { SetStatus("未能保存钉住状态：" + error.Message); }
     }
     private void UpdatePinButton()
     {
         bool pinned = _panelPinned = App.Options.PanelPinned;
-        if (pinned) PinButton.SetResourceReference(Button.BackgroundProperty, "SelectionBrush");
-        else PinButton.Background = Brushes.Transparent;
+        System.Windows.Controls.Primitives.Selector.SetIsSelected(PinButton, pinned);
         PinButton.ToolTip = pinned ? "取消钉住 · 点击其他窗口时自动收起" : "钉住面板 · 点击其他窗口时保持展开";
         AutomationProperties.SetName(PinButton, pinned ? "取消钉住面板" : "钉住面板");
+        AutomationProperties.SetItemStatus(PinButton, pinned ? "已钉住" : "未钉住");
         _shutter.InvalidateSnapshot();
     }
     private void OnClosing(object? sender,CancelEventArgs e)

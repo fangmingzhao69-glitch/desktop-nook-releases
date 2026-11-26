@@ -23,7 +23,11 @@ internal static class FeatureVerification
             main.KeepOpenForVerification = true;
             main.FinishPanelMotion();
             var pin = main.PinButton;
+            main.UpdateLayout();
+            Snapshot(main, "pin-unpinned");
             pin.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            main.UpdateLayout();
+            Snapshot(main, "pin-pinned");
             Check(App.Options.PanelPinned, "顶栏图钉启用保持展开");
             App.Options.VisualStyle = "crystal";
             App.Options.ThemeMode = "dark";
@@ -101,6 +105,10 @@ internal static class FeatureVerification
                 await Layout();
                 await Task.Delay(200);
                 Snapshot(main, "glass-" + mode);
+                pin.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+                main.UpdateLayout();
+                Snapshot(main, "pin-pinned-" + mode);
+                pin.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
                 GroupPreviewVerification.Snapshot(main, Path.Combine(root, "glass-" + mode + "-native.png"));
             }
             other.Close(); other = null;

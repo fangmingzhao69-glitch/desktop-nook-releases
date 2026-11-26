@@ -8,6 +8,55 @@
  RenderOptions.BitmapScalingMode="HighQuality" AllowDrop="True" Loaded="OnLoaded" Deactivated="OnDeactivated"
  StateChanged="OnStateChanged" Closing="OnClosing" PreviewKeyDown="OnKeyDown" DragOver="OnDragOver"
  DragLeave="OnDragLeave" Drop="OnDrop">
+ <Window.Resources>
+  <Style x:Key="PanelPinButton" TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">
+   <Setter Property="local:UiMotion.Feedback" Value="{x:Null}"/>
+   <Setter Property="Width" Value="88"/>
+   <Setter Property="Height" Value="34"/>
+   <Setter Property="Margin" Value="0,0,6,0"/>
+   <Setter Property="Padding" Value="8,0"/>
+   <Setter Property="Foreground" Value="{DynamicResource TextSecondaryBrush}"/>
+   <Setter Property="Template">
+    <Setter.Value>
+     <ControlTemplate TargetType="Button">
+      <Border x:Name="Chrome" Background="{DynamicResource SurfaceSubtleBrush}" BorderBrush="{DynamicResource LineBrush}" BorderThickness="1" CornerRadius="8" Padding="{TemplateBinding Padding}">
+       <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" VerticalAlignment="Center">
+        <Path x:Name="PinGlyph" Data="M6,2 H14 V4 H12 V7 L15,10 V12 H5 V10 L8,7 V4 H6 Z M10,12 V18"
+         Width="16" Height="18" Stretch="Uniform" Fill="Transparent" Stroke="{TemplateBinding Foreground}" StrokeThickness="1.65"
+         StrokeStartLineCap="Round" StrokeEndLineCap="Round" StrokeLineJoin="Round" RenderTransformOrigin=".5,.5">
+         <Path.RenderTransform><RotateTransform Angle="-32"/></Path.RenderTransform>
+        </Path>
+        <TextBlock x:Name="PinLabel" Text="未钉住" FontSize="12" FontWeight="SemiBold" Margin="6,0,0,0" VerticalAlignment="Center" Foreground="{TemplateBinding Foreground}"/>
+       </StackPanel>
+      </Border>
+      <ControlTemplate.Triggers>
+       <Trigger Property="IsMouseOver" Value="True">
+        <Setter TargetName="Chrome" Property="Background" Value="{DynamicResource SelectionHoverBrush}"/>
+       </Trigger>
+       <Trigger Property="Selector.IsSelected" Value="True">
+        <Setter Property="Foreground" Value="{DynamicResource OnPrimaryBrush}"/>
+        <Setter TargetName="Chrome" Property="Background" Value="{DynamicResource PrimaryBrush}"/>
+        <Setter TargetName="Chrome" Property="BorderBrush" Value="{DynamicResource PrimaryBrush}"/>
+        <Setter TargetName="PinGlyph" Property="Fill" Value="{DynamicResource OnPrimaryBrush}"/>
+        <Setter TargetName="PinGlyph" Property="RenderTransform"><Setter.Value><RotateTransform Angle="0"/></Setter.Value></Setter>
+        <Setter TargetName="PinLabel" Property="Text" Value="已钉住"/>
+       </Trigger>
+       <MultiTrigger>
+        <MultiTrigger.Conditions><Condition Property="Selector.IsSelected" Value="True"/><Condition Property="IsMouseOver" Value="True"/></MultiTrigger.Conditions>
+        <Setter TargetName="Chrome" Property="Background" Value="{DynamicResource PrimaryHoverBrush}"/>
+       </MultiTrigger>
+       <Trigger Property="IsKeyboardFocused" Value="True">
+        <Setter TargetName="Chrome" Property="BorderBrush" Value="{DynamicResource TextPrimaryBrush}"/>
+        <Setter TargetName="Chrome" Property="BorderThickness" Value="2"/>
+       </Trigger>
+       <Trigger Property="IsPressed" Value="True"><Setter Property="Opacity" Value=".78"/></Trigger>
+       <Trigger Property="IsEnabled" Value="False"><Setter Property="Opacity" Value=".4"/></Trigger>
+      </ControlTemplate.Triggers>
+     </ControlTemplate>
+    </Setter.Value>
+   </Setter>
+  </Style>
+ </Window.Resources>
  <Grid>
   <Viewbox Stretch="Uniform">
    <Grid>
@@ -35,9 +84,7 @@
          <TextBlock x:Name="BrandSubtitle" Text="ZHEYE" FontFamily="Consolas" Foreground="{DynamicResource TextSecondaryBrush}" FontSize="11" Margin="12,0,0,0" VerticalAlignment="Center"/>
         </StackPanel>
         <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Center">
-         <Button x:Name="PinButton" Width="36" Height="36" Padding="0" ToolTip="钉住面板" AutomationProperties.Name="钉住面板" AutomationProperties.AutomationId="PanelPin" Click="OnPinButton">
-          <Path Data="M6,2 H14 M8,2 V7 L5,11 V12 H15 V11 L12,7 V2 M10,12 V18" Width="18" Height="18" Stretch="Uniform" Stroke="{DynamicResource AccentInkBrush}" StrokeThickness="1.65" StrokeStartLineCap="Round" StrokeEndLineCap="Round" StrokeLineJoin="Round"/>
-         </Button>
+         <Button x:Name="PinButton" Style="{StaticResource PanelPinButton}" ToolTip="钉住面板" AutomationProperties.Name="钉住面板" AutomationProperties.AutomationId="PanelPin" Click="OnPinButton"/>
          <Button Height="36" Padding="10,0" Click="OnGamesButton" AutomationProperties.Name="图标台球">
           <StackPanel Orientation="Horizontal"><Path Data="M3,13 L5,7 Q6,5 8,5 H12 Q14,5 15,7 L17,13 Q17,16 15,16 L12,13 H8 L5,16 Q3,16 3,13 M6,9 H10 M8,7 V11 M12,9 H12.1 M14,10.5 H14.1" Width="17" Height="17" Stretch="Uniform" Stroke="{DynamicResource AccentInkBrush}" StrokeThickness="1.7" StrokeStartLineCap="Round" StrokeEndLineCap="Round" StrokeLineJoin="Round"/><TextBlock Text="图标台球" Margin="6,0,0,0" FontSize="12" VerticalAlignment="Center"/></StackPanel>
          </Button>
