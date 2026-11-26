@@ -6,6 +6,7 @@ namespace DesktopNook.App;
 
 internal sealed record FoldTheme(string Id, string Name, FoldTheme.Paper Light, FoldTheme.Paper Dark, string MarkLight, string Stud)
 {
+    internal bool IsGlass => Id == "glass";
     internal sealed record Paper(string Canvas, string Surface, string Grid, string Line, string Ink,
         string Muted, string Strip, string Accent, string Coral, string Mint, string Edge);
 
@@ -26,7 +27,11 @@ internal sealed record FoldTheme(string Id, string Name, FoldTheme.Paper Light, 
         new("berry", "蓝莓苏打",
             new("#F4F7FE", "#FFFFFF", "#E3EAF9", "#DCE5F7", "#16224A", "#7E8CB5", "#D9E3F7", "#4F6DF5", "#FB7185", "#34D399", "#B4C6EE"),
             new("#111A33", "#1B2647", "#212D52", "#34406B", "#E8EEFF", "#8C9BC7", "#0A1024", "#8AA6FF", "#FDA4AF", "#4FD69A", "#3B4A7A"),
-            "#8AA6FF", "#FBBF24")
+            "#8AA6FF", "#FBBF24"),
+        new("glass", "晴空玻璃",
+            new("#EEF7FC", "#F7FCFF", "#DDEEF7", "#CBDFEB", "#17384A", "#6D8C9F", "#D7EAF4", "#207C9E", "#E7799A", "#29AB9B", "#A9CCDD"),
+            new("#112532", "#1B3544", "#244453", "#365767", "#E8F7FF", "#8BAFC3", "#10232F", "#7BD5EF", "#F6A8C1", "#6CDECE", "#4B7487"),
+            "#7ADBF1", "#D8F5FF")
     ];
 
     internal static FoldTheme Find(string? id) => All.FirstOrDefault(theme => theme.Id == id) ?? All[0];

@@ -3,6 +3,8 @@ using System.IO;
 using System.Windows;
 using System.Windows.Automation;
 using System.Windows.Controls;
+using System.Windows.Controls.Primitives;
+using System.Windows.Data;
 using System.Windows.Media;
 using System.Windows.Threading;
 using DesktopNook.Core;
@@ -16,7 +18,9 @@ internal sealed class TaskbarAppearancePage : UserControl
     private readonly DispatcherTimer _previewTimer = new() { Interval = TimeSpan.FromSeconds(12) };
     private readonly CheckBox _enabled = new() { Content = "启用任务栏外观" };
     private readonly CheckBox _followScenes = new() { Content = "按场景自动切换外观" };
-    private readonly ComboBox _scene = new() { DisplayMemberPath = "Name" };
+    private readonly ListBox _scene = new() { DisplayMemberPath = "Name", BorderThickness = new Thickness(0), Background = Brushes.Transparent };
+    private readonly StackPanel _sceneControls = new();
+    private Button _pickColor = null!;
     private readonly CheckBox _sceneEnabled = new() { Content = "为此场景启用单独的外观" };
     private readonly TextBlock _sceneHint = new() { FontSize = 12, TextWrapping = TextWrapping.Wrap };
     private readonly ComboBox _layout = new();
@@ -54,25 +58,27 @@ internal sealed class TaskbarAppearancePage : UserControl
         _style.Items.Add(new ComboBoxItem { Content = "液态玻璃", Tag = "liquid", ToolTip = "轻模糊的背景在边缘产生折射，并沿上下沿显示渐变高光。" });
         _style.Items.Add(new ComboBoxItem { Content = "柔雾玻璃", Tag = "frosted", ToolTip = "提高背景模糊强度，减轻背景干扰。" });
 
-        var sceneCard = new StackPanel();
         _enabled.Margin = new Thickness(0, 0, 0, 10);
         _body.Children.Add(_enabled);
-        var switches = new WrapPanel { Margin = new Thickness(0, -3, 0, 5) };
-        switches.Children.Add(_followScenes);
-        sceneCard.Children.Add(switches);
-        _scene.ItemsSource = TaskbarAppearanceSettings.Scenes;
-        sceneCard.Children.Add(FieldRow("适用场景", _scene));
-        _sceneEnabled.Margin = new Thickness(82, 0, 0, 0);
-        sceneCard.Children.Add(_sceneEnabled);
-        _sceneHint.Foreground = ThemePalette.Brush("TextSecondaryBrush");
-        _sceneHint.Margin = new Thickness(88, 1, 0, 0);
-        sceneCard.Children.Add(_sceneHint);
-
+        _body.Children.Add(FieldRow("任务栏形态", _layout));
         var appearanceCard = new StackPanel();
+        _followScenes.Content = "按场景设置不同外观";
+        _followScenes.Margin = new Thickness(0, 4, 0, 8);
+        appearanceCard.Children.Add(_followScenes);
+        ConfigureScenePicker();
+        _scene.ItemsSource = TaskbarAppearanceSettings.Scenes;
+        _sceneControls.Children.Add(_scene);
+        appearanceCard.Children.Add(_sceneControls);
         _profileCaption.Foreground = ThemePalette.Brush("TextPrimaryBrush");
+        _profileCaption.Margin = new Thickness(0, 10, 0, 6);
         appearanceCard.Children.Add(_profileCaption);
+        _sceneEnabled.Content = "为此场景单独设置外观";
+        _sceneEnabled.Margin = new Thickness(0, 0, 0, 4);
+        appearanceCard.Children.Add(_sceneEnabled);
+        _sceneHint.Foreground = ThemePalette.Brush("TextSecondaryBrush");
+        _sceneHint.Margin = new Thickness(0, 0, 0, 8);
+        appearanceCard.Children.Add(_sceneHint);
         _layout.ToolTip = "开始按钮、应用和托盘合在一起，宽度随图标数量自动调整。";
-        var layoutOptions = new DockPanel();
         var assistBall = MakeButton("临时定位信息球…", () => _ = RunAsync(async () =>
         {
             if (App.IsSandbox) throw new InvalidOperationException("隔离模式不请求管理员权限。");
@@ -81,8 +87,6 @@ internal sealed class TaskbarAppearancePage : UserControl
         assistBall.Margin = new Thickness(8, 0, 0, 0);
         DockPanel.SetDock(assistBall, Dock.Right);
         var informationBall = new StackPanel { Margin = new Thickness(0, 10, 0, 0) };
-        layoutOptions.Children.Add(_layout);
-        appearanceCard.Children.Add(FieldRow("任务栏形态", layoutOptions));
         var automaticBall = new CheckBox
         {
             Content = "自动连接信息球",
@@ -107,7 +111,7 @@ internal sealed class TaskbarAppearancePage : UserControl
         _color.ToolTip = "颜色格式 #RRGGBB";
         AutomationProperties.SetName(_color, "颜色");
         colorControls.Children.Add(_color);
-        var pick = MakeButton("选颜色…", () =>
+        var pick = _pickColor = MakeButton("选颜色…", () =>
         {
             var value = TaskbarColorPicker.Choose(_owner, _color.Text.Trim());
             if (value is not null) _color.Text = value;
@@ -119,10 +123,9 @@ internal sealed class TaskbarAppearancePage : UserControl
         appearanceCard.Children.Add(FieldRow("颜色", colorControls));
         appearanceCard.Children.Add(FieldRow("不透明度", SliderField(_opacity, _opacityLabel, "颜色不透明度")));
         _radiusRow = FieldRow("模糊半径", SliderField(_radius, _radiusLabel, "模糊半径"));
-        sceneCard.Children.Add(_radiusRow);
-        sceneCard.Children.Add(informationBall);
+        appearanceCard.Children.Add(_radiusRow);
         _body.Children.Add(Card(appearanceCard));
-        var advanced = new Expander { Header = "高级设置 · 场景与信息球", Content = sceneCard,
+        var advanced = new Expander { Header = "信息球与辅助选项", Content = informationBall,
             Padding = new Thickness(0, 8, 0, 4), Margin = new Thickness(0, 4, 0, 0), Foreground = ThemePalette.Brush("TextPrimaryBrush") };
         AutomationProperties.SetAutomationId(advanced, "AppearanceAdvanced");
         _body.Children.Add(advanced);
@@ -138,10 +141,6 @@ internal sealed class TaskbarAppearancePage : UserControl
         var actions = new WrapPanel { HorizontalAlignment = HorizontalAlignment.Right };
         actions.Children.Add(MakeButton("取消更改", () => _ = RunAsync(ResetDraftAsync)));
         actions.Children.Add(MakeButton("预览", () => _ = RunAsync(PreviewAsync)));
-        var uniform = MakeButton("设为统一外观", () => _ = RunAsync(ApplyUniformAsync));
-        uniform.ToolTip = "立即对所有场景使用当前样式。保存的动态场景仍可重新启用。";
-        sceneCard.Children.Add(uniform);
-        uniform.Margin = new Thickness(0, 10, 0, 0);
         var apply = MakeButton("应用", () => _ = RunAsync(ApplyAsync), primary: true);
         apply.MinWidth = 68;
         apply.Margin = new Thickness(4, 0, 0, 0);
@@ -182,7 +181,6 @@ internal sealed class TaskbarAppearancePage : UserControl
         AutomationProperties.SetAutomationId(_scene, "AppearanceScene");
         AutomationProperties.SetAutomationId(_sceneEnabled, "AppearanceSceneEnabled");
         AutomationProperties.SetAutomationId(_followScenes, "AppearanceFollowScenes");
-        AutomationProperties.SetAutomationId(uniform, "AppearanceUniform");
         AutomationProperties.SetAutomationId(_style, "AppearanceStyle");
         AutomationProperties.SetAutomationId(_radius, "AppearanceBlurRadius");
         AutomationProperties.SetAutomationId(_opacity, "AppearanceOpacity");
@@ -195,18 +193,17 @@ internal sealed class TaskbarAppearancePage : UserControl
         {
             if (!_loading && _style.SelectedItem is ComboBoxItem { Tag: string selected })
             {
-                if (_activeScene.Key != TaskbarAppearanceSettings.DesktopScene) _sceneEnabled.IsChecked = true;
                 if (selected == "liquid") _opacity.Value = 38;
                 if (selected == "frosted") _opacity.Value = 104;
             }
             UpdateOpacity();
         };
-        _followScenes.Checked += (_, _) => UpdateSceneHint();
-        _followScenes.Unchecked += (_, _) => UpdateSceneHint();
+        _followScenes.Checked += (_, _) => ChangeSceneMode();
+        _followScenes.Unchecked += (_, _) => ChangeSceneMode();
         _enabled.Checked += (_, _) => UpdateSceneHint();
         _enabled.Unchecked += (_, _) => UpdateSceneHint();
-        _sceneEnabled.Checked += (_, _) => UpdateSceneHint();
-        _sceneEnabled.Unchecked += (_, _) => UpdateSceneHint();
+        _sceneEnabled.Checked += (_, _) => ChangeSceneOverride();
+        _sceneEnabled.Unchecked += (_, _) => ChangeSceneOverride();
         _previewTimer.Tick += (_, _) =>
         {
             if (_busy) return;
@@ -227,6 +224,88 @@ internal sealed class TaskbarAppearancePage : UserControl
         if (primary) button.Style = (Style)FindResource("PrimaryButton");
         button.Click += (_, _) => click();
         return button;
+    }
+
+    private void ConfigureScenePicker()
+    {
+        _scene.SetValue(ScrollViewer.HorizontalScrollBarVisibilityProperty, ScrollBarVisibility.Disabled);
+        _scene.SetValue(ScrollViewer.VerticalScrollBarVisibilityProperty, ScrollBarVisibility.Disabled);
+        _scene.SetValue(ScrollViewer.CanContentScrollProperty, false);
+        _scene.ItemsPanel = new ItemsPanelTemplate(new FrameworkElementFactory(typeof(WrapPanel)));
+        var border = new FrameworkElementFactory(typeof(Border));
+        border.Name = "SceneChrome";
+        border.SetValue(Border.CornerRadiusProperty, new CornerRadius(7));
+        border.SetValue(Border.PaddingProperty, new Thickness(9, 7, 9, 7));
+        border.SetValue(Border.MarginProperty, new Thickness(0, 0, 5, 5));
+        border.SetValue(Border.BorderThicknessProperty, new Thickness(1));
+        border.SetBinding(Border.BackgroundProperty, new Binding(nameof(Background)) { RelativeSource = RelativeSource.TemplatedParent });
+        border.SetBinding(Border.BorderBrushProperty, new Binding(nameof(BorderBrush)) { RelativeSource = RelativeSource.TemplatedParent });
+        var content = new FrameworkElementFactory(typeof(ContentPresenter));
+        border.AppendChild(content);
+        var template = new ControlTemplate(typeof(ListBoxItem)) { VisualTree = border };
+        var style = new Style(typeof(ListBoxItem));
+        style.Setters.Add(new Setter(Control.TemplateProperty, template));
+        style.Setters.Add(new Setter(Control.FontSizeProperty, 12d));
+        style.Setters.Add(new Setter(FrameworkElement.WidthProperty, 114d));
+        style.Setters.Add(new Setter(Control.ForegroundProperty, ThemePalette.Brush("TextSecondaryBrush")));
+        style.Setters.Add(new Setter(Control.BackgroundProperty, ThemePalette.Brush("SurfaceSubtleBrush")));
+        style.Setters.Add(new Setter(Control.BorderBrushProperty, Brushes.Transparent));
+        style.Setters.Add(new Setter(AutomationProperties.AutomationIdProperty, new Binding("Key") { StringFormat = "TaskbarScene-{0}" }));
+        var hover = new Trigger { Property = UIElement.IsMouseOverProperty, Value = true };
+        hover.Setters.Add(new Setter(Control.BackgroundProperty, ThemePalette.Brush("SelectionHoverBrush")));
+        style.Triggers.Add(hover);
+        var selected = new Trigger { Property = ListBoxItem.IsSelectedProperty, Value = true };
+        selected.Setters.Add(new Setter(Control.BackgroundProperty, ThemePalette.Brush("PrimaryBrush")));
+        selected.Setters.Add(new Setter(Control.ForegroundProperty, ThemePalette.Brush("OnPrimaryBrush")));
+        style.Triggers.Add(selected);
+        var focus = new Trigger { Property = UIElement.IsKeyboardFocusWithinProperty, Value = true };
+        focus.Setters.Add(new Setter(Control.BorderBrushProperty, ThemePalette.Brush("AccentInkBrush")));
+        style.Triggers.Add(focus);
+        _scene.ItemContainerStyle = style;
+    }
+
+    private TaskbarAppearanceProfile ReadEditedProfile()
+    {
+        var selected = _draft.ProfileFor(_activeScene.Key);
+        string style = (_style.SelectedItem as ComboBoxItem)?.Tag as string ?? "normal";
+        return selected with { Enabled = _sceneEnabled.IsChecked == true, Style = style, Color = _color.Text.Trim(),
+            Alpha = (byte)Math.Round(_opacity.Value), BlurRadius = style == "blur" ? _radius.Value : selected.BlurRadius };
+    }
+
+    private void ChangeSceneMode()
+    {
+        if (_loading) return;
+        try { _draft = Fields(); LoadScene(TaskbarAppearanceSettings.Scenes[0]); CancelPreviewForEdit(); }
+        catch (IOException error)
+        {
+            _loading = true; _followScenes.IsChecked = _draft.FollowScenes; _loading = false;
+            _message.Text = error.Message;
+        }
+    }
+
+    private void ChangeSceneOverride()
+    {
+        if (_loading || _activeScene.Key == TaskbarAppearanceSettings.DesktopScene) return;
+        try
+        {
+            bool enabled = _sceneEnabled.IsChecked == true;
+            var profile = _draft.ProfileFor(_activeScene.Key);
+            if (!enabled) profile = ReadEditedProfile();
+            else if (_draft.Profiles?.ContainsKey(_activeScene.Key) != true)
+            {
+                var baseProfile = _draft.ProfileFor(TaskbarAppearanceSettings.DesktopScene);
+                profile = new TaskbarAppearanceProfile { Style = baseProfile.Style, Color = baseProfile.Color,
+                    Alpha = baseProfile.Alpha, BlurRadius = baseProfile.BlurRadius };
+            }
+            _draft = _draft.WithProfile(_activeScene.Key, profile with { Enabled = enabled });
+            LoadScene(_activeScene);
+            CancelPreviewForEdit();
+        }
+        catch (IOException error)
+        {
+            _loading = true; _sceneEnabled.IsChecked = _draft.ProfileFor(_activeScene.Key).Enabled; _loading = false;
+            _message.Text = error.Message;
+        }
     }
 
     private static Border Card(UIElement content) => new()
@@ -302,12 +381,16 @@ internal sealed class TaskbarAppearancePage : UserControl
     {
         _loading = true;
         _activeScene = scene;
-        _profileCaption.Text = scene.Key == TaskbarAppearanceSettings.DesktopScene ? "默认外观" : scene.Name + "外观";
-        var profile = _draft.ProfileFor(scene.Key);
+        bool inherited = scene.Key != TaskbarAppearanceSettings.DesktopScene && !_draft.ProfileFor(scene.Key).Enabled;
+        _profileCaption.Text = _followScenes.IsChecked != true ? "所有场景 · 统一外观" : scene.Key == TaskbarAppearanceSettings.DesktopScene
+            ? "桌面 · 默认外观" : scene.Name + (inherited ? " · 继承桌面" : " · 单独外观");
+        _sceneControls.Visibility = _followScenes.IsChecked == true ? Visibility.Visible : Visibility.Collapsed;
+        var stored = _draft.ProfileFor(scene.Key);
+        var profile = inherited ? _draft.ProfileFor(TaskbarAppearanceSettings.DesktopScene) : stored;
         var defaults = TaskbarAppearanceSettings.SceneDefaultsFor(scene.Key);
         _scene.SelectedItem = scene;
         _sceneEnabled.Visibility = scene.Key == TaskbarAppearanceSettings.DesktopScene ? Visibility.Collapsed : Visibility.Visible;
-        _sceneEnabled.IsChecked = profile.Enabled;
+        _sceneEnabled.IsChecked = stored.Enabled;
         _style.SelectedItem = _style.Items.OfType<ComboBoxItem>().Single(item => Equals(item.Tag, profile.Style));
         _color.Text = profile.Color;
         _opacity.Value = profile.Alpha;
@@ -322,19 +405,19 @@ internal sealed class TaskbarAppearancePage : UserControl
         if (_loading) return;
         if (_enabled.IsChecked != true)
         {
-            ShowSceneHint("启用外观后可预览，或直接设为统一外观。");
+            ShowSceneHint("启用任务栏外观后，可预览当前设置，再点击应用保存。");
             return;
         }
         if (_followScenes.IsChecked != true)
         {
-            ShowSceneHint("各场景使用桌面外观。开启自动切换后可恢复独立设置。");
+            ShowSceneHint("当前样式用于所有场景。开启场景设置后可分别调整，原有设置会保留。");
             return;
         }
         if (_activeScene.Key != TaskbarAppearanceSettings.DesktopScene)
         {
             ShowSceneHint(_sceneEnabled.IsChecked == true
-                ? "该场景触发时生效，也可立即预览。"
-                : "该场景未启用，仍可先保存设置。");
+                ? "已单独设置；点击应用后，在该场景触发时生效。"
+                : "当前继承桌面外观。打开上方开关后，可单独调整此场景。");
             return;
         }
         var overrides = TaskbarAppearanceSettings.Scenes.Skip(1)
@@ -362,6 +445,7 @@ internal sealed class TaskbarAppearancePage : UserControl
         {
             _draft = Fields();
             LoadScene(next);
+            CancelPreviewForEdit();
         }
         catch (IOException ex)
         {
@@ -372,12 +456,27 @@ internal sealed class TaskbarAppearancePage : UserControl
         }
     }
 
+    private void CancelPreviewForEdit()
+    {
+        if (!_session.HasPreview) return;
+        _previewTimer.Stop();
+        _ = RunAsync(async () =>
+        {
+            await _session.CancelPreviewAsync();
+            _message.Text = "已切换设置，上一次预览已结束。可重新预览，再点击应用保存。";
+        });
+    }
+
     private void UpdateOpacity()
     {
         var mode = (_style.SelectedItem as ComboBoxItem)?.Tag as string;
         var custom = mode is not null and not "normal";
-        _color.IsEnabled = custom;
-        _opacity.IsEnabled = mode is "clear" or "blur" or "acrylic" or "liquid" or "frosted";
+        bool editable = _activeScene.Key == TaskbarAppearanceSettings.DesktopScene || _sceneEnabled.IsChecked == true;
+        _style.IsEnabled = editable;
+        _color.IsEnabled = editable && custom;
+        _pickColor.IsEnabled = editable && custom;
+        _opacity.IsEnabled = editable && mode is "clear" or "blur" or "acrylic" or "liquid" or "frosted";
+        _radius.IsEnabled = editable;
         _radiusRow.Visibility = mode == "blur" ? Visibility.Visible : Visibility.Collapsed;
         _opacityLabel.Text = $"{_opacity.Value * 100 / 255:0}%";
         _radiusLabel.Text = $"{_radius.Value:0.#}";
@@ -386,15 +485,8 @@ internal sealed class TaskbarAppearancePage : UserControl
     private TaskbarAppearanceSettings Fields()
     {
         var selected = _draft.ProfileFor(_activeScene.Key);
-        string style = (_style.SelectedItem as ComboBoxItem)?.Tag as string ?? "normal";
-        var profile = new TaskbarAppearanceProfile
-        {
-            Enabled = _sceneEnabled.IsChecked == true,
-            Style = style,
-            Color = _color.Text.Trim(),
-            Alpha = (byte)Math.Round(_opacity.Value),
-            BlurRadius = style == "blur" ? _radius.Value : selected.BlurRadius
-        };
+        var profile = _activeScene.Key != TaskbarAppearanceSettings.DesktopScene && _sceneEnabled.IsChecked != true
+            ? selected with { Enabled = false } : ReadEditedProfile();
         return (_draft.WithProfile(_activeScene.Key, profile) with
         {
             Enabled = _enabled.IsChecked == true,
@@ -422,7 +514,9 @@ internal sealed class TaskbarAppearancePage : UserControl
 
     private async Task PreviewAsync()
     {
-        var appearance = Fields().ForPreview(_activeScene.Key);
+        string scene = _activeScene.Key != TaskbarAppearanceSettings.DesktopScene && _sceneEnabled.IsChecked != true
+            ? TaskbarAppearanceSettings.DesktopScene : _activeScene.Key;
+        var appearance = Fields().ForPreview(scene);
         if (!CanApply(appearance)) return;
         if (!appearance.UsesComponent && !_session.Running)
         {
@@ -448,16 +542,6 @@ internal sealed class TaskbarAppearancePage : UserControl
                 ? "已保存此场景的设置。启用场景切换与此场景后，触发时才会显示。"
                 : appearance.UsesComponent ? "外观设置已应用，可在「预览」查看当前所选样式。" : "已恢复系统默认外观。";
         UpdateSceneHint();
-    }
-
-    private async Task ApplyUniformAsync()
-    {
-        var appearance = Fields().ForUniformAppearance(_activeScene.Key) with { Enabled = true };
-        if (!CanApply(appearance)) return;
-        await _session.ApplyAsync(appearance, _downloadApproved);
-        _previewTimer.Stop();
-        LoadFields(_session.Saved);
-        _message.Text = "已将所选样式用于所有场景。原来的动态场景设置已保留。";
     }
 
     private async Task RestoreSystemAsync()

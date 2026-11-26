@@ -232,7 +232,9 @@ internal sealed class SettingsWindow : Window
             case "外观":
                 ColorThemeCards();
                 ThemeCards();
-                Pick("界面风格", "Settings-VisualStyle", _options.VisualStyle,
+                if (ThemePalette.Family.IsGlass)
+                    Info("晴空玻璃主题已包含通透表面、玻璃高光与整套控件配色。切换其他主题时恢复原界面风格。");
+                else Pick("界面风格", "Settings-VisualStyle", _options.VisualStyle,
                     PanelVisualStyle.Choices.Select(choice => (choice.Id, choice.Name)).ToArray(), value =>
                     {
                         _options.VisualStyle = value;
@@ -313,7 +315,7 @@ internal sealed class SettingsWindow : Window
 
     private void ColorThemeCards()
     {
-        var heading = Text("配色", 14);
+        var heading = Text("主题", 14);
         heading.FontWeight = FontWeights.SemiBold;
         heading.Margin = new Thickness(0, 0, 0, 8);
         _content.Children.Add(heading);
@@ -323,7 +325,10 @@ internal sealed class SettingsWindow : Window
             bool current = _options.ColorTheme == theme.Id;
             var stack = new StackPanel { Orientation = Orientation.Horizontal };
             stack.Children.Add(new Image { Source = FoldTheme.Mark(theme), Width = 25, Height = 25, Margin = new Thickness(0, 0, 7, 0) });
-            stack.Children.Add(Text(theme.Name, 12));
+            var description = new StackPanel();
+            description.Children.Add(Text(theme.Name, 12));
+            if (theme.IsGlass) description.Children.Add(Text("玻璃材质与整套配色", 10, "TextSecondaryBrush"));
+            stack.Children.Add(description);
             var button = new Button
             {
                 Content = stack, MinWidth = 106, Margin = new Thickness(0, 0, 6, 6), Padding = new Thickness(7),

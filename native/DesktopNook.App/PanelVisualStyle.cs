@@ -16,9 +16,10 @@ internal static class PanelVisualStyle
     }
     internal static void Apply(MainWindow main)
     {
-        bool paper = Selected == "paper" || SystemParameters.HighContrast;
-        bool glass = Selected is "glass" or "crystal" && !SystemParameters.HighContrast;
-        bool crystal = Selected == "crystal" && !SystemParameters.HighContrast;
+        bool glassTheme = ThemePalette.Family.IsGlass && !SystemParameters.HighContrast;
+        bool paper = (!glassTheme && Selected == "paper") || SystemParameters.HighContrast;
+        bool glass = (Selected is "glass" or "crystal" || glassTheme) && !SystemParameters.HighContrast;
+        bool crystal = (Selected == "crystal" || glassTheme) && !SystemParameters.HighContrast;
         var canvas = ThemePalette.Brush("CanvasBrush").Color;
         var title = ThemePalette.Brush("FoldTitleBrush").Color;
         // An accent on a per-pixel WPF window becomes opaque on current builds.

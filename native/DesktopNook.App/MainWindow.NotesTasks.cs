@@ -13,8 +13,6 @@ public partial class MainWindow
     {
         var rows = new StackPanel();
         content.Children.Add(rows);
-        NoteTextEditor? selectedEditor = null;
-        Action? updateStrike = null;
         if (!readOnly)
         {
             var add = NotesButton("＋ 添加", _ => AddTask());
@@ -23,7 +21,6 @@ public partial class MainWindow
             DockPanel.SetDock(add, Dock.Right);
             header.Children.Insert(header.Children.Count - 1, add);
 
-            updateStrike = AddNoteStrikeButton(header, "NoteTaskStrike-" + note.Id, () => selectedEditor);
         }
         BuildRows();
 
@@ -70,8 +67,7 @@ public partial class MainWindow
 
         void BuildRows()
         {
-            selectedEditor = null;
-            updateStrike?.Invoke();
+            ResetNoteFormatting();
             rows.Children.Clear();
             foreach (var (task, index) in note.Tasks.Select((task, index) => (task, index)).OrderBy(entry => entry.task.Done))
             {
@@ -122,15 +118,6 @@ public partial class MainWindow
                     note.Tasks.Remove(task);
                     note.ModifiedUtc = DateTime.UtcNow;
                 }));
-                editor.GotKeyboardFocus += (_, _) =>
-                {
-                    selectedEditor = editor;
-                    updateStrike?.Invoke();
-                };
-                editor.SelectionChanged += (_, _) =>
-                {
-                    if (selectedEditor == editor) updateStrike?.Invoke();
-                };
                 editor.TextChanged += (_, _) =>
                 {
                     var (text, strikes) = editor.ReadContent();
@@ -144,7 +131,6 @@ public partial class MainWindow
                     task.Bolds = bolds;
                     NotesChanged(true, note);
                     UpdateNoteCounts();
-                    if (selectedEditor == editor) updateStrike?.Invoke();
                 };
                 check.Click += (_, _) =>
                 {

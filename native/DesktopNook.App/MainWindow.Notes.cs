@@ -80,7 +80,10 @@ public partial class MainWindow
         TrackComposition(_noteSearch);
         _noteSearch.TextChanged+=(_,_)=>{if(_renderingNotes||NoteProject is null)return;NoteProject.Search=_noteSearch.Text;_notesSearchHint.Visibility=_noteSearch.Text.Length==0?Visibility.Visible:Visibility.Collapsed;NotesChanged();_notesSearch.Stop();_notesSearch.Start();};
         _notesSearchLayer=new Grid();_notesSearchLayer.Children.Add(_noteSearch);_notesSearchHint=NotesText("搜索当前分类的记录…",12);_notesSearchHint.Margin=new Thickness(10,0,10,8);_notesSearchHint.IsHitTestVisible=false;_notesSearchHint.Foreground=Brush("TextSecondaryBrush");_notesSearchLayer.Children.Add(_notesSearchHint);body.Children.Add(_notesSearchLayer);
-        _notesCounts=NotesText("",11);AutomationProperties.SetName(_notesCounts,"分类记录统计");_notesCounts.Margin=new Thickness(0,0,0,8);_notesCounts.TextWrapping=TextWrapping.NoWrap;_notesCounts.TextTrimming=TextTrimming.CharacterEllipsis;Grid.SetRow(_notesCounts,1);body.Children.Add(_notesCounts);
+        _notesCounts=NotesText("",11);AutomationProperties.SetName(_notesCounts,"分类记录统计");
+        var statistics = new DockPanel { Margin = new Thickness(0,0,0,8), LastChildFill = true };
+        var formatting = CreateNoteFormatToolbar(); DockPanel.SetDock(formatting, Dock.Right); statistics.Children.Add(formatting);
+        statistics.Children.Add(_notesCounts); Grid.SetRow(statistics,1); body.Children.Add(statistics);
         _noteCards=new StackPanel(); _notesScroll=new ScrollViewer { Content=_noteCards, VerticalScrollBarVisibility=ScrollBarVisibility.Auto, HorizontalScrollBarVisibility=ScrollBarVisibility.Disabled };
         _notesScroll.ScrollChanged+=(_,e)=>{if(e.VerticalChange==0)return;_shutter.InvalidateSnapshot();if(!_renderingNotes&&!_showNotesArchive&&NoteProject is not null){NoteProject.Scroll=_notesScroll.VerticalOffset;NotesChanged();}};
         Grid.SetRow(_notesScroll,2);body.Children.Add(_notesScroll);NotesHost.Children.Add(body);
@@ -172,6 +175,7 @@ public partial class MainWindow
             _notesSearchLayer.Visibility = _projectTabs.Visibility;
             if (_showNotesArchive)
             {
+                ResetNoteFormatting();
                 RenderNotesArchive();
                 UpdateNotesColumns();
                 return;
@@ -225,7 +229,7 @@ public partial class MainWindow
         var notes=NotesDraft.Notes.Where(n=>n.ProjectId==NoteProject?.Id&&!n.Archived).ToList();
         var tasks=notes.Where(n=>n.Kind=="todo").SelectMany(n=>n.Tasks).Where(t=>!string.IsNullOrWhiteSpace(t.Text)).ToList();
         var search=NoteProject?.Search??"";
-        _notesCounts.Text=$"{notes.Count} 条记录 · 待完成 {tasks.Count(t=>!t.Done)} · 已完成 {tasks.Count(t=>t.Done)}"+(search.Length>0?$" · 匹配 {notes.Count(MatchesNote)} 条":"");
+        _notesCounts.Text=$"{notes.Count} 条记录 · 待办总计 {tasks.Count} · 待完成 {tasks.Count(t=>!t.Done)} · 已完成 {tasks.Count(t=>t.Done)}"+(search.Length>0?$" · 匹配 {notes.Count(MatchesNote)} 条":"");
         _notesCounts.ToolTip=_notesCounts.Text;
     }
     private bool MatchesNote(ProjectNote note)
@@ -238,6 +242,7 @@ public partial class MainWindow
     {
         if (_notesComposing || _showNotesArchive) return;
         _shutter.InvalidateSnapshot();
+        ResetNoteFormatting();
         _noteCards.Children.Clear();
         UpdateNoteCounts();
         var notes = ActiveCategoryNotes();
@@ -267,85 +272,6 @@ public partial class MainWindow
         ConfigureNoteEditor(editor, note, "title", null);
         editor.TextChanged+=(_,_)=>{note.Title=editor.Text;NotesChanged(true,note);UpdateNoteCounts();};
         return editor;
-    }
-
-    private Action AddNoteStrikeButton(DockPanel header, string id, Func<NoteTextEditor?> selectedEditor)
-    {
-        Button? highlight = null;
-        Button? bold = null;
-        var button = NotesButton("S", clicked =>
-        {
-            if (_notesComposing || selectedEditor() is not { IsReadOnly: false, Selection.IsEmpty: false } editor) return;
-            editor.Focus();
-            editor.ToggleStrike();
-            Update(clicked);
-        });
-        button.Content = new TextBlock { Text = "S", TextDecorations = TextDecorations.Strikethrough };
-        AutomationProperties.SetAutomationId(button, id);
-        ToolTipService.SetShowOnDisabled(button, true);
-        DockPanel.SetDock(button, Dock.Right);
-        header.Children.Insert(header.Children.Count - 1, button);
-        bold = NotesButton("B", _ =>
-        {
-            if (_notesComposing || selectedEditor() is not { IsReadOnly: false, Selection.IsEmpty: false } editor) return;
-            editor.Focus();
-            editor.ToggleBold();
-            Update(button);
-        });
-        bold.Content = new TextBlock { Text = "B", FontWeight = FontWeights.Bold };
-        AutomationProperties.SetAutomationId(bold, id + "-Bold");
-        ToolTipService.SetShowOnDisabled(bold, true);
-        DockPanel.SetDock(bold, Dock.Right);
-        header.Children.Insert(header.Children.Count - 1, bold);
-        highlight = NotesButton("标注", _ =>
-        {
-            if (_notesComposing || selectedEditor() is not { IsReadOnly: false, Selection.IsEmpty: false } editor) return;
-            Popup(button, NoteHighlightOptions(editor));
-        });
-        highlight.ToolTip = "为选中的文字设置背景色";
-        AutomationProperties.SetAutomationId(highlight, id + "-Highlight");
-        DockPanel.SetDock(highlight, Dock.Right);
-        header.Children.Insert(header.Children.Count - 1, highlight);
-        Update(button);
-        return () => Update(button);
-
-        void Update(Button target)
-        {
-            var editor = selectedEditor();
-            target.IsEnabled = editor is { IsReadOnly: false, Selection.IsEmpty: false };
-            if (highlight is not null) highlight.IsEnabled = target.IsEnabled;
-            if (bold is not null)
-            {
-                bold.IsEnabled = target.IsEnabled;
-                bool isBold = target.IsEnabled && editor!.SelectionIsBold();
-                bold.Background = isBold ? Brush("SelectionBrush") : Brushes.Transparent;
-                bold.ToolTip = target.IsEnabled ? isBold ? "取消加粗（Ctrl+B）" : "字体加粗（Ctrl+B）" : "选中文字后添加或取消加粗";
-                AutomationProperties.SetName(bold, isBold ? "取消加粗" : "字体加粗");
-            }
-            bool remove = target.IsEnabled && editor!.SelectionIsStruck();
-            string action = remove ? "取消删除线" : "添加删除线";
-            target.Background = remove ? Brush("SelectionBrush") : Brushes.Transparent;
-            target.ToolTip = target.IsEnabled ? action : "选中文字后添加或取消删除线";
-            AutomationProperties.SetName(target, action);
-        }
-    }
-
-    private IEnumerable<object> NoteHighlightOptions(NoteTextEditor editor)
-    {
-        foreach (var (name, color) in new (string, string?)[]
-        {
-            ("黄色", "#FFF0A6"), ("绿色", "#CBEFCB"), ("蓝色", "#CDE8FF"),
-            ("粉色", "#FFD7E5"), ("紫色", "#E3D6FF"), ("橙色", "#FFD8AF"),
-            ("珊瑚色", "#FFC9C4"), ("薄荷色", "#BBEEDF"), ("青色", "#BDEDF2"),
-            ("青柠色", "#E4EFA9"), ("米色", "#EEDFC5"), ("灰色", "#DFE3EB"), ("清除背景色", null)
-        })
-        {
-            var item = Menu(name, () => { editor.Focus(); editor.Highlight(color); },
-                !editor.IsReadOnly && !editor.Selection.IsEmpty);
-            if (color is not null) item.Icon = new Border { Width = 14, Height = 14,
-                CornerRadius = new CornerRadius(3), Background = new SolidColorBrush((Color)ColorConverter.ConvertFromString(color)) };
-            yield return item;
-        }
     }
 
     private void ConfigureNoteEditor(TextBoxBase editor, ProjectNote note, string key, Action? delete)
@@ -383,13 +309,17 @@ public partial class MainWindow
         TrackComposition(editor);
         editor.SelectionChanged += (_, _) =>
         {
+            if (ReferenceEquals(editor, _activeNoteEditor)) _updateNoteFormatButtons?.Invoke();
             if (_renderingNotes || _showNotesArchive || !editor.IsKeyboardFocused || NoteProject is not { } project) return;
             project.EditorKey = key;
             (project.Caret, project.SelectionLength) = ReadSelection();
             NotesChanged();
         };
+        editor.TextChanged += (_, _) => { if (ReferenceEquals(editor, _activeNoteEditor)) _updateNoteFormatButtons?.Invoke(); };
         editor.GotKeyboardFocus += (_, _) =>
         {
+            _activeNoteEditor = editor as NoteTextEditor;
+            _updateNoteFormatButtons?.Invoke();
             if (_showNotesArchive || NoteProject is not { } project) return;
             project.SelectedNote = note.Id;
             project.EditorKey = key;
@@ -429,8 +359,6 @@ public partial class MainWindow
             };
             AutomationProperties.SetName(body, "文字记录正文");
             ConfigureNoteEditor(body, note, "body", null);
-            Action? updateStrike = readOnly ? null : AddNoteStrikeButton(header, "NoteTextStrike-" + note.Id, () => body);
-            body.SelectionChanged += (_, _) => updateStrike?.Invoke();
             body.TextChanged += (_, _) =>
             {
                 var (text, strikes) = body.ReadContent();
@@ -444,7 +372,6 @@ public partial class MainWindow
                 if (strikes is not null || note.BodyStrikes is not null) note.BodyStrikes = strikes ?? [];
                 NotesChanged(true, note);
                 UpdateNoteCounts();
-                updateStrike?.Invoke();
             };
             content.Children.Add(body);
         }

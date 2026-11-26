@@ -58,9 +58,9 @@ internal static class FeatureVerification
             await Layout();
             var editor = Find<NoteTextEditor>(main.NotesHost).Single();
             editor.Focus(); editor.SelectCharacters(0, 5);
-            var bold = Find<Button>(main.NotesHost).Single(button => AutomationProperties.GetAutomationId(button).EndsWith("-Bold", StringComparison.Ordinal));
+            var bold = Find<Button>(main.NotesHost).Single(button => AutomationProperties.GetAutomationId(button) == "NotesFormatBold");
             bold.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
-            Check(note.BodyBolds?.SequenceEqual([new NoteBoldRange(0, 5)]) == true && editor.SelectionIsBold(), "通过标题栏为选中文字加粗");
+            Check(note.BodyBolds?.SequenceEqual([new NoteBoldRange(0, 5)]) == true && editor.SelectionIsBold(), "通过统计行为选中文字加粗");
             editor.Highlight("#BBEEDF");
             editor.ToggleStrike();
             Check(main.FlushNotes(false), "加粗、标注、删除线同时保存");
@@ -75,7 +75,7 @@ internal static class FeatureVerification
             Check(editor.ReadBolds()?.Any(range => range.Start <= 1 && range.Start + range.Length >= 6) == true, "在格式文字前输入后加粗随文字移动");
             editor.Undo();
             editor.SelectCharacters(0, 5);
-            bold = Find<Button>(main.NotesHost).Single(button => AutomationProperties.GetAutomationId(button).EndsWith("-Bold", StringComparison.Ordinal));
+            bold = Find<Button>(main.NotesHost).Single(button => AutomationProperties.GetAutomationId(button) == "NotesFormatBold");
             bold.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
             Check(editor.ReadBolds() is null, "同一按钮可以取消加粗");
             editor.ToggleBold();
@@ -112,6 +112,28 @@ internal static class FeatureVerification
                 GroupPreviewVerification.Snapshot(main, Path.Combine(root, "glass-" + mode + "-native.png"));
             }
             other.Close(); other = null;
+            App.Options.VisualStyle = "paper"; PanelVisualStyle.Select("paper");
+            var themeSettings = new SettingsWindow(main);
+            try
+            {
+                themeSettings.SelectPage("外观"); themeSettings.Show(); await Layout();
+                Find<Button>(themeSettings).Single(button => AutomationProperties.GetAutomationId(button) == "Settings-Color-glass")
+                    .RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+                await Layout();
+                Check(ThemePalette.Family.IsGlass && ((SolidColorBrush)main.Surface.Background).Color.A < 255 &&
+                    !Find<ComboBox>(themeSettings).Any(control => AutomationProperties.GetAutomationId(control) == "Settings-VisualStyle"),
+                    "独立玻璃主题自动应用整套配色与材质，无需风格开关");
+                Check(App.Options.ColorTheme == "glass" && App.Options.VisualStyle == "paper", "选择玻璃主题保存主题标识并保留其他主题原风格");
+                foreach (var mode in new[] { "light", "dark" })
+                {
+                    Find<Button>(themeSettings).Single(button => AutomationProperties.GetAutomationId(button) == "Settings-Theme-" + mode)
+                        .RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+                    await Layout();
+                    Check(ThemePalette.Family.IsGlass && ThemePalette.Mode == mode, mode + " 模式保留独立玻璃主题");
+                    Snapshot(themeSettings, "glass-theme-settings-" + mode); Snapshot(main, "glass-theme-" + mode);
+                }
+            }
+            finally { themeSettings.Close(); }
             var session = new TaskbarAppearanceSession(new TaskbarAppearanceStore(Path.Combine(root, "appearance")), new QuietBackend());
             var settings = new Window { Width = 540, Height = 620, Title = "任务栏设置验收", Owner = main };
             try
@@ -124,7 +146,7 @@ internal static class FeatureVerification
                 Check(!advanced.IsExpanded && Find<Button>(settings).Any(button => AutomationProperties.GetAutomationId(button) == "AppearanceApply"), "任务栏高级选项默认折叠且应用入口可见");
                 Snapshot(settings, "taskbar-simple");
                 advanced.IsExpanded = true; settings.UpdateLayout();
-                Check(Find<ComboBox>(settings).Any(control => AutomationProperties.GetAutomationId(control) == "AppearanceScene"), "高级设置保留场景配置");
+                Check(Find<ListBox>(settings).Any(control => AutomationProperties.GetAutomationId(control) == "AppearanceScene"), "场景直接选择，辅助选项单独折叠");
             }
             finally { settings.Close(); }
             UiMotion.Configure("off");
@@ -135,9 +157,10 @@ internal static class FeatureVerification
                 try
                 {
                     picker.UpdateLayout();
-                    var standard = Find<Button>(picker).Where(button => button.Content is Border).ToList();
-                    Check(standard.Count == 30 && standard.All(button => ((Border)button.Content).ActualWidth >= 24 &&
-                        ((Border)button.Content).ActualHeight >= 16), "30 个标准色色块完整可见");
+                    var standard = Find<Button>(picker).Where(button => AutomationProperties.GetAutomationId(button).StartsWith("ColorSwatch-", StringComparison.Ordinal)).ToList();
+                    Check(standard.Count == 30 && standard.All(button => button.Content is StackPanel content &&
+                        content.Children.OfType<Border>().Single().ActualWidth >= 24 && content.Children.OfType<TextBlock>().Single().Text.Length > 0),
+                        "30 个标准色色块带可见颜色名称");
                     standard.Single(button => AutomationProperties.GetName(button) == "暖灰 #B9ADA1")
                         .RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
                     picker.UpdateLayout();

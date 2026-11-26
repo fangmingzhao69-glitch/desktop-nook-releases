@@ -105,14 +105,14 @@ internal static class NotesVerification
             Check(ReferenceEquals(body,Body()),"自动保存不重建编辑控件或打断正文焦点");
             var textNote = window.NotesDraft.Notes.Single();
             var bodyStrike = Find<Button>(window.NotesHost).Single(button =>
-                AutomationProperties.GetAutomationId(button) == "NoteTextStrike-" + textNote.Id);
+                AutomationProperties.GetAutomationId(button) == "NotesFormatStrike");
             int newline = textRecord.IndexOf('\n');
             body.SelectCharacters(newline - 2, 5);
             bodyStrike.Focus();
             bodyStrike.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
             NoteStrikeRange[] expectedTextStrikes = [new(newline - 2, 2), new(newline + 1, 2)];
             Check(body.PlainText == textRecord && textNote.BodyStrikes?.SequenceEqual(expectedTextStrikes) == true,
-                "标题旁删除线按钮支持正文跨行选区并保持原文");
+                "统计行删除线按钮支持正文跨行选区并保持原文");
             Check(window.FlushNotes(false) && new NotesStore(App.Store.DataDirectory).State.Notes.Single()
                 .BodyStrikes?.SequenceEqual(expectedTextStrikes) == true &&
                 NotesMarkdown.Export(window.NotesDraft, textNote).Contains("~~求。~~\n~~下一~~"),
@@ -166,19 +166,24 @@ internal static class NotesVerification
             taskBox.Focus();
             taskBox.SelectCharacters(0, 0);
             var strike = Find<Button>(window.NotesHost).Single(button =>
-                AutomationProperties.GetAutomationId(button) == "NoteTaskStrike-" + checklist.Id);
-            Check(!strike.IsEnabled && ReferenceEquals(strike.Parent, Find<TextBox>(window.NotesHost).Last(b =>
-                    AutomationProperties.GetName(b) == "记录标题").Parent), "删除线按钮和清单标题同行");
+                AutomationProperties.GetAutomationId(button) == "NotesFormatStrike");
+            Check(!strike.IsEnabled && ((DockPanel)Find<TextBlock>(window.NotesHost).Single(text =>
+                    AutomationProperties.GetName(text) == "分类记录统计").Parent).IsAncestorOf(strike), "格式工具与统计同行，空选区时禁用");
             taskBox.SelectCharacters(2, 2);
-            Check(strike.IsEnabled && AutomationProperties.GetName(strike) == "添加删除线", "选中文字可从标题栏加删除线");
+            Check(strike.IsEnabled && AutomationProperties.GetName(strike) == "添加删除线", "选中文字可从统计行加删除线");
             var marker = Find<Button>(window.NotesHost).Single(button =>
-                AutomationProperties.GetAutomationId(button) == "NoteTaskStrike-" + checklist.Id + "-Highlight");
+                AutomationProperties.GetAutomationId(button) == "NotesFormatColor");
             marker.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
-            ClickMenu(window.LastMenu!.Items.OfType<MenuItem>().Single(item => Equals(item.Header, "黄色")));
+            await Layout(); window.LastMenu!.UpdateLayout();
+            var paletteBitmap = new RenderTargetBitmap((int)window.LastMenu.ActualWidth, (int)window.LastMenu.ActualHeight, 96, 96, PixelFormats.Pbgra32);
+            paletteBitmap.Render(window.LastMenu); var palettePng = new PngBitmapEncoder(); palettePng.Frames.Add(BitmapFrame.Create(paletteBitmap));
+            using (var paletteFile = File.Create(Path.Combine(root, "note-color-palette.png"))) palettePng.Save(paletteFile);
+            Find<Button>(window.LastMenu).Single(item => AutomationProperties.GetAutomationId(item) == "ColorSwatch-FFF0A6")
+                .RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
             NoteHighlightRange[] expectedHighlights = [new(2, 2, "#FFF0A6")];
             Check(checklist.Tasks.Single().Highlights?.SequenceEqual(expectedHighlights) == true &&
                 window.FlushNotes(false) && new NotesStore(App.Store.DataDirectory).State.Notes.Last().Tasks.Single()
-                .Highlights?.SequenceEqual(expectedHighlights) == true, "标题栏文字背景色保存并重新读取");
+                .Highlights?.SequenceEqual(expectedHighlights) == true, "统计行文字背景色保存并重新读取");
             window.RenderNotes();
             await Layout();
             taskBox = TaskEditors(checklist).Single();
@@ -199,15 +204,15 @@ internal static class NotesVerification
                 NotesMarkdown.Export(new NotesState(), conversion).Contains("<mark style=\"background-color:#FFF0A6\">设计</mark>"),
                 "标注在类型转换和 Markdown 导出中保留");
             strike = Find<Button>(window.NotesHost).Single(button =>
-                AutomationProperties.GetAutomationId(button) == "NoteTaskStrike-" + checklist.Id);
+                AutomationProperties.GetAutomationId(button) == "NotesFormatStrike");
             strike.Focus();
             strike.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
             Check(taskBox.ReadContent().Strikes?.SequenceEqual([new NoteStrikeRange(2, 2)]) == true &&
                 taskBox.PlainText == "确认设计方案" && !checklist.Tasks.Single().Done, "所选文字加删除线且待办仍未完成");
             taskBox.SelectCharacters(2, 2);
-            Check(AutomationProperties.GetName(strike) == "取消删除线", "标题栏显示当前操作");
+            Check(AutomationProperties.GetName(strike) == "取消删除线", "统计行显示当前操作");
             strike.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
-            Check(taskBox.ReadContent().Strikes is null, "已标记文字可用同一个标题栏按钮取消删除线");
+            Check(taskBox.ReadContent().Strikes is null, "已标记文字可用同一个统计行按钮取消删除线");
             taskBox.SelectCharacters(2, 2);
             ClickMenu(OpenEditorMenu(taskBox).Items.OfType<MenuItem>().Single(item => Equals(item.Header, "添加删除线")));
             Check(window.FlushNotes(false) && new NotesStore(App.Store.DataDirectory).State.Notes.Last().Tasks.Single()
@@ -298,7 +303,7 @@ internal static class NotesVerification
             finally{File.Delete(notes);Directory.Move(displaced,notes);}
             Check(window.FlushNotes(false)&&new NotesStore(App.Store.DataDirectory).State.Notes.Any(n=>n.Text.Contains("仍需保留")),"解除故障后重试成功提交草稿");
             var stats=Find<TextBlock>(window.NotesHost).Single(t=>AutomationProperties.GetName(t)=="分类记录统计");
-            Check(!stats.Text.Contains("\n")&&stats.TextWrapping==TextWrapping.NoWrap&&stats.Text.Contains("待完成")&&stats.Text.Contains("已完成"),"分类记录数与待办完成统计保持单行");
+            Check(!stats.Text.Contains("\n") && stats.Text.Contains("待办总计") && stats.Text.IndexOf("待办总计", StringComparison.Ordinal) < stats.Text.IndexOf("待完成", StringComparison.Ordinal) && stats.Text.Contains("已完成"), "统计行依次显示记录、待办总计、待完成与已完成");
             window.Width=1080;window.Height=620;await Layout();Snapshot("notes-preview");
             Check(window.IconColumns==5,"默认宽度保留左侧五列图标");
             var font=Body().TransformToAncestor(window).TransformBounds(new Rect(0,0,12,12)).Width;
@@ -347,6 +352,8 @@ internal static class NotesVerification
             window.NotesDraft.Notes.Clear();window.NotesDraft.Notes.Add(new(){ProjectId=p.Id,Kind="todo",Title="本周待办",Tasks=[new(){Text="整理需求资料"},new(){Text="确认设计方案"}]});
             window.NotesDraft.Notes.Add(new(){ProjectId=p.Id,Title="项目待办",Kind="todo",Tasks=[new(){Text="整理项目资料"},new(){Text="确认设计方案"},new(){Text="建立项目档案",Done=true}]});
             active.SelectedNote=null;active.Scroll=0;active.Search="";window.NotesStore.Commit(window.NotesDraft);window.Render();window.RenderNotes();await Layout();
+            var totals = Find<TextBlock>(window.NotesHost).Single(text => AutomationProperties.GetName(text) == "分类记录统计").Text;
+            Check(totals.Contains("待办总计 5") && totals.Contains("待完成 4") && totals.Contains("已完成 1"), "待办总计等于未完成与已完成之和");
             var cards = Find<Border>(window.NotesHost).Where(border => border.Tag is ProjectNote).ToList();
             var handles = Find<Thumb>(window.NotesHost).Where(thumb => AutomationProperties.GetAutomationId(thumb).StartsWith("NoteOrder-")).ToList();
             Check(handles.Select(handle => handle.Tag).SequenceEqual(new object[] { 1, 2 }), "分类内便签显示连续序号");

@@ -150,8 +150,8 @@ internal static class FoldThemeVerification
                     await Save(main, $"zheye-{family.Id}-{mode}.png");
                 }
             }
-            Check(previews.Count == 4 && main.NotesDraft.LeftFraction == savedRatio,
-                "四套主题分别使用对应图标，切换保留已保存的分栏");
+            Check(previews.Count == FoldTheme.All.Count && main.NotesDraft.LeftFraction == savedRatio,
+                "各套主题分别使用对应图标，切换保留已保存的分栏");
             Select("Settings-Color-lime");
             Select("Settings-Theme-dark");
             await main.Dispatcher.InvokeAsync(() => { }, DispatcherPriority.ContextIdle);

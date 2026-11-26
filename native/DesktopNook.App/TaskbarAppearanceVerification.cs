@@ -272,10 +272,10 @@ internal static class TaskbarAppearanceVerification
                         "任务栏外观没有导入入口，保留手动选色和恢复");
 
                     var advanced = Find<Expander>(dialog).Single(item => AutomationProperties.GetAutomationId(item) == "AppearanceAdvanced");
-                    Check(!advanced.IsExpanded, "场景和信息球选项默认收进高级设置");
+                    Check(!advanced.IsExpanded, "辅助选项默认折叠，场景不再藏入高级设置");
                     advanced.IsExpanded = true;
                     dialog.UpdateLayout();
-                    var scenes = Find<ComboBox>(dialog).Single(item => AutomationProperties.GetAutomationId(item) == "AppearanceScene");
+                    var scenes = Find<ListBox>(dialog).Single(item => AutomationProperties.GetAutomationId(item) == "AppearanceScene");
                     var styles = Find<ComboBox>(dialog).Single(item => AutomationProperties.GetAutomationId(item) == "AppearanceStyle");
                     var layout = Find<ComboBox>(dialog).Single(item => AutomationProperties.GetAutomationId(item) == "NativeTaskbarLayout");
                     var automaticBall = Find<CheckBox>(dialog).Single(item => AutomationProperties.GetAutomationId(item) == "Taskbar-InfoBall-Automatic");
@@ -302,20 +302,27 @@ internal static class TaskbarAppearanceVerification
                         "默认桌面场景无需滚动即可看到不透明度，应用按钮固定在独立底栏");
                     SavePage(dialog, "taskbar-appearance-preview.png");
                     scenes.SelectedIndex = 2;
+                    Check(!enabled.IsChecked.GetValueOrDefault() && !styles.IsEnabled && styles.SelectedIndex == 1,
+                        "未单独设置的场景显示继承桌面，禁止误改隐藏配置");
+                    enabled.IsChecked = true;
                     styles.SelectedIndex = 3;
                     blur.Value = 34;
                     blur.BringIntoView();
-                    Check(enabled.IsChecked == true, "直接选择未启用场景的外观会启用该场景");
+                    Check(enabled.IsChecked == true, "明确开启单独设置后才编辑此场景");
                     scenes.SelectedIndex = 0;
                     Check(styles.SelectedIndex == 1, "修改最大化场景后，桌面样式独立保持");
                     scenes.SelectedIndex = 2;
                     Check(blur.Value == 34 && styles.SelectedIndex == 3 && enabled.IsChecked == true,
                         "切换场景保留未应用的模糊半径、样式及启用开关");
+                    enabled.IsChecked = false;
+                    Check(!styles.IsEnabled && styles.SelectedIndex == 1, "关闭单独设置后恢复显示桌面继承值");
+                    enabled.IsChecked = true;
+                    Check(styles.IsEnabled && styles.SelectedIndex == 3 && blur.Value == 34, "重新开启场景恢复先前样式和模糊半径");
                     dialog.UpdateLayout();
                     blur.BringIntoView();
                     dialog.UpdateLayout();
                     Check(blur.IsVisible && blur.ActualWidth > 100 && blur.Template.FindName("PART_Track", blur) != null,
-                        "高级设置保留可操作的模糊半径和原生滑块轨道");
+                        "模糊半径紧随样式显示并保留原生滑块轨道");
                     string theme = ThemePalette.Mode;
                     try
                     {
@@ -361,6 +368,11 @@ internal static class TaskbarAppearanceVerification
                     var previewButton = Find<Button>(uniformDialog).Single(item => Equals(item.Content, "预览"));
                     previewButton.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
                     Check(uniformSession.HasPreview, "内嵌预览启动并保留临时状态");
+                    var sceneChoices = Find<ListBox>(uniformDialog).Single(item => AutomationProperties.GetAutomationId(item) == "AppearanceScene");
+                    sceneChoices.SelectedIndex = 2;
+                    Check(!uniformSession.HasPreview, "切换场景会结束上一次预览，避免沿用旧场景效果");
+                    sceneChoices.SelectedIndex = 0;
+                    previewButton.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
                     var general = Find<Button>(uniformDialog).Single(item => AutomationProperties.GetAutomationId(item) == "SettingsPage-常规");
                     general.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
                     Check(!uniformSession.HasPreview && uniformProbe.LastAppearance == uniformSession.Saved,
@@ -371,13 +383,17 @@ internal static class TaskbarAppearanceVerification
                     Find<Button>(uniformDialog).Single(item => AutomationProperties.GetAutomationId(item) == "SettingsPage-" + SettingsWindow.TaskbarPage)
                         .RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
                     uniformDialog.UpdateLayout();
-                    var button = Find<Button>(uniformDialog).Single(item => AutomationProperties.GetAutomationId(item) == "AppearanceUniform");
-                    button.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+                    var follow = Find<CheckBox>(uniformDialog).Single(item => AutomationProperties.GetAutomationId(item) == "AppearanceFollowScenes");
+                    follow.IsChecked = false;
+                    Check(uniformStore.Load().FollowScenes, "切换统一模式只修改草稿，应用前不改写已保存配置");
+                    Find<Button>(uniformDialog).Single(item => AutomationProperties.GetAutomationId(item) == "AppearanceApply")
+                        .RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
                     var saved = uniformStore.Load();
                     Check(!saved.FollowScenes && saved.Style == "blur" && saved.ProfileFor("maximized_window_appearance").Enabled &&
                         uniformProbe.LastAppearance?.FollowScenes == false,
-                        "界面一键应用统一模糊并保存，原最大化场景保持可恢复");
-                    previewButton.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+                        "统一模式应用后保存，原最大化场景保持可恢复");
+                    Find<Button>(uniformDialog).Single(item => Equals(item.Content, "预览"))
+                        .RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
                     Check(uniformSession.HasPreview, "关闭设置前有活动预览");
                 }
                 catch (Exception ex) { dialogFailure = ex; }
