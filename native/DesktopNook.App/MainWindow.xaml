@@ -130,8 +130,12 @@
             AutomationProperties.Name="{Binding Name}" AutomationProperties.AutomationId="{Binding Id}" Click="OnIconClick"
             PreviewMouseLeftButtonDown="OnIconDown" PreviewMouseMove="OnIconMove" MouseRightButtonUp="OnIconRightClick">
             <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center" MaxWidth="{Binding ActualWidth,RelativeSource={RelativeSource AncestorType=Button}}">
-             <local:ShellIcon IconPath="{Binding Path}" IsRecycleBin="{Binding Recycle}" Width="46" Height="46" Margin="0,0,0,6"/>
-             <TextBlock Text="{Binding Name}" Foreground="{DynamicResource TextPrimaryBrush}" FontSize="12" TextTrimming="CharacterEllipsis" MaxWidth="88" TextAlignment="Center"/>
+             <Border Width="54" Height="54" CornerRadius="12" Margin="0,0,0,4" Background="{DynamicResource IconPlateBrush}">
+              <local:ShellIcon IconPath="{Binding Path}" IsRecycleBin="{Binding Recycle}" Width="48" Height="48" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+             </Border>
+             <Border Background="{DynamicResource IconCaptionBrush}" CornerRadius="5" Padding="5,1" MaxWidth="96">
+              <TextBlock Text="{Binding Name}" Foreground="{DynamicResource TextPrimaryBrush}" FontSize="12" TextTrimming="CharacterEllipsis" MaxWidth="86" TextAlignment="Center"/>
+             </Border>
             </StackPanel>
            </Button>
           </DataTemplate></ItemsControl.ItemTemplate>

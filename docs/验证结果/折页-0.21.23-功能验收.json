@@ -1,0 +1,17 @@
+{
+  "version": "0.21.23",
+  "date": "2026-11-26",
+  "checks": { "featuresAndGlass": 30, "nativeTaskbarContextMenu": 8, "iconOrdering": 12 },
+  "passed": 50,
+  "failed": 0,
+  "iconQuality": { "passed": true, "sources": 6, "resultRecords": 41, "readOnlyCollectedShortcutSources": 3, "cachePixelBudgetMiB": 8 },
+  "evidence": [
+    "双色独立背景前核验浅色、深色玻璃的实际桌面合成效果",
+    "原生右键菜单在所点胶囊图标上方居中，UIA 内容坐标随窗口移动，Esc 正常关闭",
+    "收纳图标显示时请求更高分辨率原始资源，图像本身透明度保持为 1",
+    "图标提取、渲染缩放、可见区懒加载和缓存淘汰通过",
+    "真实鼠标拖动排序与分类移动保持"
+  ],
+  "limitations": ["当前 Windows 11 单屏实测；混合 DPI 多屏及其他 Windows 版本未在本轮实测"],
+  "reports": "发布/折页-v0.21.23/验收摘要"
+}

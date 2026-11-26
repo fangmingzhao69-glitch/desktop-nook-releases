@@ -1,4 +1,5 @@
 using System.IO;
+using System.Runtime.InteropServices;
 using System.Text.Json;
 using System.Windows;
 using System.Windows.Automation;
@@ -82,6 +83,30 @@ internal static class FeatureVerification
             main.FlushNotes(false);
             Check(NotesMarkdown.Export(main.NotesDraft, note).Contains("<strong>常用与灵感</strong>"), "Markdown 导出保留加粗");
 
+            object? linkShell = Activator.CreateInstance(Type.GetTypeFromProgID("WScript.Shell")!);
+            try
+            {
+                foreach (var sample in new[] { ("资源管理器", Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.Windows), "explorer.exe")),
+                    ("命令提示符", Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.System), "cmd.exe")), ("折页", Environment.ProcessPath!) })
+                {
+                    string shortcut = Path.Combine(App.Store.DesktopRoots[0], sample.Item1 + ".lnk");
+                    object link = ((dynamic)linkShell!).CreateShortcut(shortcut);
+                    try { ((dynamic)link).TargetPath = sample.Item2; ((dynamic)link).Save(); }
+                    finally { Marshal.FinalReleaseComObject(link); }
+                    App.Store.Collect(shortcut, "office");
+                }
+            }
+            finally { if (linkShell is not null) Marshal.FinalReleaseComObject(linkShell); }
+            main.Render(); await Layout();
+            for (int wait = 0; wait < 80 && Find<ShellIcon>(main.Icons).Any(icon => icon.Source is null || ReferenceEquals(icon.Source, ShellIntegration.AppIcon)); wait++)
+                await Task.Delay(50);
+            var collectedIcons = Find<ShellIcon>(main.Icons).ToList();
+            Check(collectedIcons.Count == 3 && collectedIcons.All(icon => icon.Source is BitmapSource bitmap &&
+                !ReferenceEquals(bitmap, ShellIntegration.AppIcon) && bitmap.PixelWidth >= ShellIcon.PixelSize(icon.Width, 1, VisualTreeHelper.GetDpi(icon).DpiScaleX)),
+                "合成收纳项加载高分辨率原图资源，图像本身保持不透明");
+            Check(collectedIcons.All(icon => icon.Opacity == 1) && ShellIntegration.CachedIconBytes <= ShellIntegration.IconCache.Limit,
+                "图标不跟随玻璃背景变淡，图标缓存仍在八 MiB 预算内");
+
             var backdrop = new Grid();
             backdrop.ColumnDefinitions.Add(new()); backdrop.ColumnDefinitions.Add(new());
             backdrop.Children.Add(new Border { Background = new SolidColorBrush(Color.FromRgb(35, 140, 215)) });
@@ -111,7 +136,6 @@ internal static class FeatureVerification
                 pin.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
                 GroupPreviewVerification.Snapshot(main, Path.Combine(root, "glass-" + mode + "-native.png"));
             }
-            other.Close(); other = null;
             App.Options.VisualStyle = "paper"; PanelVisualStyle.Select("paper");
             var themeSettings = new SettingsWindow(main);
             try
@@ -131,9 +155,14 @@ internal static class FeatureVerification
                     await Layout();
                     Check(ThemePalette.Family.IsGlass && ThemePalette.Mode == mode, mode + " 模式保留独立玻璃主题");
                     Snapshot(themeSettings, "glass-theme-settings-" + mode); Snapshot(main, "glass-theme-" + mode);
+                    themeSettings.Hide(); main.FinishPanelMotion(); GroupPreviewVerification.PlaceBehind(other, main); main.Activate();
+                    await Task.Delay(160);
+                    GroupPreviewVerification.Snapshot(main, Path.Combine(root, "clear-glass-" + mode + ".png"));
+                    themeSettings.Show(); await Layout();
                 }
             }
             finally { themeSettings.Close(); }
+            other.Close(); other = null;
             var session = new TaskbarAppearanceSession(new TaskbarAppearanceStore(Path.Combine(root, "appearance")), new QuietBackend());
             var settings = new Window { Width = 540, Height = 620, Title = "任务栏设置验收", Owner = main };
             try

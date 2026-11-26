@@ -66,12 +66,14 @@ public partial class App : Application
                 NativeTaskbarShapeVerification.ShowIconProbe(Path.GetFullPath(capsuleProbeRoot));
                 return;
             }
-            if (e.Args is ["--sandbox", string groupProbeRoot, "--native-taskbar-group-probe" or "--native-taskbar-group-self-test"])
+            if (e.Args is ["--sandbox", string groupProbeRoot, "--native-taskbar-group-probe" or "--native-taskbar-group-self-test" or "--native-taskbar-context-self-test"])
             {
                 IsSandbox = true;
                 GroupPreviewVerification.ShowProbe(Path.GetFullPath(groupProbeRoot));
                 if (e.Args[2] == "--native-taskbar-group-self-test")
                     Dispatcher.BeginInvoke(async () => await GroupPreviewVerification.Run(Path.GetFullPath(groupProbeRoot)));
+                if (e.Args[2] == "--native-taskbar-context-self-test")
+                    Dispatcher.BeginInvoke(async () => await GroupPreviewVerification.RunContext(Path.GetFullPath(groupProbeRoot)));
                 return;
             }
             if (e.Args.Contains("--native-taskbar-shape-self-test") || e.Args.Contains("--native-taskbar-shape-parent-probe"))

@@ -93,12 +93,70 @@ internal static class GroupPreviewVerification
             Application.Current.Shutdown(failure is null ? 0 : 1);
         }
         void Check(bool value, string text) { if (!value) throw new Exception(text); checks.Add(text); }
-        static async Task Click(Point point)
+        static async Task Click(Point point, bool right = false)
         {
             if (!SetCursorPos((int)point.X, (int)point.Y)) throw new InvalidOperationException("无法定位测试鼠标。");
-            mouse_event(2, 0, 0, 0, 0); await Task.Delay(90); mouse_event(4, 0, 0, 0, 0); await Task.Delay(100);
+            mouse_event(right ? 8u : 2u, 0, 0, 0, 0); await Task.Delay(90); mouse_event(right ? 16u : 4u, 0, 0, 0, 0); await Task.Delay(100);
         }
     }
+    internal static async Task RunContext(string root)
+    {
+        var checks = new List<string>(); string? failure = null;
+        using var recovery = new NativeTaskbarGroupPreview();
+        GetCursorPos(out var original);
+        try
+        {
+            nint bar = FindWindowEx(0, 0, "Shell_TrayWnd", null);
+            Check(bar != 0 && GetWindowRect(bar, out _), "读取现有任务栏，不改变任务栏模式");
+            string id = $"DesktopNook.GroupVerification.{Environment.ProcessId}";
+            NativeTaskbarContents.Measurement? contents = null; int index = -1;
+            for (int wait = 0; wait < 30 && index < 0; wait++)
+            {
+                await Task.Delay(120); contents = await Task.Run(() => NativeTaskbarContents.Measure(bar));
+                if (contents.HasValue) index = Array.IndexOf(contents.Value.AppIds, id);
+            }
+            Check(index >= 0, "识别独立沙箱进程的软件图标");
+            await Task.Delay(700); contents = await Task.Run(() => NativeTaskbarContents.Measure(bar));
+            index = contents.HasValue ? Array.IndexOf(contents.Value.AppIds, id) : -1;
+            Check(index >= 0, "在胶囊稳定后读取物理图标坐标");
+            var button = contents!.Value.AppButtons[index];
+            recovery.Update(bar, contents.Value with { AppButtons = [button], AppIds = [id] });
+            SetForegroundWindow(bar);
+            await Task.Delay(150);
+            SetCursorPos((int)(button.Left + button.Width / 2), (int)(button.Top + button.Height / 2));
+            mouse_event(8, 0, 0, 0, 0); await Task.Delay(90); mouse_event(16, 0, 0, 0, 0);
+            for (int wait = 0; wait < 35 && !recovery.ContextMenus.Aligned; wait++) await Task.Delay(100);
+            nint menu = recovery.ContextMenus.LastMenu;
+            if (menu == 0 || !recovery.ContextMenus.Aligned) throw new Exception(recovery.ContextMenus.Diagnostic);
+            Check(true, "真实鼠标右键触发系统菜单并完成定位");
+            Check(GetWindowRect(menu, out var bounds) && Math.Abs((bounds.Left + bounds.Right) / 2d -
+                (button.Left + button.Width / 2)) <= 3 && bounds.Bottom <= button.Top, "菜单位于所点图标正上方并保持原尺寸");
+            var items = await Task.Run(() => AutomationElement.FromHandle(menu).FindFirst(TreeScope.Descendants,
+                new PropertyCondition(AutomationElement.AutomationIdProperty, "SystemItemList"))?.Current.BoundingRectangle);
+            Check(items is { } r && r.Left >= bounds.Left && r.Right <= bounds.Right && r.Top >= bounds.Top && r.Bottom <= bounds.Bottom,
+                "原生菜单内容坐标与窗口位置一致");
+            File.WriteAllText(Path.Combine(root, "context-placement.json"), JsonSerializer.Serialize(new {
+                icon = new { button.Left, button.Top, button.Width, button.Height },
+                menu = new { bounds.Left, bounds.Top, bounds.Right, bounds.Bottom },
+                centerDifference = Math.Abs((bounds.Left + bounds.Right) / 2d - (button.Left + button.Width / 2))
+            }, new JsonSerializerOptions { WriteIndented = true }));
+            SnapshotNative(menu, Path.Combine(root, "taskbar-context-menu.png"));
+            if (GetForegroundWindow() == menu) { keybd_event(27, 1, 0, 0); keybd_event(27, 1, 2, 0); }
+            for (int wait = 0; wait < 15 && IsWindowVisible(menu) && GetForegroundWindow() == menu; wait++) await Task.Delay(80);
+            Check(!IsWindowVisible(menu) || GetForegroundWindow() != menu, "Esc 关闭原生右键菜单");
+            Check(FindWindowEx(0, 0, "Shell_TrayWnd", null) == bar, "验收未重启或替换 Explorer 任务栏");
+        }
+        catch (Exception error) { failure = error.ToString(); }
+        finally
+        {
+            recovery.Dispose(); SetCursorPos(original.X, original.Y);
+            File.WriteAllText(Path.Combine(root, "context-verification.json"), JsonSerializer.Serialize(new { success = failure is null,
+                passed = checks.Count, checks, failure }, new JsonSerializerOptions { WriteIndented = true }));
+            Application.Current.Shutdown(failure is null ? 0 : 1);
+        }
+        void Check(bool value, string name) { if (!value) throw new Exception(name); checks.Add(name); }
+    }
+
     private static IEnumerable<T> Find<T>(DependencyObject parent) where T : DependencyObject
     {
         for (int i = 0; i < VisualTreeHelper.GetChildrenCount(parent); i++)
@@ -110,15 +168,18 @@ internal static class GroupPreviewVerification
     }
     internal static void Snapshot(Window window, string path)
     {
-        // Capture the compositor, including DWM live thumbnails.
-        var origin = window.PointToScreen(new Point());
-        var dpi = VisualTreeHelper.GetDpi(window);
-        int width = (int)(window.ActualWidth * dpi.DpiScaleX), height = (int)(window.ActualHeight * dpi.DpiScaleY);
+        SnapshotNative(new WindowInteropHelper(window).Handle, path);
+    }
+    internal static void SnapshotNative(nint handle, string path)
+    {
+        // Capture the compositor, including DWM thumbnails and immersive menus.
+        if (!GetWindowRect(handle, out var bounds)) throw new IOException("无法读取截图窗口。");
+        int width = bounds.Right - bounds.Left, height = bounds.Bottom - bounds.Top;
         nint screen = GetDC(0), memory = CreateCompatibleDC(screen), bitmap = CreateCompatibleBitmap(screen, width, height);
         nint previous = SelectObject(memory, bitmap);
         try
         {
-            BitBlt(memory, 0, 0, width, height, screen, (int)origin.X, (int)origin.Y, 0x40CC0020);
+            BitBlt(memory, 0, 0, width, height, screen, bounds.Left, bounds.Top, 0x40CC0020);
             var source = Imaging.CreateBitmapSourceFromHBitmap(bitmap, 0, Int32Rect.Empty, BitmapSizeOptions.FromEmptyOptions());
             var encoder = new PngBitmapEncoder(); encoder.Frames.Add(BitmapFrame.Create(source));
             using var file = File.Create(path); encoder.Save(file);
@@ -128,13 +189,18 @@ internal static class GroupPreviewVerification
     internal static void PlaceBehind(Window window, Window foreground) => SetWindowPos(new WindowInteropHelper(window).Handle,
         new WindowInteropHelper(foreground).Handle, 0, 0, 0, 0, 0x13);
     [StructLayout(LayoutKind.Sequential)] private struct NativePoint { public int X, Y; }
+    [StructLayout(LayoutKind.Sequential)] private struct NativeRect { public int Left, Top, Right, Bottom; }
     [DllImport("user32.dll", CharSet = CharSet.Unicode)] private static extern nint FindWindowEx(nint parent, nint after, string name, string? title);
     [DllImport("user32.dll")] private static extern bool SetCursorPos(int x, int y);
     [DllImport("user32.dll")] private static extern bool GetCursorPos(out NativePoint point);
     [DllImport("user32.dll")] private static extern void mouse_event(uint flags, uint x, uint y, uint data, nuint extra);
     [DllImport("user32.dll")] private static extern nint GetForegroundWindow();
+    [DllImport("user32.dll")] private static extern bool SetForegroundWindow(nint window);
     [DllImport("user32.dll")] private static extern bool ShowWindowAsync(nint window, int command);
     [DllImport("user32.dll")] private static extern bool IsIconic(nint window);
+    [DllImport("user32.dll")] private static extern bool IsWindowVisible(nint window);
+    [DllImport("user32.dll")] private static extern bool GetWindowRect(nint window, out NativeRect rect);
+    [DllImport("user32.dll")] private static extern void keybd_event(byte key, byte scan, uint flags, nuint extra);
     [DllImport("user32.dll")] private static extern bool SetWindowPos(nint window, nint after, int x, int y, int width, int height, uint flags);
     [DllImport("user32.dll")] private static extern nint GetDC(nint window);
     [DllImport("user32.dll")] private static extern int ReleaseDC(nint window, nint dc);

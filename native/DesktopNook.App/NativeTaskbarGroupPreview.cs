@@ -19,6 +19,8 @@ internal sealed class NativeTaskbarGroupPreview : IDisposable
     private readonly Dispatcher _dispatcher = Dispatcher.CurrentDispatcher;
     private readonly Dictionary<nint, (Rect[] Buttons, string[] Ids)> _bars = new();
     private readonly MouseCallback _callback;
+    private readonly NativeTaskbarContextMenu _contextMenus = new();
+    internal NativeTaskbarContextMenu ContextMenus => _contextMenus;
     private nint _hook;
     private int _revision;
     private Window? _popup;
@@ -42,7 +44,8 @@ internal sealed class NativeTaskbarGroupPreview : IDisposable
 
     private nint OnMouse(int code, nint message, nint data)
     {
-        if (code >= 0 && message == 0x202) // WM_LBUTTONUP; never swallow native input.
+        if (code >= 0 && (message == 0x201 || message == 0x205)) _contextMenus.Dispose();
+        if (code >= 0 && message is 0x202 or 0x205) // Button-up; never swallow native input.
         {
             Diagnostic = "mouse-up";
             var input = Marshal.PtrToStructure<MouseInput>(data);
@@ -53,6 +56,7 @@ internal sealed class NativeTaskbarGroupPreview : IDisposable
                 Diagnostic = "index:" + index;
                 if (index < 0 || index >= bar.Ids.Length || string.IsNullOrEmpty(bar.Ids[index])) continue;
                 if (GetAncestor(WindowFromPoint(input.Point), 2) != taskbar) { Diagnostic = "different-window"; break; }
+                if (message == 0x205) { _revision++; _contextMenus.Track(taskbar, bar.Buttons[index]); break; }
                 var id = bar.Ids[index];
                 var button = bar.Buttons[index];
                 int revision = ++_revision;
@@ -251,6 +255,7 @@ internal sealed class NativeTaskbarGroupPreview : IDisposable
     private void ClosePopup() { var popup = _popup; _popup = null; _shownId = null; popup?.Close(); }
     public void Dispose()
     {
+        _contextMenus.Dispose();
         _revision++;
         if (_hook != 0) UnhookWindowsHookEx(_hook);
         _hook = 0; _bars.Clear(); ClosePopup();

@@ -13,6 +13,7 @@ public sealed class ShellIcon : Image
     public string IconPath {get=>(string)GetValue(IconPathProperty);set=>SetValue(IconPathProperty,value);}
     public bool IsRecycleBin {get=>(bool)GetValue(IsRecycleBinProperty);set=>SetValue(IsRecycleBinProperty,value);}
     private int _pixels;
+    private static readonly int[] PixelBuckets = [32, 48, 64, 96, 128, 192, 256, 384, 512, 768, 1024];
     private string? _key;
     private ScrollViewer? _scroll;
     private bool _paused;
@@ -58,7 +59,14 @@ public sealed class ShellIcon : Image
         if(Matches())Dispatcher.BeginInvoke(()=>{if(IsLoaded&&!_paused&&generation==ShellIntegration.IconGeneration&&Matches())Source=image;});
     }
     protected override void OnDpiChanged(DpiScale oldDpi,DpiScale newDpi){base.OnDpiChanged(oldDpi,newDpi);_key=null;}
-    internal static int PixelSize(double logicalSize,double transformScale,double dpiScale)=>Math.Clamp((int)Math.Ceiling(logicalSize*transformScale*dpiScale),16,1024);
+    internal static int PixelSize(double logicalSize,double transformScale,double dpiScale)
+    {
+        // Ask Shell for a larger native resource, then downsample once on screen.
+        int requested = Math.Clamp((int)Math.Ceiling(logicalSize * transformScale * dpiScale * 2), 16, 1024);
+        foreach (int size in PixelBuckets)
+            if (size >= requested) return size;
+        return 1024;
+    }
     private void Refresh(bool force=false)
     {
         // Items can leave the visual tree during a category switch before Unloaded is delivered.
