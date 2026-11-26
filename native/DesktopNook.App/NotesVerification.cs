@@ -229,6 +229,8 @@ internal static class NotesVerification
             Check(TaskEditors(checklist).Select(editor => editor.PlainText).SequenceEqual(["", "确认设计方案"]) &&
                 TaskEditors(checklist)[0].IsKeyboardFocused, "点击添加在第一行创建并聚焦新待办");
             TaskEditors(checklist)[0].Selection.Text = "整理项目资料";
+            TaskEditors(checklist)[0].SelectCharacters(0, 2);
+            TaskEditors(checklist)[0].Highlight("#BBEEDF");
             var firstCheck = Find<CheckBox>(window.NotesHost).First();
             firstCheck.IsChecked = true;
             firstCheck.RaiseEvent(new RoutedEventArgs(Button.ClickEvent)); await Layout();
@@ -236,6 +238,10 @@ internal static class NotesVerification
             Check(reordered.Select(editor => editor.PlainText).SequenceEqual(["确认设计方案", "整理项目资料"]) &&
                 ((Paragraph)reordered[1].Document.Blocks.FirstBlock!).TextDecorations.Count > 0,
                 "勾选的待办移到底部并显示整行删除线");
+            reordered[1].SelectCharacters(0, 2);
+            Check(reordered[1].Selection.GetPropertyValue(TextElement.ForegroundProperty) is SolidColorBrush markedInk &&
+                markedInk.Color == FoldTheme.LabelOn((Color)ColorConverter.ConvertFromString("#BBEEDF")),
+                "勾选待办更新基础字色后保留标注范围的对比前景");
             var firstRow = (DockPanel)reordered[0].Parent;
             var checkbox = firstRow.Children.OfType<CheckBox>().Single();
             checkbox.ApplyTemplate();

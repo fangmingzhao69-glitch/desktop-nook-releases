@@ -11,12 +11,19 @@ namespace DesktopNook.App;
 internal sealed class NoteTextEditor : RichTextBox
 {
     public NoteTextEditor(string text, NoteStrikeRange[]? strikes, Action<List<NoteTask>>? pasteTasks = null,
-        NoteHighlightRange[]? highlights = null, NoteBoldRange[]? bolds = null)
+        NoteHighlightRange[]? highlights = null, NoteBoldRange[]? bolds = null, Brush? foreground = null)
     {
+        // RichTextBox transfers later base-foreground assignments into its
+        // document. Set the base before restoring per-range highlight colors.
+        Foreground = foreground ?? ThemePalette.Brush("TextPrimaryBrush");
         FontSize = 12;
         Padding = new Thickness(4);
         BorderThickness = new Thickness(0);
         Background = Brushes.Transparent;
+        SetResourceReference(SelectionBrushProperty, "EditorSelectionBrush");
+        // RichTextBox draws selection as an adorner above the glyphs, unlike
+        // TextBox's non-adorner SelectionTextBrush. Keep that overlay light.
+        SelectionOpacity = .2;
         MinHeight = 26;
         AcceptsReturn = pasteTasks is null;
         HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled;
@@ -38,8 +45,9 @@ internal sealed class NoteTextEditor : RichTextBox
         foreach (var mark in highlights ?? [])
         {
             var range = new TextRange(PositionAt(mark.Start), PositionAt(mark.Start + mark.Length));
-            range.ApplyPropertyValue(TextElement.BackgroundProperty, new SolidColorBrush((Color)ColorConverter.ConvertFromString(mark.Color)));
-            range.ApplyPropertyValue(TextElement.ForegroundProperty, Brushes.Black);
+            var background = (Color)ColorConverter.ConvertFromString(mark.Color);
+            range.ApplyPropertyValue(TextElement.BackgroundProperty, new SolidColorBrush(background));
+            range.ApplyPropertyValue(TextElement.ForegroundProperty, new SolidColorBrush(FoldTheme.LabelOn(background)));
         }
         DataObject.AddPastingHandler(this, (_, args) =>
         {
@@ -157,9 +165,22 @@ internal sealed class NoteTextEditor : RichTextBox
         {
             Selection.ApplyPropertyValue(TextElement.BackgroundProperty, color is null
                 ? Brushes.Transparent : new SolidColorBrush((Color)ColorConverter.ConvertFromString(color)));
-            Selection.ApplyPropertyValue(TextElement.ForegroundProperty, color is null ? Foreground : Brushes.Black);
+            Selection.ApplyPropertyValue(TextElement.ForegroundProperty, color is null ? Foreground
+                : new SolidColorBrush(FoldTheme.LabelOn((Color)ColorConverter.ConvertFromString(color))));
         }
         finally { EndChange(); }
+    }
+
+    internal void RefreshHighlightForeground()
+    {
+        foreach (var segment in Segments().Where(segment => segment.IsRun).ToArray())
+        {
+            var range = new TextRange(segment.Start, segment.End);
+            if (range.GetPropertyValue(TextElement.BackgroundProperty) is not SolidColorBrush { Color.A: > 0 } background) continue;
+            var ink = FoldTheme.LabelOn(background.Color);
+            if (range.GetPropertyValue(TextElement.ForegroundProperty) is SolidColorBrush current && current.Color == ink) continue;
+            range.ApplyPropertyValue(TextElement.ForegroundProperty, new SolidColorBrush(ink));
+        }
     }
 
     internal NoteHighlightRange[]? ReadHighlights()

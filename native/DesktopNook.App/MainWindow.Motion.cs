@@ -67,6 +67,7 @@ public partial class MainWindow
     private IntPtr MotionWindowMessage(IntPtr hwnd,int message,IntPtr wParam,IntPtr lParam,ref bool handled)
     {
         if(message is 0x7e or 0x2e0 or 0x1a)TaskbarPlacement.Invalidate();
+        if(message is 0x7e or 0x2e0)_glassMaterial?.ResetDisplay();
         if(message==0x112&&(wParam.ToInt64()&0xfff0)==0xf020&&!_committingHide&&!_allowExit&&UiMotion.Enabled)
         {handled=true;TogglePanel();}
         return IntPtr.Zero;
@@ -75,6 +76,7 @@ public partial class MainWindow
     private void OpenPanelMotion()
     {
         _idleRelease.Stop();EnsurePanelContent();RestoreNotesVisuals();UpdateSizingLayout();UpdateLayout();
+        _glassMaterial?.RefreshVisibility();
         foreach(var icon in FindVisualChildren<ShellIcon>(Icons)){icon.Resume();icon.PrimeForReveal(this);}
         _hidePending=false;_hideRevision++;_shutter.Play(true);
         if(_shutter.Active||!UiMotion.Enabled||_shutter.Failure is not null||(Surface.IsLoaded&&Surface.IsVisible))Opacity=1;

@@ -159,9 +159,11 @@ public static class UiMotion
             return;
         }
         bool selected=control is ToggleButton {IsChecked:true};
+        bool glassIcon=GetFeedback(control)=="icon"&&ThemePalette.Family.IsGlass&&!SystemParameters.HighContrast;
         var baseColor=GetFeedback(control) is "tile" or "icon"?Colors.Transparent:control.Background is SolidColorBrush background?background.Color:Colors.Transparent;
         Color toColor=selected?ThemePalette.Brush("SelectionBrush").Color:!control.IsEnabled?baseColor:
-            pressed?ThemePalette.Brush("SelectionBrush").Color:control.IsMouseOver?ThemePalette.Brush("SelectionHoverBrush").Color:baseColor;
+            pressed?glassIcon?Color.FromArgb(65,255,255,255):ThemePalette.Brush("SelectionBrush").Color:
+            control.IsMouseOver?glassIcon?Color.FromArgb(38,255,255,255):ThemePalette.Brush("SelectionHoverBrush").Color:baseColor;
         var brush=state.Brush!;var fromColor=brush.Color;
         Stop(brush,SolidColorBrush.ColorProperty);brush.Color=toColor;
         if(animate&&Enabled&&fromColor!=toColor)Animate(brush,SolidColorBrush.ColorProperty,new ColorAnimation(fromColor,toColor,TimeSpan.FromMilliseconds(selected?160:140)){FillBehavior=FillBehavior.Stop});

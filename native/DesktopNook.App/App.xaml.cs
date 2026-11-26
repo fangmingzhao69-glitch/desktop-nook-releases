@@ -55,6 +55,12 @@ public partial class App : Application
                 || arg is "--billiards-parent-probe" or "--billiards-perf-test" or "--verification-marker" or "--native-taskbar-shape-parent-probe" or "--native-taskbar-capsule-icon-probe");
 #if NOOK_UI_VERIFICATION
             if (interactiveVerification && !e.Args.Contains("--sandbox")) throw new IOException("界面自检必须使用沙箱。");
+            if (e.Args is ["--sandbox", string glassRoot, "--glass-capture-self-test"])
+            {
+                IsSandbox = true;
+                Dispatcher.BeginInvoke(async () => await GlassMaterialVerification.RunCapture(Path.GetFullPath(glassRoot)));
+                return;
+            }
             if (e.Args is ["--sandbox", string ballTestRoot, "--info-ball-auto-self-test"])
             {
                 IsSandbox = true;

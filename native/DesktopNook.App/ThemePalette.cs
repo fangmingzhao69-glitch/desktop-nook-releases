@@ -77,6 +77,7 @@ internal static class ThemePalette
     private static void RefreshControls(DependencyObject parent)
     {
         if (parent is Control control) UiMotion.RefreshFeedback(control);
+        if (parent is NoteTextEditor editor) editor.RefreshHighlightForeground();
         for (int index = 0; index < VisualTreeHelper.GetChildrenCount(parent); index++)
             RefreshControls(VisualTreeHelper.GetChild(parent, index));
     }
@@ -123,7 +124,7 @@ internal static class ThemePalette
 
     private static Color AccessibleColor(string key) => key switch
     {
-        "PrimaryBrush" or "PrimaryHoverBrush" or "PrimaryPressedBrush" or "SelectionBrush" or "SelectionHoverBrush" or "FoldMintBrush" or "FoldCoralBrush" => SystemColors.HighlightColor,
+        "PrimaryBrush" or "PrimaryHoverBrush" or "PrimaryPressedBrush" or "SelectionBrush" or "SelectionHoverBrush" or "EditorSelectionBrush" or "FoldMintBrush" or "FoldCoralBrush" => SystemColors.HighlightColor,
         "OnPrimaryBrush" or "OnCoralBrush" or "OnMintBrush" or "OnTooltipBrush" => SystemColors.HighlightTextColor,
         "TextPrimaryBrush" or "TextSecondaryBrush" or "AccentInkBrush" or "LineBrush" or "OutlineBrush" or "DangerBrush" or "WarningBrush" or "SuccessBrush" or
             "SettingsNavigationBorderBrush" => SystemColors.WindowTextColor,

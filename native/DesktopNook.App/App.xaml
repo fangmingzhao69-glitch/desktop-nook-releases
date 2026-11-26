@@ -9,7 +9,7 @@
       <Setter Property="Template">
         <Setter.Value>
           <ControlTemplate TargetType="Thumb">
-            <Border x:Name="DragSurface" Background="{DynamicResource SurfaceSubtleBrush}" CornerRadius="5" Padding="8,5">
+            <Border x:Name="DragSurface" Background="{DynamicResource NoteMetaBrush}" CornerRadius="5" Padding="8,5">
               <DockPanel>
                 <StackPanel DockPanel.Dock="Left" Orientation="Horizontal" Margin="0,0,10,0">
                   <TextBlock Text="⠿" FontSize="13" Foreground="{DynamicResource AccentInkBrush}" VerticalAlignment="Center" />

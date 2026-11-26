@@ -62,6 +62,7 @@ public partial class MainWindow : Window
         var clip = new RectangleGeometry(new Rect(new Point(), e.NewSize), 13, 13);
         clip.Freeze();
         content.Clip = clip;
+        GlassBackdropLayer.Clip = clip;
     }
 
     private void OnLoaded(object sender,RoutedEventArgs e)

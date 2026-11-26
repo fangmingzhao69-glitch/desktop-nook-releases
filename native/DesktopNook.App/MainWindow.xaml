@@ -63,13 +63,19 @@
     <Border x:Name="Surface" Width="1080" Height="620" Background="{DynamicResource CanvasBrush}"
      BorderBrush="{DynamicResource FoldEdgeBrush}" BorderThickness="1" CornerRadius="14" SnapsToDevicePixels="True">
      <Grid>
+      <Grid x:Name="GlassBackdropLayer" Visibility="Collapsed" IsHitTestVisible="False">
+       <Image x:Name="GlassBackdropImage" Stretch="Fill" RenderOptions.BitmapScalingMode="LowQuality">
+        <Image.Effect><BlurEffect Radius="22" KernelType="Gaussian" RenderingBias="Performance"/></Image.Effect>
+       </Image>
+       <Rectangle x:Name="GlassBackdropTint"/>
+      </Grid>
       <Border x:Name="GlassSheen" Visibility="Collapsed" IsHitTestVisible="False" CornerRadius="13" Margin="1">
        <Border.Background>
-        <LinearGradientBrush StartPoint="0,0" EndPoint=".3,1">
-         <GradientStop Color="#50FFFFFF" Offset="0"/>
-         <GradientStop Color="#12FFFFFF" Offset=".34"/>
-         <GradientStop Color="#00FFFFFF" Offset=".7"/>
-         <GradientStop Color="#18FFFFFF" Offset="1"/>
+        <LinearGradientBrush StartPoint="0,0" EndPoint="0,1">
+         <GradientStop Color="#28FFFFFF" Offset="0"/>
+         <GradientStop Color="#08FFFFFF" Offset=".18"/>
+         <GradientStop Color="#00FFFFFF" Offset=".5"/>
+         <GradientStop Color="#00FFFFFF" Offset="1"/>
         </LinearGradientBrush>
        </Border.Background>
       </Border>
@@ -104,6 +110,7 @@
       <Grid x:Name="SplitLayout" Grid.Row="1">
        <Grid.ColumnDefinitions><ColumnDefinition x:Name="LauncherColumn" Width="61*"/><ColumnDefinition Width="5"/><ColumnDefinition x:Name="NotesColumn" Width="39*"/></Grid.ColumnDefinitions>
        <Grid.RowDefinitions><RowDefinition Height="60"/><RowDefinition Height="42"/><RowDefinition Height="*"/><RowDefinition Height="36"/></Grid.RowDefinitions>
+       <Border Grid.Column="2" Grid.RowSpan="4" Background="{DynamicResource GlassReadingSurfaceBrush}" IsHitTestVisible="False"/>
        <Rectangle x:Name="PaperGrid" Grid.RowSpan="4" Fill="{DynamicResource FoldGridPattern}" IsHitTestVisible="False"/>
        <Rectangle x:Name="PaperRules" Grid.Column="2" Grid.RowSpan="4" Margin="0,92,0,36" Fill="{DynamicResource FoldRulePattern}" IsHitTestVisible="False"/>
        <DockPanel Margin="24,0" VerticalAlignment="Center">

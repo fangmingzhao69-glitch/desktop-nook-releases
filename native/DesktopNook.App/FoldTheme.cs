@@ -29,8 +29,8 @@ internal sealed record FoldTheme(string Id, string Name, FoldTheme.Paper Light, 
             new("#111A33", "#1B2647", "#212D52", "#34406B", "#E8EEFF", "#8C9BC7", "#0A1024", "#8AA6FF", "#FDA4AF", "#4FD69A", "#3B4A7A"),
             "#8AA6FF", "#FBBF24"),
         new("glass", "晴空玻璃",
-            new("#EEF7FC", "#F7FCFF", "#DDEEF7", "#CBDFEB", "#17384A", "#6D8C9F", "#D7EAF4", "#207C9E", "#E7799A", "#29AB9B", "#A9CCDD"),
-            new("#112532", "#1B3544", "#244453", "#365767", "#E8F7FF", "#8BAFC3", "#10232F", "#7BD5EF", "#F6A8C1", "#6CDECE", "#4B7487"),
+            new("#F3F6FA", "#FBFCFE", "#E3E8EF", "#D1D9E4", "#202936", "#798594", "#E6EBF2", "#387FA8", "#C7798F", "#31998B", "#BAC6D4"),
+            new("#20252E", "#2C323C", "#303844", "#424B59", "#F0F4FA", "#A0ACBB", "#252B35", "#91BFE1", "#E1A5B8", "#83CDBD", "#667487"),
             "#7ADBF1", "#D8F5FF")
     ];
 
@@ -41,7 +41,7 @@ internal sealed record FoldTheme(string Id, string Name, FoldTheme.Paper Light, 
         byte Mix(byte x, byte y) => (byte)Math.Round(x * (1 - t) + y * t);
         return Color.FromRgb(Mix(a.R,b.R), Mix(a.G,b.G), Mix(a.B,b.B));
     }
-    private static Color LabelOn(Color color)
+    internal static Color LabelOn(Color color)
     {
         static double Linear(byte channel)
         {
@@ -64,7 +64,9 @@ internal sealed record FoldTheme(string Id, string Name, FoldTheme.Paper Light, 
         {
             ["CanvasBrush"]=canvas, ["CanvasSubtleBrush"]=Blend(canvas,line,.2), ["SurfaceBrush"]=surface,
             ["SurfaceSubtleBrush"]=Blend(surface,line,.22), ["TextPrimaryBrush"]=ink,
-            ["TextSecondaryBrush"]=Blend(muted,ink,dark ? .14 : .38), ["TextFaintBrush"]=muted,
+            ["TextSecondaryBrush"]=IsGlass ? Parse(dark ? "#D2DBE7" : "#344150") : Blend(muted,ink,dark ? .14 : .38),
+            ["TextFaintBrush"]=IsGlass ? Parse(dark ? "#D2DBE7" : "#344150") : muted,
+            ["EditorSelectionBrush"]=IsGlass ? Parse("#238ACC") : primary,
             ["LineBrush"]=line, ["OutlineBrush"]=Blend(line,ink,dark ? .28 : .38),
             ["PrimaryBrush"]=primary, ["PrimaryHoverBrush"]=Blend(primary,onPrimary,.08),
             ["PrimaryPressedBrush"]=Blend(primary,onPrimary,.16), ["OnPrimaryBrush"]=onPrimary,

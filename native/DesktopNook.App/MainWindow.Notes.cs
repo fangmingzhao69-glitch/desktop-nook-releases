@@ -332,10 +332,12 @@ public partial class MainWindow
         var border = new Border { Tag=note, CornerRadius=new CornerRadius(5), BorderBrush=Brush("LineBrush"),
             BorderThickness=new Thickness(1), Margin=new Thickness(0,0,0,10), Background=Brush("SurfaceBrush") };
         border.SetResourceReference(Border.BackgroundProperty, "NoteSurfaceBrush");
+        border.SetResourceReference(Border.BorderBrushProperty, "NoteBorderBrush");
         var inset = new Border { BorderThickness=new Thickness(3,0,0,0), CornerRadius=new CornerRadius(4),
             BorderBrush=Brush(note.Kind == "text" ? "FoldCoralBrush" : "PrimaryBrush"),
             Padding=new Thickness(10,10,12,10), Child=content };
         border.Child = inset;
+        inset.SetResourceReference(Border.BorderThicknessProperty, "NoteAccentThickness");
         var header=new DockPanel();var menu=NotesButton("···",b=>NoteCardMenu(b,note));AutomationProperties.SetName(menu,"便签操作");DockPanel.SetDock(menu,Dock.Right);header.Children.Add(menu);
         string metadata = note.ModifiedUtc.ToLocalTime().ToString("MM月dd日 HH:mm");
         if (note.Favorite) metadata += " · 常用";
@@ -350,12 +352,12 @@ public partial class MainWindow
         content.Children.Add(header);
         if(note.Kind=="text")
         {
-            var body = new NoteTextEditor(note.Text, note.BodyStrikes, highlights: note.BodyHighlights, bolds: note.BodyBolds)
+            var body = new NoteTextEditor(note.Text, note.BodyStrikes, highlights: note.BodyHighlights, bolds: note.BodyBolds,
+                foreground: Brush("TextPrimaryBrush"))
             {
                 MinHeight = 65,
                 IsReadOnly = readOnly,
-                IsInactiveSelectionHighlightEnabled = !readOnly,
-                Foreground = Brush("TextPrimaryBrush")
+                IsInactiveSelectionHighlightEnabled = !readOnly
             };
             AutomationProperties.SetName(body, "文字记录正文");
             ConfigureNoteEditor(body, note, "body", null);

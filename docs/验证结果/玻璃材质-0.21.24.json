@@ -1,0 +1,57 @@
+{
+  "version": "0.21.24",
+  "date": "2026-11-27",
+  "scope": "Windows 11 单显示器、独立沙箱；实现工作树验收，正式包从相同提交重新构建",
+  "passedTotal": 223,
+  "checks": [
+    {
+      "name": "features",
+      "passed": 39,
+      "report": "C:\\Users\\23584\\AppData\\Local\\Temp\\Zheye-glass-releasecheck-6181e03d011b41cfa9de4997f555dab6\\features-verification.json",
+      "failure": null
+    },
+    {
+      "name": "notes",
+      "passed": 95,
+      "report": "C:\\Users\\23584\\AppData\\Local\\Temp\\Zheye-material-notestoggle-4e8babdfc440438e935aa262de00d500\\notes-verification.json",
+      "failure": ""
+    },
+    {
+      "name": "ordering",
+      "passed": 12,
+      "report": "C:\\Users\\23584\\AppData\\Local\\Temp\\Zheye-material-order-675125f7d27a436c96c4ea6971b4b526\\ordering-verification.json",
+      "failure": ""
+    },
+    {
+      "name": "taskbar-context",
+      "passed": 8,
+      "report": "C:\\Users\\23584\\AppData\\Local\\Temp\\Zheye-material-context2-e2d776f8fb9e4c9ba2818aafc3bab52e\\context-verification.json",
+      "failure": null
+    },
+    {
+      "name": "core",
+      "passed": 69,
+      "report": "E:\\cxgj\\AIgonzhuoqu\\XMWJ\\折页桌面\\native\\test-results\\core.json",
+      "failure": null
+    }
+  ],
+  "contextRetry": "首轮未捕获系统跳转菜单，第二轮完整通过8项；物理图标中心偏差0像素，未重启或替换Explorer",
+  "capturePrototype": "合成遮挡窗排除、真实后方颜色通道检查通过；背景图像只驻内存",
+  "updaterSource": "LocalUpdater/OnlineUpdater/GiteeUpdateSource及升级验收与v0.21.23无差异；发布后另记录匿名下载及隔离升级",
+  "dailyInstallation": "本轮未覆盖日常安装或操作真实收纳内容",
+  "limitations": "实时背景仅x64单显示器且原始帧<=8MiB；不支持或不可用回退不透明底色，不承诺多屏实测",
+  "finishReview": {
+    "disposition": "ship",
+    "resolved": [
+      "明暗主题文字对比度",
+      "背景标注初始化、主题切换和待办勾选后字色",
+      "方向契约、界面规范及作用域设计文档"
+    ],
+    "remaining": [],
+    "captures": [
+      ".impeccable/review/windows-light.png",
+      ".impeccable/review/windows-dark.png"
+    ],
+    "documenter": "DESIGN.md与sidecar已复核，8个组件预览，未引入发货栅格素材"
+  }
+}

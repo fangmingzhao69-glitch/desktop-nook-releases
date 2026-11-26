@@ -107,12 +107,9 @@ internal static class FeatureVerification
             Check(collectedIcons.All(icon => icon.Opacity == 1) && ShellIntegration.CachedIconBytes <= ShellIntegration.IconCache.Limit,
                 "图标不跟随玻璃背景变淡，图标缓存仍在八 MiB 预算内");
 
-            var backdrop = new Grid();
-            backdrop.ColumnDefinitions.Add(new()); backdrop.ColumnDefinitions.Add(new());
-            backdrop.Children.Add(new Border { Background = new SolidColorBrush(Color.FromRgb(35, 140, 215)) });
-            var warm = new Border { Background = new SolidColorBrush(Color.FromRgb(240, 140, 65)) }; Grid.SetColumn(warm, 1); backdrop.Children.Add(warm);
+            var backdrop = GlassMaterialVerification.ReferenceBackdrop();
             other = new Window { Title = "玻璃隔离背景", WindowStyle = WindowStyle.None, ShowInTaskbar = false, ShowActivated = false, Topmost = true,
-                Left = main.Left, Top = main.Top, Width = main.ActualWidth, Height = main.ActualHeight, Content = backdrop };
+                Left = main.Left - 80, Top = main.Top - 80, Width = main.ActualWidth + 160, Height = main.ActualHeight + 160, Content = backdrop };
             other.Show(); GroupPreviewVerification.PlaceBehind(other, main); main.Activate();
             foreach (var mode in new[] { "light", "dark" })
             {
@@ -129,6 +126,11 @@ internal static class FeatureVerification
                 main.Activate();
                 await Layout();
                 await Task.Delay(200);
+                var markedEditor = Find<NoteTextEditor>(main.NotesHost).Single();
+                markedEditor.SelectCharacters(0, 5);
+                Check(markedEditor.Selection.GetPropertyValue(System.Windows.Documents.TextElement.ForegroundProperty) is SolidColorBrush markedInk &&
+                    markedInk.Color == FoldTheme.LabelOn((Color)ColorConverter.ConvertFromString("#BBEEDF")),
+                    mode + " 模式切换后背景标注文字保持依据底色选择的对比前景");
                 Snapshot(main, "glass-" + mode);
                 pin.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
                 main.UpdateLayout();
@@ -162,6 +164,7 @@ internal static class FeatureVerification
                 }
             }
             finally { themeSettings.Close(); }
+            await GlassMaterialVerification.CheckSurface(main, other, root, Check);
             other.Close(); other = null;
             var session = new TaskbarAppearanceSession(new TaskbarAppearanceStore(Path.Combine(root, "appearance")), new QuietBackend());
             var settings = new Window { Width = 540, Height = 620, Title = "任务栏设置验收", Owner = main };

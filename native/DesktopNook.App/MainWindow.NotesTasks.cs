@@ -104,11 +104,11 @@ public partial class MainWindow
                 DockPanel.SetDock(sequence, Dock.Left);
                 row.Children.Add(sequence);
 
-                var editor = new NoteTextEditor(task.Text, task.Strikes, batch => PasteTasks(task, batch), task.Highlights, task.Bolds)
+                var editor = new NoteTextEditor(task.Text, task.Strikes, batch => PasteTasks(task, batch), task.Highlights, task.Bolds,
+                    foreground: Brush(task.Done ? "TextSecondaryBrush" : "TextPrimaryBrush"))
                 {
                     IsReadOnly = readOnly,
                     IsInactiveSelectionHighlightEnabled = !readOnly,
-                    Foreground = Brush(task.Done ? "TextSecondaryBrush" : "TextPrimaryBrush"),
                     ToolTip = readOnly ? null : "粘贴多行文字可自动拆成多条待办"
                 };
                 editor.SetDone(task.Done);
@@ -144,6 +144,7 @@ public partial class MainWindow
 
                     editor.SetDone(task.Done);
                     editor.Foreground = Brush(task.Done ? "TextSecondaryBrush" : "TextPrimaryBrush");
+                    editor.RefreshHighlightForeground();
                     int position = note.TasksInDisplayOrder().TakeWhile(other => other != task).Count();
                     if (rows.Children.IndexOf(row) != position)
                     {
