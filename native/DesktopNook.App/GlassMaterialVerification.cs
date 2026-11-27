@@ -44,13 +44,17 @@ internal static class GlassMaterialVerification
         check(GetWindowDisplayAffinity(new WindowInteropHelper(main).Handle, out uint affinity) && affinity == 0,
             "普通截图和屏幕共享继续包含折页窗口");
         main.TogglePanel(); await Task.Delay(700);
-        check(main.WindowState == WindowState.Minimized && main.GlassMaterial is { Running: false, BufferBytes: 0 } &&
+        check(main.WindowState == WindowState.Minimized && main.GlassMaterial is { Running: false, BufferBytes: 0, CaptureSuspended: true } &&
             main.GlassBackdropImage.Source is null, "收起时停止采样并释放持有的背景缓冲");
         main.ShowPanel(); await Task.Delay(800); main.FinishPanelMotion();
         check(main.GlassMaterial is { HasFrame: true, Running: true }, "重新展开时恢复玻璃背景");
         ThemePalette.Apply(ThemePalette.Mode, "grape");
-        check(main.GlassMaterial is { Running: false, BufferBytes: 0 }, "切换其他主题时释放玻璃资源");
+        check(main.GlassMaterial is { Running: false, BufferBytes: 0, CaptureSuspended: true }, "切换其他主题时停止采样并清空背景像素");
         ThemePalette.Apply(ThemePalette.Mode, "glass");
+        await Task.Delay(900);
+        check(main.GlassMaterial is { HasFrame: true, CaptureInstances: 1 }, "重新展开及切回玻璃主题复用同一原生采集器");
+        main.GlassMaterial!.ResetDisplay(); await Task.Delay(1000);
+        check(main.GlassMaterial is { HasFrame: true, CaptureInstances: 1 }, "显示区域刷新保留原生采集器并恢复有效背景");
         board.Content = ReferenceBackdrop(); await Task.Delay(1100);
         GroupPreviewVerification.Snapshot(main, Path.Combine(root, "glass-material-final.png"));
     }

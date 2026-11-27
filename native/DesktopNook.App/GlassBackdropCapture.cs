@@ -12,6 +12,7 @@ internal sealed class GlassBackdropCapture : IDisposable
     private readonly ScalingCallback _callback;
     private nint _host, _magnifier;
     private bool _initialized;
+    private bool _suspended = true;
     private byte[]? _pixels;
     private int _width, _height, _stride;
     private bool _reading, _hasFrame;
@@ -23,6 +24,7 @@ internal sealed class GlassBackdropCapture : IDisposable
     internal string Status { get; private set; } = "not initialized";
     internal Guid Format { get; private set; }
     internal bool Supported => _magnifier != 0;
+    internal bool Suspended => _suspended;
 
     internal GlassBackdropCapture()
     {
@@ -39,7 +41,6 @@ internal sealed class GlassBackdropCapture : IDisposable
             var identity = new Transform { M11 = 1, M22 = 1, M33 = 1 };
             MagSetWindowTransform(_magnifier, ref identity);
             SetLayeredWindowAttributes(_host, 0, 1, 2);
-            ShowWindow(_host, 8);
             Status = "ready";
         }
         catch (Exception error) when (error is DllNotFoundException or EntryPointNotFoundException)
@@ -49,9 +50,11 @@ internal sealed class GlassBackdropCapture : IDisposable
     internal BitmapSource? Capture(NativeRect rect, nint[] excluded)
     {
         int width = rect.Right - rect.Left, height = rect.Bottom - rect.Top;
+        if (GetSystemMetrics(80) != 1) { Status = "capture unavailable for this display configuration"; return null; }
         if (_magnifier == 0 || width <= 0 || height <= 0 || (long)width * height * 4 > PixelBudget) return null;
         if (rect.Left < 0 || rect.Top < 0 || rect.Right > GetSystemMetrics(0) || rect.Bottom > GetSystemMetrics(1)) return null;
         if (SHQueryUserNotificationState(out int state) == 0 && state is 2 or 3 or 4) { Status = "capture suspended"; return null; }
+        if (_suspended) { ShowWindow(_host, 8); _suspended = false; }
         var filter = excluded.Append(_host).Distinct().ToArray();
         if (!_filter.SequenceEqual(filter))
         {
@@ -108,12 +111,31 @@ internal sealed class GlassBackdropCapture : IDisposable
         return true;
     }
 
+    // Keep one native magnifier for this panel's lifetime. Repeated runtime
+    // initialize/uninitialize retains native allocations on current Windows.
+    // Suspending stops paints and releases our pixel/bitmap ownership instead.
+    internal void Suspend()
+    {
+        _reading = false; _hasFrame = false;
+        if (_host != 0 && !_suspended) ShowWindow(_host, 0);
+        _suspended = true; _pixels = null; _image = null;
+        _width = _height = _stride = 0; _signature = 0;
+        Status = "suspended";
+    }
+
     public void Dispose()
     {
+        Suspend();
+        if (_magnifier != 0)
+        {
+            MagSetImageScalingCallback(_magnifier, null);
+            DestroyWindow(_magnifier);
+        }
         if (_host != 0) DestroyWindow(_host);
-        _host = 0; _magnifier = 0; _pixels = null; _image = null; _filter = [];
+        _host = 0; _magnifier = 0; _filter = [];
         if (_initialized) MagUninitialize();
         _initialized = false;
+        GC.KeepAlive(_callback);
     }
     [StructLayout(LayoutKind.Sequential)] internal struct NativeRect { public int Left, Top, Right, Bottom; }
     [StructLayout(LayoutKind.Sequential)] private struct ImageHeader { public uint Width, Height; public Guid Format; public uint Stride, Offset; public nuint Size; }
@@ -122,7 +144,7 @@ internal sealed class GlassBackdropCapture : IDisposable
         nint destination, ImageHeader output, NativeRect raw, NativeRect clipped, nint region);
     [DllImport("Magnification.dll")] private static extern bool MagInitialize();
     [DllImport("Magnification.dll")] private static extern bool MagUninitialize();
-    [DllImport("Magnification.dll")] private static extern bool MagSetImageScalingCallback(nint window, ScalingCallback callback);
+    [DllImport("Magnification.dll")] private static extern bool MagSetImageScalingCallback(nint window, ScalingCallback? callback);
     [DllImport("Magnification.dll")] private static extern bool MagSetWindowSource(nint window, NativeRect rect);
     [DllImport("Magnification.dll")] private static extern bool MagSetWindowFilterList(nint window, uint mode, int count, nint[] windows);
     [DllImport("Magnification.dll")] private static extern bool MagSetWindowTransform(nint window, ref Transform transform);

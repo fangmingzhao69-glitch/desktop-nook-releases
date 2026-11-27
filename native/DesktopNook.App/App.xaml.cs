@@ -55,6 +55,12 @@ public partial class App : Application
                 || arg is "--billiards-parent-probe" or "--billiards-perf-test" or "--verification-marker" or "--native-taskbar-shape-parent-probe" or "--native-taskbar-capsule-icon-probe");
 #if NOOK_UI_VERIFICATION
             if (interactiveVerification && !e.Args.Contains("--sandbox")) throw new IOException("界面自检必须使用沙箱。");
+            if (e.Args is ["--sandbox", string glassMemoryRoot, "--glass-memory-self-test", string glassMemoryMode, string glassMemoryCycles])
+            {
+                IsSandbox = true;
+                Dispatcher.BeginInvoke(async () => await GlassMemoryVerification.RunCapture(Path.GetFullPath(glassMemoryRoot), glassMemoryMode, int.Parse(glassMemoryCycles)));
+                return;
+            }
             if (e.Args is ["--sandbox", string glassRoot, "--glass-capture-self-test"])
             {
                 IsSandbox = true;
@@ -206,6 +212,10 @@ public partial class App : Application
             if(e.Args.Contains("--brand-self-test"))Dispatcher.BeginInvoke(async()=>{var checks=new List<string>();string failure="";try{window.KeepOpenForVerification=true;await BrandVerification.Run(window,root,checks);}catch(Exception ex){failure=ex.ToString();}File.WriteAllText(Path.Combine(root,"brand-verification.json"),System.Text.Json.JsonSerializer.Serialize(new{passed=checks.Count,failure,checks}));Shutdown(failure.Length==0?0:1);},System.Windows.Threading.DispatcherPriority.Loaded);
             if (IsSandbox && e.Args.Contains("--notes-self-test")) Dispatcher.BeginInvoke(async () => await NotesVerification.Run(window, root), System.Windows.Threading.DispatcherPriority.Loaded);
             if (IsSandbox && e.Args.Contains("--features-self-test")) Dispatcher.BeginInvoke(async () => await FeatureVerification.Run(window, root), System.Windows.Threading.DispatcherPriority.Loaded);
+            int glassPanelMemory = Array.IndexOf(e.Args, "--glass-panel-memory-self-test");
+            if (IsSandbox && glassPanelMemory >= 0 && glassPanelMemory + 2 < e.Args.Length)
+                Dispatcher.BeginInvoke(async () => await GlassMemoryVerification.RunPanel(window, root,
+                    e.Args[glassPanelMemory + 1], int.Parse(e.Args[glassPanelMemory + 2])), System.Windows.Threading.DispatcherPriority.Loaded);
             var taskbarTest = Array.IndexOf(e.Args, "--taskbar-appearance-self-test");
             if (IsSandbox && taskbarTest >= 0)
             {

@@ -12,12 +12,14 @@ internal sealed class GlassMaterialSurface : IDisposable
     private readonly DispatcherTimer _timer;
     private GlassBackdropCapture? _capture;
     private ImageSource? _frame;
-    private bool _enabled, _unavailable, _busy, _stopPending, _resetPending;
+    private bool _enabled, _unavailable, _busy, _stopPending, _resetPending, _disposed;
     private int _stillFrames, _failures;
     internal bool Running => _timer.IsEnabled;
     internal bool HasFrame => _frame is not null;
     internal int UpdatedFrames { get; private set; }
+    internal int CaptureInstances { get; private set; }
     internal long BufferBytes => _capture?.BufferBytes ?? 0;
+    internal bool CaptureSuspended => _capture is null || _capture.Suspended;
     internal string Status { get; private set; } = "stopped";
 
     internal GlassMaterialSurface(MainWindow owner)
@@ -34,6 +36,7 @@ internal sealed class GlassMaterialSurface : IDisposable
 
     internal void Enable(bool enabled)
     {
+        if (_disposed) return;
         _enabled = enabled;
         RefreshVisibility();
     }
@@ -48,8 +51,9 @@ internal sealed class GlassMaterialSurface : IDisposable
 
     internal void ResetDisplay()
     {
+        if (_disposed) return;
         if (_busy) { _resetPending = true; return; }
-        _capture?.Dispose(); _capture = null; _unavailable = false; _failures = 0;
+        _capture?.Suspend(); _unavailable = false; _failures = 0;
         _frame = null; _owner.SetGlassBackdrop(null, default);
         if (_enabled) _timer.Interval = TimeSpan.FromMilliseconds(200);
     }
@@ -61,7 +65,7 @@ internal sealed class GlassMaterialSurface : IDisposable
         try
         {
             if (_unavailable) return;
-            _capture ??= new GlassBackdropCapture();
+            if (_capture is null) { _capture = new GlassBackdropCapture(); CaptureInstances++; }
             if (!_capture.Supported) { _unavailable = true; Status = _capture.Status; _capture.Dispose(); _capture = null; return; }
             nint handle = new WindowInteropHelper(_owner).Handle;
             if (!GetWindowRect(handle, out var ownerRect)) return;
@@ -84,7 +88,7 @@ internal sealed class GlassMaterialSurface : IDisposable
             if (frame is null)
             {
                 if (Status != "capture suspended" && ++_failures >= 3)
-                { _unavailable = true; _capture.Dispose(); _capture = null; _frame = null; _owner.SetGlassBackdrop(null, default); }
+                { _unavailable = true; _capture.Suspend(); _frame = null; _owner.SetGlassBackdrop(null, default); }
                 return;
             }
             _failures = 0;
@@ -119,12 +123,14 @@ internal sealed class GlassMaterialSurface : IDisposable
     private void Stop()
     {
         if (_busy) { _timer.Stop(); _stopPending = true; return; }
-        _timer.Stop(); _capture?.Dispose(); _capture = null; _frame = null;
+        _timer.Stop(); _frame = null;
         _owner.SetGlassBackdrop(null, default); Status = "stopped";
+        _capture?.Suspend();
+        if (_disposed) { _capture?.Dispose(); _capture = null; }
     }
     public void Dispose()
     {
-        _enabled = false; Stop();
+        _disposed = true; _enabled = false; Stop();
         _owner.StateChanged -= VisibilityChanged; _owner.IsVisibleChanged -= VisibleChanged;
         _owner.LocationChanged -= GeometryChanged; _owner.SizeChanged -= SizeChanged; _owner.Closed -= Closed;
     }

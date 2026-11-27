@@ -1,0 +1,152 @@
+{
+  "success": true,
+  "mode": "suspend",
+  "cycles": 100,
+  "frames": 100,
+  "samples": [
+    {
+      "stage": "before",
+      "privateBytes": 108617728,
+      "workingSet": 154050560,
+      "managedBytes": 2412168,
+      "managedCommittedBytes": 0,
+      "handles": 865,
+      "userObjects": 77,
+      "gdiObjects": 105,
+      "captureBufferBytes": 0
+    },
+    {
+      "stage": "cycle-10",
+      "privateBytes": 138944512,
+      "workingSet": 185647104,
+      "managedBytes": 7755248,
+      "managedCommittedBytes": 9113600,
+      "handles": 985,
+      "userObjects": 83,
+      "gdiObjects": 110,
+      "captureBufferBytes": 0
+    },
+    {
+      "stage": "cycle-20",
+      "privateBytes": 139907072,
+      "workingSet": 186818560,
+      "managedBytes": 7746264,
+      "managedCommittedBytes": 9113600,
+      "handles": 985,
+      "userObjects": 83,
+      "gdiObjects": 110,
+      "captureBufferBytes": 0
+    },
+    {
+      "stage": "cycle-30",
+      "privateBytes": 139976704,
+      "workingSet": 187416576,
+      "managedBytes": 7751344,
+      "managedCommittedBytes": 9179136,
+      "handles": 985,
+      "userObjects": 83,
+      "gdiObjects": 110,
+      "captureBufferBytes": 0
+    },
+    {
+      "stage": "cycle-40",
+      "privateBytes": 140058624,
+      "workingSet": 188469248,
+      "managedBytes": 7934440,
+      "managedCommittedBytes": 9244672,
+      "handles": 985,
+      "userObjects": 83,
+      "gdiObjects": 110,
+      "captureBufferBytes": 0
+    },
+    {
+      "stage": "cycle-50",
+      "privateBytes": 133914624,
+      "workingSet": 182714368,
+      "managedBytes": 7750872,
+      "managedCommittedBytes": 9310208,
+      "handles": 985,
+      "userObjects": 83,
+      "gdiObjects": 110,
+      "captureBufferBytes": 0
+    },
+    {
+      "stage": "cycle-60",
+      "privateBytes": 133922816,
+      "workingSet": 182784000,
+      "managedBytes": 8027480,
+      "managedCommittedBytes": 9310208,
+      "handles": 985,
+      "userObjects": 83,
+      "gdiObjects": 110,
+      "captureBufferBytes": 0
+    },
+    {
+      "stage": "cycle-70",
+      "privateBytes": 135659520,
+      "workingSet": 185303040,
+      "managedBytes": 7756512,
+      "managedCommittedBytes": 9375744,
+      "handles": 985,
+      "userObjects": 83,
+      "gdiObjects": 110,
+      "captureBufferBytes": 0
+    },
+    {
+      "stage": "cycle-80",
+      "privateBytes": 135729152,
+      "workingSet": 185409536,
+      "managedBytes": 7753328,
+      "managedCommittedBytes": 9441280,
+      "handles": 985,
+      "userObjects": 83,
+      "gdiObjects": 110,
+      "captureBufferBytes": 0
+    },
+    {
+      "stage": "cycle-90",
+      "privateBytes": 133623808,
+      "workingSet": 182947840,
+      "managedBytes": 7748224,
+      "managedCommittedBytes": 9506816,
+      "handles": 985,
+      "userObjects": 83,
+      "gdiObjects": 110,
+      "captureBufferBytes": 0
+    },
+    {
+      "stage": "cycle-100",
+      "privateBytes": 134172672,
+      "workingSet": 183562240,
+      "managedBytes": 7756008,
+      "managedCommittedBytes": 9506816,
+      "handles": 985,
+      "userObjects": 83,
+      "gdiObjects": 110,
+      "captureBufferBytes": 0
+    },
+    {
+      "stage": "idle-15s",
+      "privateBytes": 120946688,
+      "workingSet": 174567424,
+      "managedBytes": 7859360,
+      "managedCommittedBytes": 9506816,
+      "handles": 954,
+      "userObjects": 79,
+      "gdiObjects": 106,
+      "captureBufferBytes": 0
+    },
+    {
+      "stage": "diagnostic-full-gc",
+      "privateBytes": 108822528,
+      "workingSet": 162459648,
+      "managedBytes": 1344160,
+      "managedCommittedBytes": 5857280,
+      "handles": 957,
+      "userObjects": 79,
+      "gdiObjects": 106,
+      "captureBufferBytes": 0
+    }
+  ],
+  "failure": null
+}

@@ -1,0 +1,34 @@
+{
+  "version": "0.21.25",
+  "date": "2026-11-27",
+  "baselineCommit": "a48752efaa8259c1a248ab4347fb3e98d152e545",
+  "scope": "Windows11单显示器，独立沙箱合成窗口/58入口，界面检查串行",
+  "baseline": "原版原生采集器代码+独立QA测量入口；未对正式进程执行GC或停止",
+  "diagnosis": "反复创建/抓取/销毁60次后完整GC仍有原生提交累积；显式回调清理单独不足以修正，暂停复用消除逐次累积路径",
+  "checks": {
+    "features": 41,
+    "glassPanelCycles": 100,
+    "ordinaryPanelCycles": 40,
+    "rawSuspendCycles": 100,
+    "captureInstanceCount": 1,
+    "hiddenCaptureTimerStopped": true,
+    "hiddenPixelOwnershipReleased": true,
+    "metadataUnchanged": true,
+    "postWarmupGrowthBelow32MiB": true
+  },
+  "measurement": {
+    "glassIdleAfter40MiB": 268.6,
+    "glassIdleAfter100MiB": 237.6,
+    "ordinaryIdleAfter40MiB": 236.6,
+    "panelForcedGC": false,
+    "workingSetTrim": false,
+    "rawFinalGC": "仅诊断比较托管/原生差异，不用于正式路径"
+  },
+  "notProven": "尚未证明现场所有约1.2GiB由同一处导致；不承诺固定总内存占用",
+  "dailyInstallation": {
+    "version": "0.21.24.0",
+    "sha256Before": "5799E1BDBB7814142C46B8D41D7A290311397D68356AE03B732C8B7BC7BCD8D5",
+    "overwritten": false,
+    "realDataUsedForTests": false
+  }
+}
